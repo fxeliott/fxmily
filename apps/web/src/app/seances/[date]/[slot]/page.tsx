@@ -7,9 +7,12 @@ import { cache, type CSSProperties } from 'react';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { AssetDeepDive } from '@/components/seances/asset-deepdive';
+import { SeanceBiasBasket } from '@/components/seances/bias-basket';
 import { BiasSynthesis } from '@/components/seances/bias-synthesis';
+import { pickCorrelatedSatellites, SeanceMacroCompass } from '@/components/seances/macro-compass';
 import { ReplayPlayer } from '@/components/seances/replay-player';
 import { SeancesDisclaimer } from '@/components/seances/seances-disclaimer';
+import { SessionChoreography } from '@/components/seances/session-choreography';
 import type { SeanceSlot } from '@/lib/seances/derive';
 import { getSeanceByDateSlot } from '@/lib/seances/service';
 
@@ -54,6 +57,15 @@ export default async function SeancePage({ params }: SeancePageProps) {
   const showAnalysis = !isCancelled && !seance.contentNeedsReview;
   const hasTakeaways = seance.keyTakeaways.some((t) => t.trim().length > 0);
   const allAssets = [...seance.macroAssets, ...seance.assets];
+  // "Le plan du jour" building blocks: the macro conductor (DXY) drives its
+  // inverse-correlated satellites in the compass; the tradeable basket = the
+  // non-macro assets. The compass only renders when a conductor + ≥1 satellite
+  // exist; the section itself renders when either sub-view has data.
+  const conductor = seance.macroAssets[0] ?? null;
+  const satellites = pickCorrelatedSatellites(seance.assets);
+  const hasCompass = conductor !== null && satellites.length > 0;
+  const showPlan = showAnalysis && (hasCompass || seance.assets.length > 0);
+  const showChoreography = showAnalysis && seance.slot === 'analyse';
 
   return (
     <main
@@ -62,7 +74,7 @@ export default async function SeancePage({ params }: SeancePageProps) {
     >
       <DashboardAmbient />
       <div className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 lg:px-8">
-        <header className="flex flex-col gap-3">
+        <header className="masthead-accent flex flex-col gap-3">
           <Link
             href="/seances"
             className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
@@ -140,9 +152,30 @@ export default async function SeancePage({ params }: SeancePageProps) {
               </p>
             ) : null}
 
+            {/* Le plan du jour — the visual overview: the macro engine (compass)
+                + the day's basket at a glance. The highest-comprehension block,
+                placed high where the eye lands. */}
+            {showPlan ? (
+              <section
+                aria-labelledby="seance-plan-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
+                <h2 id="seance-plan-heading" className="t-eyebrow-lg text-[var(--t-3)]">
+                  Le plan du jour
+                </h2>
+                {hasCompass && conductor ? (
+                  <SeanceMacroCompass conductor={conductor} satellites={satellites} />
+                ) : null}
+                {seance.assets.length > 0 ? <SeanceBiasBasket assets={seance.assets} /> : null}
+              </section>
+            ) : null}
+
             {/* L'essentiel — whole-session key takeaways. */}
             {showAnalysis && hasTakeaways ? (
-              <section aria-labelledby="seance-essentiel-heading" className="flex flex-col gap-3">
+              <section
+                aria-labelledby="seance-essentiel-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
                 <h2 id="seance-essentiel-heading" className="t-eyebrow-lg text-[var(--t-3)]">
                   L&apos;essentiel
                 </h2>
@@ -167,9 +200,26 @@ export default async function SeancePage({ params }: SeancePageProps) {
               </section>
             ) : null}
 
+            {/* La chorégraphie — the method primer (manipulation-first + the NY
+                session windows). Pre-session planning only (analyse slot). */}
+            {showChoreography ? (
+              <section
+                aria-labelledby="seance-choreography-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
+                <h2 id="seance-choreography-heading" className="t-eyebrow-lg text-[var(--t-3)]">
+                  La chorégraphie de séance
+                </h2>
+                <SessionChoreography />
+              </section>
+            ) : null}
+
             {/* Macro context (DXY). */}
             {showAnalysis && seance.macroAssets.length > 0 ? (
-              <section aria-labelledby="seance-macro-heading" className="flex flex-col gap-3">
+              <section
+                aria-labelledby="seance-macro-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
                 <h2 id="seance-macro-heading" className="t-eyebrow-lg text-[var(--t-3)]">
                   Contexte macro
                 </h2>
@@ -183,7 +233,10 @@ export default async function SeancePage({ params }: SeancePageProps) {
 
             {/* Per-asset analysis. */}
             {showAnalysis && seance.assets.length > 0 ? (
-              <section aria-labelledby="seance-analyse-heading" className="flex flex-col gap-3">
+              <section
+                aria-labelledby="seance-analyse-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
                 <h2 id="seance-analyse-heading" className="t-eyebrow-lg text-[var(--t-3)]">
                   Analyse par actif
                 </h2>
@@ -197,7 +250,10 @@ export default async function SeancePage({ params }: SeancePageProps) {
 
             {/* Bias overview. */}
             {showAnalysis && allAssets.length >= 2 ? (
-              <section aria-labelledby="seance-synthese-heading" className="flex flex-col gap-3">
+              <section
+                aria-labelledby="seance-synthese-heading"
+                className="wow-reveal flex flex-col gap-3"
+              >
                 <h2 id="seance-synthese-heading" className="t-eyebrow-lg text-[var(--t-3)]">
                   Vue d&apos;ensemble des biais
                 </h2>

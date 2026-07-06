@@ -46,7 +46,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* global self, clients, fetch, caches, Request */
 
-const VERSION = 'fxmily-sw-v2-t15';
+const VERSION = 'fxmily-sw-v3-t15';
 
 // Versioned Cache Storage bucket. Bumping VERSION rotates the bucket name, so
 // `activate` can delete every bucket that isn't the current one.
@@ -92,6 +92,18 @@ self.addEventListener('activate', (event) => {
       } catch (_err) {
         /* cache enumeration failed — non-fatal, old buckets are harmless */
       }
+      // Navigation preload: the browser issues the navigation request itself,
+      // NATIVELY (same streaming/redirect semantics as no-SW), in parallel
+      // with SW startup; the fetch handler then just hands that response
+      // through. Without it, `fetch(request)` REPLAYS the navigation from
+      // inside the SW — measurably different timing on streamed dev/HMR
+      // responses (flaked twice on CI shard 2, 2026-07-06: page transiently
+      // duplicated/hidden mid-hydration). Not supported everywhere → guarded.
+      try {
+        await self.registration.navigationPreload?.enable();
+      } catch (_err) {
+        /* preload unsupported — fetch handler falls back to fetch(request) */
+      }
       await self.clients.claim();
     })(),
   );
@@ -121,6 +133,11 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       try {
         // Network-first: always try the live page (auth, fresh data) first.
+        // Prefer the navigation-preload response — the BROWSER's own native
+        // request, streamed exactly as if no SW existed. `fetch(request)` is
+        // only the fallback for engines without preload support.
+        const preloaded = await event.preloadResponse;
+        if (preloaded) return preloaded;
         return await fetch(request);
       } catch (_err) {
         // Offline / unreachable — fall back to the cached offline page. If it

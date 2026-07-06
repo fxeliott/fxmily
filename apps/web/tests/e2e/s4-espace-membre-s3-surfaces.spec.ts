@@ -218,10 +218,10 @@ test.describe('S4 — surfaces S3 espace membre : teaser dashboard + /verificati
 
     // EXACTLY ONE event is excused (the one linked to the écart with a
     // memberReason) — visibly neutralized, never silently dropped (« l'histoire
-    // ne se réécrit pas, seul le score pardonne »).
-    await expect(
-      constancySection.getByText(/excusé, motif donné ou levé par la réalité/),
-    ).toHaveCount(1);
+    // ne se réécrit pas, seul le score pardonne »). Tour 15 split the generic
+    // excusal note into per-cause notes (EXCUSAL_NOTE in score-events-history):
+    // a memberReason-excused event now reads « excusé, motif donné ».
+    await expect(constancySection.getByText(/excusé, motif donné/)).toHaveCount(1);
 
     // --- Écarts: both cards render, factual labels (§33.2 — calm, no shaming).
     const discrepanciesSection = page.getByRole('region', { name: 'Tes écarts' });

@@ -131,7 +131,7 @@ export function parseWrapperAllowlist(wrapperBody) {
 /**
  * Pure comparison core — given the three derived lists, return a structured
  * report of every drift class. No I/O, fully unit-testable.
- * @param {{ routes: string[], crontab: string[], allowlist: string[], excluded?: Set<string> }} input
+ * @param {{ routes: string[], crontab: string[], allowlist: string[], excluded?: Set<string>, localTasks?: Set<string> }} input
  * @returns {{
  *   ok: boolean,
  *   missingFromCrontab: string[],

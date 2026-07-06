@@ -162,8 +162,8 @@ export function SportZonesBar({ durationMin }: SportZonesBarProps) {
       {/* Caption */}
       <p className="t-cap text-[var(--t-3)]">
         Cible <span className="font-mono text-[var(--t-2)] tabular-nums">150 min/sem</span> (ACSM) :
-        la régularité stabilise ton humeur sur la semaine, pas le volume d&apos;une séance. Au-delà
-        de <span className="font-mono text-[var(--t-2)] tabular-nums">90 min</span>, surveille la
+        la régularité stabilise ton humeur sur la semaine, pas le volume d’une séance. Au-delà de{' '}
+        <span className="font-mono text-[var(--t-2)] tabular-nums">90 min</span>, surveille la
         récupération.
       </p>
     </div>

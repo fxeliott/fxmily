@@ -64,8 +64,8 @@ export function WeeklyReportOverdueAlertEmail({
           <Text style={paragraph}>
             La semaine du <strong>{weekRange}</strong> est terminée, mais {overdueCount} membre
             {plural ? 's' : ''} actif{plural ? 's' : ''}
-            {expectedCount > overdueCount ? ` (sur ${expectedCount})` : ''} n&apos;
-            {plural ? 'ont' : 'a'} pas encore leur rapport hebdomadaire. Le digest n&apos;a pas été
+            {expectedCount > overdueCount ? ` (sur ${expectedCount})` : ''} n’
+            {plural ? 'ont' : 'a'} pas encore leur rapport hebdomadaire. Le digest n’a pas été
             généré pour cette semaine.
           </Text>
 

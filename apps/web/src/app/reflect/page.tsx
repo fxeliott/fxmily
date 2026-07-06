@@ -120,8 +120,10 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                   <strong className="text-[var(--t-1)]">A</strong> (déclencheur) ·{' '}
                   <strong className="text-[var(--t-1)]">B</strong> (croyance) ·{' '}
                   <strong className="text-[var(--t-1)]">C</strong> (conséquence) ·{' '}
+                  {/* Literal U+2019 (not &apos;) — the SWC compiler eats the
+                      leading space of a JSXText holding an entity (Tour 15). */}
                   <strong className="text-[var(--t-1)]">D</strong> (mise en question). Le cadre ABCD
-                  d&apos;Ellis adapté au trading, pas un substitut à un suivi clinique.
+                  d’Ellis adapté au trading, pas un substitut à un suivi clinique.
                 </p>
 
                 <div className="mt-1 flex flex-wrap items-center gap-3">

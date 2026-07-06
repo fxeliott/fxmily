@@ -492,7 +492,7 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
         ) : (
           <p className="t-cap text-[var(--t-4)]">
             Lien <code className="font-mono">tradingview.com</code> de ta sortie : la preuve de ta
-            gestion jusqu&apos;au bout.
+            gestion jusqu’au bout.
           </p>
         )}
       </div>

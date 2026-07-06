@@ -23,6 +23,7 @@ vi.mock('@/lib/db', () => ({
     trade: {
       findFirst: vi.fn(),
       deleteMany: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -36,6 +37,7 @@ import { db } from '@/lib/db';
 import {
   closeTrade,
   deleteTrade,
+  getOpenTradesEnteredToday,
   TradeAlreadyClosedError,
   TradeExitBeforeEntryError,
   type CloseTradeInput,
@@ -372,5 +374,61 @@ describe('deleteTrade — storage sweep (AX1-F1, RGPD §17)', () => {
     await expect(deleteTrade('user-1', 'missing')).rejects.toThrow();
     expect(db.trade.deleteMany).not.toHaveBeenCalled();
     expect(storageDelete).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Tour 15 — `getOpenTradesEnteredToday`: open trades ENTERED on the member's
+ * local day, for the evening wizard's gentle "pense à les clôturer" reminder.
+ * Distinct from `getStaleOpenTradesSummary` (72 h safety net) — this window is
+ * "today", so it bounds `enteredAt` to the member-local civil day, in UTC.
+ */
+describe('getOpenTradesEnteredToday — evening reminder (Tour 15)', () => {
+  const TZ = 'Europe/Paris';
+  // Paris-local today at NOW = 2026-06-10 (UTC+2 in June, 11:00 local).
+  const NOW = new Date('2026-06-10T09:00:00.000Z');
+
+  beforeEach(() => {
+    vi.mocked(db.trade.count).mockReset();
+  });
+
+  it('counts open trades whose enteredAt falls in the member-local day (UTC bounds)', async () => {
+    vi.mocked(db.trade.count).mockResolvedValue(2 as never);
+
+    const out = await getOpenTradesEnteredToday('user-1', TZ, NOW);
+
+    expect(out).toEqual({ count: 2 });
+    const call = vi.mocked(db.trade.count).mock.calls[0]?.[0] as {
+      where?: { userId?: string; closedAt?: null; enteredAt?: { gte?: Date; lt?: Date } };
+    };
+    expect(call.where?.userId).toBe('user-1');
+    // Only OPEN trades (closedAt: null).
+    expect(call.where?.closedAt).toBeNull();
+    // Local midnight 2026-06-10 Paris (UTC+2) = 2026-06-09T22:00Z ; next local
+    // midnight = 2026-06-10T22:00Z. Half-open interval.
+    expect(call.where?.enteredAt?.gte).toEqual(new Date('2026-06-09T22:00:00.000Z'));
+    expect(call.where?.enteredAt?.lt).toEqual(new Date('2026-06-10T22:00:00.000Z'));
+  });
+
+  it('returns count 0 when the member entered nothing open today', async () => {
+    vi.mocked(db.trade.count).mockResolvedValue(0 as never);
+
+    const out = await getOpenTradesEnteredToday('user-1', TZ, NOW);
+
+    expect(out).toEqual({ count: 0 });
+  });
+
+  it('shifts the UTC window with the member timezone (Asia/Tokyo, UTC+9)', async () => {
+    vi.mocked(db.trade.count).mockResolvedValue(1 as never);
+
+    // At 2026-06-10T09:00Z it is already 18:00 in Tokyo on 2026-06-10.
+    await getOpenTradesEnteredToday('user-tokyo', 'Asia/Tokyo', NOW);
+
+    const call = vi.mocked(db.trade.count).mock.calls[0]?.[0] as {
+      where?: { enteredAt?: { gte?: Date; lt?: Date } };
+    };
+    // Tokyo local midnight 2026-06-10 = 2026-06-09T15:00Z ; next = 2026-06-10T15:00Z.
+    expect(call.where?.enteredAt?.gte).toEqual(new Date('2026-06-09T15:00:00.000Z'));
+    expect(call.where?.enteredAt?.lt).toEqual(new Date('2026-06-10T15:00:00.000Z'));
   });
 });

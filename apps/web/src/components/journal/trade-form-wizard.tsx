@@ -792,7 +792,8 @@ function StepPlannedRR({
         <div className="mb-3 flex items-center justify-between">
           <span className="t-eyebrow">R:R prévu</span>
           <Pill tone={isLowRR ? 'bad' : 'acc'}>
-            EV {isLowRR ? 'NÉGATIF' : 'POSITIF'} si réussite &gt;{breakeven.toFixed(0)}%
+            EV {isLowRR ? 'NÉGATIF' : 'POSITIF'} si réussite {'>'}
+            {breakeven.toFixed(0)}%
           </Pill>
         </div>
 

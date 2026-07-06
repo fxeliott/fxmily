@@ -89,10 +89,12 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
 
           <p className="rounded-control max-w-prose border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
             Un point hebdomadaire sur ton{' '}
-            <strong className="text-[var(--t-1)]">état d&apos;esprit</strong> d&apos;athlète-trader
-            (cadre Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&amp;L, pas
-            d&apos;analyse de marché, c&apos;est un instrument de recul, totalement séparé de ton
-            score et de ton edge.
+            {/* Literal U+2019 and bare & (no HTML entity) — the SWC compiler
+                eats the leading space of a JSXText holding ANY entity (Tour 15
+                proof: &apos;, &amp; and numeric entities all trigger it). */}
+            <strong className="text-[var(--t-1)]">état d’esprit</strong> d’athlète-trader (cadre
+            Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&L, pas d’analyse de marché,
+            c’est un instrument de recul, totalement séparé de ton score et de ton edge.
           </p>
         </header>
 

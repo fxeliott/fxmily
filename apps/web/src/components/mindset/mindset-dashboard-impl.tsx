@@ -259,9 +259,7 @@ function DimensionTrends({
     <section className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
       <div className="flex items-baseline justify-between gap-3">
         <span className="t-eyebrow-lg text-[var(--t-3)]">Tendance par dimension</span>
-        <span className="t-cap text-[var(--t-4)]">
-          version {instrumentVersion} de l&apos;instrument
-        </span>
+        <span className="t-cap text-[var(--t-4)]">version {instrumentVersion} de l’instrument</span>
       </div>
       {!anyMultiPoint ? (
         <p className="t-cap text-[var(--t-3)]">

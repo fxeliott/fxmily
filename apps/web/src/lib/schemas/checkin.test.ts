@@ -21,8 +21,14 @@ import {
  * re-used by the Server Action without manual conversion.
  */
 
+// A recent PAST day, computed at run time: the schemas enforce a rolling
+// horizon (no future beyond tomorrow, nothing older than PAST_HORIZON_DAYS),
+// so a hard-coded fixture date silently expires — '2026-05-06' started failing
+// every suite run on 2026-07-06 (Tour 15). 7 days back is valid in any TZ.
+const recentPastDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 const validMorning = {
-  date: '2026-05-06',
+  date: recentPastDate,
   sleepHours: '7.5',
   sleepQuality: '8',
   morningRoutineCompleted: 'true',
@@ -36,7 +42,7 @@ const validMorning = {
 };
 
 const validEvening = {
-  date: '2026-05-06',
+  date: recentPastDate,
   planRespectedToday: 'true',
   hedgeRespectedToday: 'na',
   formationFollowed: 'true',

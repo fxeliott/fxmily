@@ -41,100 +41,98 @@ export default function AIDisclosurePage(): React.ReactElement {
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
-          <strong>quatre cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
+          <strong>quatre cas d’usage</strong> : rédiger un rapport hebdomadaire (que{' '}
           <strong>seul Eliott</strong> reçoit, pour assurer ton suivi), ton débrief mensuel (que tu
-          consultes), ton calendrier d&apos;organisation hebdomadaire (que tu consultes) et
-          l&apos;analyse unique de ton questionnaire d&apos;entrée (ton profil membre), à partir de
-          tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
-          remplacement du coaching humain.
+          consultes), ton calendrier d’organisation hebdomadaire (que tu consultes) et l’analyse
+          unique de ton questionnaire d’entrée (ton profil membre), à partir de tes propres données.
+          Pas de conseil de trade, pas de décision autonome, pas de remplacement du coaching humain.
         </>
       }
     >
       <h2>1. Pourquoi cette page existe</h2>
       <p>
-        Le règlement européen sur l&apos;intelligence artificielle (EU AI Act, entré en vigueur le
-        1ᵉʳ août 2024) impose à toute application qui interagit avec une personne via une IA
-        générative d&apos;être <strong>explicite</strong> sur ce point. L&apos;article 50(1) du
-        règlement est d&apos;application directe à partir du <strong>2 août 2026</strong>. Cette
-        page est notre engagement de transparence avant cette échéance.
+        Le règlement européen sur l’intelligence artificielle (EU AI Act, entré en vigueur le 1ᵉʳ
+        août 2024) impose à toute application qui interagit avec une personne via une IA générative
+        d’être <strong>explicite</strong> sur ce point. L’article 50(1) du règlement est
+        d’application directe à partir du <strong>2 août 2026</strong>. Cette page est notre
+        engagement de transparence avant cette échéance.
       </p>
 
       <h2>2. Quel modèle on utilise, pour quoi</h2>
       <ul>
         <li>
           <strong>Modèle</strong> : Claude Opus 4.8 (identifiant exact <code>claude-opus-4-8</code>
-          ), édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
-          d&apos;Eliott (pas d&apos;API Anthropic facturée par requête côté Fxmily, voir{' '}
+          ), édité par Anthropic PBC. Les contenus sont générés via l’abonnement personnel Max
+          d’Eliott (pas d’API Anthropic facturée par requête côté Fxmily, voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
           <strong>Quatre usages</strong> : (a) un <em>rapport hebdomadaire</em> que{' '}
           <strong>seul Eliott (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
-          suivi, tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
-          ton <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
-          <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
+          suivi, tu ne le reçois pas directement ; il s’affiche dans l’onglet Admin ; (b) ton{' '}
+          <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
+          <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l’onglet Admin (
           <code>?tab=monthly-debrief</code>), il synthétise <strong>tes propres données</strong>{' '}
           (trades, check-ins, notes, progression mois sur mois) ; (c) ton{' '}
-          <em>calendrier d&apos;organisation hebdomadaire</em> (§26) consultable sur{' '}
+          <em>calendrier d’organisation hebdomadaire</em> (§26) consultable sur{' '}
           <a href="/calendrier">/calendrier</a>, généré à partir de ton questionnaire de
-          disponibilité et d&apos;un instantané chiffré de ton activité, il organise ton{' '}
+          disponibilité et d’un instantané chiffré de ton activité, il organise ton{' '}
           <strong>temps</strong> de pratique (sessions, entraînement, repos), jamais le marché ; (d)
-          l&apos;<em>analyse unique de ton questionnaire d&apos;entrée</em> (entretien
-          d&apos;onboarding) qui construit ton profil membre, réponses pseudonymisées avant envoi.
+          l’<em>analyse unique de ton questionnaire d’entrée</em> (entretien d’onboarding) qui
+          construit ton profil membre, réponses pseudonymisées avant envoi.
         </li>
         <li>
           <strong>Volume</strong> : au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
           par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
-          questionnaire d&apos;organisation) + 1 appel unique à l&apos;arrivée (analyse du
-          questionnaire d&apos;entrée), plafonnés à $15 de tokens par run (garde-fou technique côté
-          Eliott pour éviter toute dérive de coût).
+          questionnaire d’organisation) + 1 appel unique à l’arrivée (analyse du questionnaire
+          d’entrée), plafonnés à $15 de tokens par run (garde-fou technique côté Eliott pour éviter
+          toute dérive de coût).
         </li>
       </ul>
 
-      <h2>3. Ce que l&apos;IA ne fait jamais</h2>
+      <h2>3. Ce que l’IA ne fait jamais</h2>
       <ul>
         <li>
-          <strong>Aucun conseil de trade.</strong> Aucun prompt n&apos;autorise l&apos;IA à dire
-          quoi acheter, vendre, garder, fermer, ou hedger. Voir <a href="/legal/terms">CGU §4</a>{' '}
-          (posture éducative SPEC §2).
+          <strong>Aucun conseil de trade.</strong> Aucun prompt n’autorise l’IA à dire quoi acheter,
+          vendre, garder, fermer, ou hedger. Voir <a href="/legal/terms">CGU §4</a> (posture
+          éducative SPEC §2).
         </li>
         <li>
-          <strong>Aucune décision autonome.</strong> L&apos;IA est un exécuteur de prompt. Elle ne
-          déclenche pas d&apos;action, n&apos;envoie pas de message à un tiers, ne modifie pas tes
-          paramètres, ne te catégorise pas en archétype fixe.
+          <strong>Aucune décision autonome.</strong> L’IA est un exécuteur de prompt. Elle ne
+          déclenche pas d’action, n’envoie pas de message à un tiers, ne modifie pas tes paramètres,
+          ne te catégorise pas en archétype fixe.
         </li>
         <li>
           <strong>Aucune personnalisation comportementale.</strong> Tes données ne sont pas envoyées
-          à un système qui apprendrait de toi pour t&apos;influencer (pas de ML re-training sur tes
+          à un système qui apprendrait de toi pour t’influencer (pas de ML re-training sur tes
           contenus, pas de profilage marketing, pas de scoring de personnalité).
         </li>
         <li>
           <strong>Aucun remplacement du coaching humain.</strong> Eliott reste ton interlocuteur
-          humain. L&apos;IA produit un brouillon ; Eliott le lit, le corrige, ou l&apos;ignore. Si
-          tu as une question sur ton parcours, tu écris à Eliott, pas au rapport IA.
+          humain. L’IA produit un brouillon ; Eliott le lit, le corrige, ou l’ignore. Si tu as une
+          question sur ton parcours, tu écris à Eliott, pas au rapport IA.
         </li>
         <li>
-          <strong>Aucun audio, aucune voix.</strong> Pas de TTS, pas d&apos;enregistrement, pas
-          d&apos;analyse vocale. Décision produit explicite (SPEC §2).
+          <strong>Aucun audio, aucune voix.</strong> Pas de TTS, pas d’enregistrement, pas d’analyse
+          vocale. Décision produit explicite (SPEC §2).
         </li>
       </ul>
 
       <h2>4. Garde-fous techniques</h2>
       <ul>
         <li>
-          <strong>Détection d&apos;injection de prompt</strong> : toute donnée que tu saisis (notes
-          d&apos;humeur, journal, descriptions de trades) est filtrée par un détecteur multi-vecteur
-          côté serveur avant d&apos;être incluse dans le contexte envoyé à l&apos;IA. Si un pattern
-          suspect est détecté (ex. tentative d&apos;injecter des instructions adverses), la donnée
-          est neutralisée et un audit log est créé.
+          <strong>Détection d’injection de prompt</strong> : toute donnée que tu saisis (notes
+          d’humeur, journal, descriptions de trades) est filtrée par un détecteur multi-vecteur côté
+          serveur avant d’être incluse dans le contexte envoyé à l’IA. Si un pattern suspect est
+          détecté (ex. tentative d’injecter des instructions adverses), la donnée est neutralisée et
+          un audit log est créé.
         </li>
         <li>
           <strong>Filtre de routage de crise</strong> : si une donnée que tu saisis contient des
           marqueurs de détresse psychologique (mots-clés FR, regex unicode-aware exclusive des
-          expressions argot trading), un message t&apos;orientant vers les ressources de soutien
-          national (3114, SOS Amitié, Suicide Écoute) s&apos;affiche, et la donnée est conservée
-          mais marquée pour revue humaine par Eliott. L&apos;IA n&apos;est pas appelée sur ce
-          contenu.
+          expressions argot trading), un message t’orientant vers les ressources de soutien national
+          (3114, SOS Amitié, Suicide Écoute) s’affiche, et la donnée est conservée mais marquée pour
+          revue humaine par Eliott. L’IA n’est pas appelée sur ce contenu.
         </li>
         <li>
           <strong>Budget plafonné</strong> : chaque appel IA est limité à $15 de tokens. Au-delà, la
@@ -142,21 +140,20 @@ export default function AIDisclosurePage(): React.ReactElement {
         </li>
         <li>
           <strong>Banner de transparence</strong> : chaque contenu généré par IA (rapport hebdo
-          admin, débrief mensuel, calendrier d&apos;organisation, emails) affiche un bandeau «
-          Généré par IA · pas substitut coaching humain ».
+          admin, débrief mensuel, calendrier d’organisation, emails) affiche un bandeau « Généré par
+          IA · pas substitut coaching humain ».
         </li>
       </ul>
 
       <h2>5. Tes droits spécifiques au contenu IA</h2>
       <p>
         En plus de tes droits RGPD généraux (voir{' '}
-        <a href="/legal/privacy">Politique de confidentialité §6</a>), l&apos;EU AI Act te garantit
-        :
+        <a href="/legal/privacy">Politique de confidentialité §6</a>), l’EU AI Act te garantit :
       </p>
       <ul>
         <li>
-          <strong>Droit de savoir</strong> : tout contenu qui t&apos;est destiné et qui a été généré
-          par IA porte le bandeau de transparence ci-dessus. Pas de prose IA déguisée en écriture
+          <strong>Droit de savoir</strong> : tout contenu qui t’est destiné et qui a été généré par
+          IA porte le bandeau de transparence ci-dessus. Pas de prose IA déguisée en écriture
           humaine.
         </li>
         <li>
@@ -164,8 +161,8 @@ export default function AIDisclosurePage(): React.ReactElement {
           <em>débrief mensuel</em> dans{' '}
           <a href="/account/notifications">tes préférences de notifications</a> (toggle{' '}
           <code>monthly_debrief_ready</code>). Le contenu désactivé ne sera plus envoyé ni affiché
-          pour toi. Le <em>rapport hebdomadaire</em>, lui, ne t&apos;est pas adressé, il est réservé
-          à Eliott pour assurer ton suivi.
+          pour toi. Le <em>rapport hebdomadaire</em>, lui, ne t’est pas adressé, il est réservé à
+          Eliott pour assurer ton suivi.
         </li>
         <li>
           <strong>Droit de signaler une erreur</strong> : si un rapport contient une affirmation
@@ -179,25 +176,25 @@ export default function AIDisclosurePage(): React.ReactElement {
       <p>
         Un rapport généré par IA est un <strong>brouillon de réflexion</strong>. Il peut contenir
         des biais (hallucination, sur-généralisation, ton trop affirmatif). Le traiter comme une
-        vérité absolue serait une erreur. À l&apos;inverse, ignorer toute observation sous prétexte
-        qu&apos;elle vient d&apos;une IA serait excessif aussi.
+        vérité absolue serait une erreur. À l’inverse, ignorer toute observation sous prétexte
+        qu’elle vient d’une IA serait excessif aussi.
       </p>
       <p>
         La bonne posture, alignée avec le framework Mark Douglas que Fxmily applique :{' '}
         <strong>chaque observation est une probabilité, pas une certitude</strong>. Tu peux
-        l&apos;accepter, la nuancer, ou la rejeter selon ce que tu connais de toi.
+        l’accepter, la nuancer, ou la rejeter selon ce que tu connais de toi.
       </p>
 
       <h2>7. Sécurité et chaîne de traitement</h2>
       <ul>
         <li>
-          <strong>Données envoyées à l&apos;IA</strong> : uniquement ton journal de trades agrégé
+          <strong>Données envoyées à l’IA</strong> : uniquement ton journal de trades agrégé
           (statistiques numériques), tes check-ins de la semaine (humeur 1-5, mots-clés), tes notes
           libres. Aucune information directement identifiante (nom, email, IP).
         </li>
         <li>
           <strong>Conservation côté Anthropic</strong> : Anthropic indique ne pas utiliser les
-          contenus de l&apos;abonnement Max pour ré-entraîner ses modèles (voir{' '}
+          contenus de l’abonnement Max pour ré-entraîner ses modèles (voir{' '}
           <a
             href="https://www.anthropic.com/legal/aup"
             rel="noopener noreferrer external"
@@ -216,9 +213,9 @@ export default function AIDisclosurePage(): React.ReactElement {
 
       <h2>8. Mises à jour de cette page</h2>
       <p>
-        Toute évolution du modèle IA utilisé, du périmètre d&apos;usage, ou de la chaîne de
-        traitement sera reflétée ici dans les 30 jours. La date de dernière mise à jour est indiquée
-        en haut de page. Pour toute question, écris à{' '}
+        Toute évolution du modèle IA utilisé, du périmètre d’usage, ou de la chaîne de traitement
+        sera reflétée ici dans les 30 jours. La date de dernière mise à jour est indiquée en haut de
+        page. Pour toute question, écris à{' '}
         <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>.
       </p>
 

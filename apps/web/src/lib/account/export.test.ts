@@ -165,6 +165,7 @@ const SAFE_USER = {
   role: 'member',
   status: 'active',
   timezone: 'Europe/Paris',
+  weekendsOff: true,
   consentRgpdAt: null,
   joinedAt: new Date('2026-05-05T08:00:00Z'),
   lastSeenAt: null,
@@ -243,6 +244,25 @@ describe('buildUserDataExport', () => {
         select: expect.not.objectContaining({ passwordHash: true }),
       }),
     );
+  });
+
+  it('selects the member-declared weekendsOff scoring setting (Tour 15 export)', async () => {
+    // The scalar `weekendsOff` drives the whole off-aware constancy rhythm, so
+    // art.20 portability must surface it. A scalar can't be caught by the
+    // `model User` relation-coverage guard (it only classifies relations), so we
+    // pin the select explicitly here.
+    await buildUserDataExport('u1');
+    expect(userFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ weekendsOff: true }),
+      }),
+    );
+  });
+
+  it('surfaces weekendsOff on the exported user snapshot', async () => {
+    userFindUnique.mockResolvedValueOnce({ ...SAFE_USER, weekendsOff: false });
+    const snap = await buildUserDataExport('u1');
+    expect(snap.user?.weekendsOff).toBe(false);
   });
 
   it('selects safe push subscription fields only (no p256dhKey/authKey)', async () => {

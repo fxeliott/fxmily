@@ -72,9 +72,9 @@ export function PasswordResetEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Ce lien expire dans {expiresInMinutes} minutes et ne peut servir qu&apos;une seule fois.
-            Si tu n&apos;es pas à l&apos;origine de cette demande, ignore cet email, ton mot de
-            passe actuel reste inchangé et ton compte est en sécurité.
+            Ce lien expire dans {expiresInMinutes} minutes et ne peut servir qu’une seule fois. Si
+            tu n’es pas à l’origine de cette demande, ignore cet email, ton mot de passe actuel
+            reste inchangé et ton compte est en sécurité.
           </Text>
 
           <Text style={footerSign}>L&apos;équipe Fxmily</Text>

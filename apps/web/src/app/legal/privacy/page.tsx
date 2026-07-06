@@ -40,8 +40,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <p>
         Le responsable de traitement est <strong>Eliott Pena</strong>, éditeur et utilisateur unique
         de Fxmily, joignable à <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Voir
-        aussi nos <a href="/legal/mentions">mentions légales</a> pour l&apos;hébergeur et
-        l&apos;adresse postale.
+        aussi nos <a href="/legal/mentions">mentions légales</a> pour l’hébergeur et l’adresse
+        postale.
       </p>
 
       <h2>2. Quelles données on collecte</h2>
@@ -51,8 +51,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <ul>
         <li>
           <strong>Identité &amp; compte</strong> : email, prénom, nom, mot de passe (haché en
-          argon2id, jamais stocké en clair), fuseau horaire, date d&apos;inscription, dernière
-          connexion. Base légale : exécution du contrat (membre / éditeur).
+          argon2id, jamais stocké en clair), fuseau horaire, date d’inscription, dernière connexion.
+          Base légale : exécution du contrat (membre / éditeur).
         </li>
         <li>
           <strong>Journal de trades</strong> : paire, direction, session, sizing, R planifié, R
@@ -74,25 +74,25 @@ export default function PrivacyPolicyPage(): React.ReactElement {
           consentement (toggle activable et désactivable à tout moment).
         </li>
         <li>
-          <strong>Logs d&apos;audit</strong> : actions sensibles (login, création de trade, export
-          de données…) avec un hash SHA-256 salé de ton IP (jamais l&apos;IP en clair) et un
-          user-agent tronqué à 512 caractères. Base légale : intérêt légitime (sécurité).
+          <strong>Logs d’audit</strong> : actions sensibles (login, création de trade, export de
+          données…) avec un hash SHA-256 salé de ton IP (jamais l’IP en clair) et un user-agent
+          tronqué à 512 caractères. Base légale : intérêt légitime (sécurité).
         </li>
       </ul>
 
       <p>
-        Fxmily <strong>n&apos;utilise aucun tracker tiers</strong> : pas de Google Analytics, pas de
-        Meta Pixel, pas de cookies publicitaires, pas de fingerprint. Voir le bandeau cookie affiché
-        en bas d&apos;écran à ta première visite.
+        Fxmily <strong>n’utilise aucun tracker tiers</strong> : pas de Google Analytics, pas de Meta
+        Pixel, pas de cookies publicitaires, pas de fingerprint. Voir le bandeau cookie affiché en
+        bas d’écran à ta première visite.
       </p>
 
       <h2>3. Pourquoi ces données</h2>
       <p>
-        Trois finalités, et c&apos;est tout : (1) faire fonctionner le compte (auth, journal,
-        check-ins), (2) calculer ton score comportemental et te le restituer dans le dashboard, (3)
-        générer un rapport hebdomadaire que <strong>seul Eliott</strong> reçoit, pour mieux
-        t&apos;accompagner en formation. Aucune donnée n&apos;est utilisée pour de la publicité, de
-        la revente, ou de l&apos;entraînement de modèle d&apos;IA tiers.
+        Trois finalités, et c’est tout : (1) faire fonctionner le compte (auth, journal, check-ins),
+        (2) calculer ton score comportemental et te le restituer dans le dashboard, (3) générer un
+        rapport hebdomadaire que <strong>seul Eliott</strong> reçoit, pour mieux t’accompagner en
+        formation. Aucune donnée n’est utilisée pour de la publicité, de la revente, ou de
+        l’entraînement de modèle d’IA tiers.
       </p>
 
       <h2>4. Combien de temps on les garde</h2>
@@ -106,12 +106,12 @@ export default function PrivacyPolicyPage(): React.ReactElement {
           24h via un lien email.
         </li>
         <li>
-          <strong>Logs d&apos;audit</strong> : 12 mois maximum (rétention sécurité, hashs IP non
+          <strong>Logs d’audit</strong> : 12 mois maximum (rétention sécurité, hashs IP non
           réversibles).
         </li>
         <li>
           <strong>Sauvegardes Postgres chiffrées</strong> : 30 jours en R2 cross-région. Une demande
-          d&apos;effacement RGPD purge les sauvegardes au prochain cycle (≤ 30 jours).
+          d’effacement RGPD purge les sauvegardes au prochain cycle (≤ 30 jours).
         </li>
         <li>
           <strong>Abonnements push inactifs</strong> : purgés automatiquement après 90 jours sans
@@ -130,19 +130,19 @@ export default function PrivacyPolicyPage(): React.ReactElement {
           Cloudflare Analytics activé.
         </li>
         <li>
-          <strong>Resend, Inc.</strong> (États-Unis, clauses contractuelles types) : envoi
-          d&apos;emails transactionnels (invitation, digest hebdo). Aucun email marketing.
+          <strong>Resend, Inc.</strong> (États-Unis, clauses contractuelles types) : envoi d’emails
+          transactionnels (invitation, digest hebdo). Aucun email marketing.
         </li>
         <li>
           <strong>Sentry, Inc.</strong> (États-Unis, clauses contractuelles types) : collecte
-          d&apos;erreurs serveur (stack trace + user-agent + URL anonymisée). Pas de session replay,
-          pas de PII utilisateur dans les payloads (configuration côté code).
+          d’erreurs serveur (stack trace + user-agent + URL anonymisée). Pas de session replay, pas
+          de PII utilisateur dans les payloads (configuration côté code).
         </li>
         <li>
           <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) : modèle Claude
           Opus 4.8 (<code>claude-opus-4-8</code>) utilisé pour générer le rapport hebdo (Eliott
-          uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
-          unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
+          uniquement), le débrief mensuel, le calendrier d’organisation et l’analyse unique de ton
+          questionnaire d’entrée (profil membre, données pseudonymisées) (voir{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>). Anthropic indique ne pas utiliser ces
           contenus pour ré-entraîner ses modèles, détail et mises à jour sur la page{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>.
@@ -151,7 +151,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
 
       <h2>6. Tes droits RGPD</h2>
       <p>
-        Tu disposes des droits d&apos;
+        Tu disposes des droits d’
         <strong>accès, rectification, effacement, limitation, portabilité, opposition</strong>, et
         tu peux retirer ton consentement à tout moment :
       </p>
@@ -164,7 +164,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         <li>
           <strong>Effacement</strong> : tu peux supprimer ton compte depuis{' '}
           <a href="/account/delete">/account/delete</a>. Soft-delete immédiat, hard-delete sous 30
-          jours, fenêtre d&apos;annulation 24h par email.
+          jours, fenêtre d’annulation 24h par email.
         </li>
         <li>
           <strong>Rectification &amp; opposition</strong> : par email à{' '}
@@ -181,9 +181,9 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <h2>7. Sécurité</h2>
       <p>
         Mots de passe hachés en argon2id, secrets jamais committés en clair, transport TLS 1.3 forcé
-        via Caddy + HSTS preload, tokens d&apos;invitation hashés en SHA-256, IPs des logs
-        d&apos;audit hashées avec un sel propriétaire. Sauvegardes chiffrées GPG AES-256 avant
-        upload R2. Aucune carte bancaire n&apos;est stockée par Fxmily V1 (formation hors-app).
+        via Caddy + HSTS preload, tokens d’invitation hashés en SHA-256, IPs des logs d’audit
+        hashées avec un sel propriétaire. Sauvegardes chiffrées GPG AES-256 avant upload R2. Aucune
+        carte bancaire n’est stockée par Fxmily V1 (formation hors-app).
       </p>
 
       <h2>8. Modifications</h2>

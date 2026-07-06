@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { CatchUpYesterdayCue } from '@/components/checkin/catch-up-yesterday-cue';
+import { CatchUpRecentCue } from '@/components/checkin/catch-up-recent-cue';
 import { CheckinEchoCard } from '@/components/checkin/checkin-echo-card';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
@@ -26,8 +26,8 @@ import {
   getCheckin,
   getCheckinStatus,
   getLast7Days,
+  getRecentBackfillDays,
   getStreak,
-  getYesterdayBackfill,
 } from '@/lib/checkin/service';
 import { getOffDaySet, isOffDay, isWeekendLocalDate } from '@/lib/checkin/off-days';
 import { crossedMilestone } from '@/lib/checkin/streak';
@@ -79,11 +79,13 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   // context can be queried on the same civil day the status uses.
   const todayLocal = localDateOf(new Date(), timezone);
 
-  const [status, streak, last7, yesterdayBackfill, offCtx] = await Promise.all([
+  const [status, streak, last7, recentBackfill, offCtx] = await Promise.all([
     getCheckinStatus(userId, timezone),
     getStreak(userId, timezone),
     getLast7Days(userId, timezone),
-    getYesterdayBackfill(userId, timezone),
+    // Tour 15 — the last few expected (non-off) days the member never fully
+    // filled (yesterday first), so the rattrapage cue lists each catch-up day.
+    getRecentBackfillDays(userId, timezone),
     // Tour 14 — off-day context for TODAY, to power the "Je ne trade pas
     // aujourd'hui" control (declare/cancel) and read its current state.
     getOffDaySet(userId, todayLocal, todayLocal),
@@ -202,16 +204,12 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           </>
         ) : null}
 
-        {/* F7 — cue calme « Rattraper hier » quand un slot d'hier manque. Opt-in,
-            jamais rouge ni compte-à-rebours (anti-Black-Hat §31.2). Ne s'affiche
-            pas quand hier est déjà complet (getYesterdayBackfill → null). */}
-        {yesterdayBackfill ? (
-          <CatchUpYesterdayCue
-            date={yesterdayBackfill.date}
-            morningMissing={yesterdayBackfill.morningMissing}
-            eveningMissing={yesterdayBackfill.eveningMissing}
-          />
-        ) : null}
+        {/* Tour 15 — cue calme « Rattrapage » : liste jusqu'à 3 jours attendus
+            récents encore incomplets (hier en tête), chacun cliquable vers son
+            flux de rattrapage. Opt-in, jamais rouge ni compte-à-rebours
+            (anti-Black-Hat §31.2). Les jours off sont déjà exclus en amont, et le
+            cue ne s'affiche pas quand tout est complet (liste vide). */}
+        {recentBackfill.length > 0 ? <CatchUpRecentCue days={recentBackfill} /> : null}
 
         {/* page-stagger : la lecture du moment (streak puis tendance 7 j) arrive
             en cascade douce — DIRECT children animés (compositor-only, reduced-
@@ -268,9 +266,15 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           <Card className="flex flex-col gap-2 p-5">
             <span className="t-eyebrow">Pourquoi deux fois par jour ?</span>
             <p className="t-body text-[var(--t-2)]">
+              {/* Root cause (Tour 15, proven on /legal/mentions v5/v6): the SWC
+                  compiler DROPS the leading space of a JSXText containing an
+                  HTML entity (&apos;) — prod DOM rendered « avantle marché ».
+                  Fix: literal U+2019 apostrophe instead of the entity (a {' '}
+                  workaround gets folded back to a plain space by prettier,
+                  silently re-exposing the bug). Keep this text entity-free. */}
               Le matin capture ton état physique et ton intention <em>avant</em> le marché. Le soir
-              mesure ce qui s&apos;est passé : discipline, stress, émotions. Croisés sur 30 jours,
-              ces deux signaux révèlent les patterns qui dégradent ton edge.
+              mesure ce qui s’est passé : discipline, stress, émotions. Croisés sur 30 jours, ces
+              deux signaux révèlent les patterns qui dégradent ton edge.
             </p>
             <p className="t-cap text-[var(--t-4)]">
               Tu peux passer un slot, mais le streak ne tient que si tu en fais au moins un par

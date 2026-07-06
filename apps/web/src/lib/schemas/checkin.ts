@@ -26,6 +26,13 @@ const TODAY_HORIZON_DAYS = 1;
  * where the UI offers a day the submit would then reject.
  */
 export const PAST_HORIZON_DAYS = 60;
+/**
+ * Tour 15 — the multi-day rattrapage cue lists at most this many recent expected
+ * (non-off) days the member never filled, so the hub never turns a couple of
+ * missed days into an overwhelming wall of catch-up rows (anti-Black-Hat §31.2:
+ * a calm nudge, never pressure). Consumed by `getRecentBackfillDays`.
+ */
+export const MAX_BACKFILL_SUGGESTIONS = 3;
 const MIN_DATE = '2020-01-01';
 
 /** YYYY-MM-DD with calendar validity check. */

@@ -48,7 +48,7 @@ export function AnnotationReceivedEmail({
         <title>Nouvelle correction sur {tradePair}</title>
       </Head>
       <Preview>
-        {author} t&apos;a laissé une correction sur ton trade {tradePair}.
+        {author} t’a laissé une correction sur ton trade {tradePair}.
       </Preview>
       <Body style={body}>
         <Container style={container}>

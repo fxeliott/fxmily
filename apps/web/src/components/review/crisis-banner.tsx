@@ -76,9 +76,8 @@ export function V18CrisisBanner({
             Si tu traverses un moment difficile, tu n&apos;es pas seul·e.
           </h2>
           <p className="t-body mt-2 text-[var(--t-2)]">
-            {confirmationText} Ces lignes d&apos;écoute sont gratuites, confidentielles et
-            disponibles 24/7. Appeler quelqu&apos;un, c&apos;est aussi une discipline
-            d&apos;exécution.
+            {confirmationText} Ces lignes d’écoute sont gratuites, confidentielles et disponibles
+            24/7. Appeler quelqu’un, c’est aussi une discipline d’exécution.
           </p>
 
           <ul className="mt-4 space-y-2.5">

@@ -109,7 +109,7 @@ export const JOURNEY_STAGES: ReadonlyArray<Omit<JourneyStage, 'reached' | 'curre
   {
     id: 'regularity',
     label: 'Régularité',
-    caption: 'Tu reviens chaque jour. Le réflexe s’installe.',
+    caption: 'Tu reviens sur tes jours actifs. Le réflexe s’installe.',
     threshold: 50,
   },
   {

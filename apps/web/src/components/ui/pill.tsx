@@ -8,7 +8,9 @@ const pillVariants = cva(
   {
     variants: {
       tone: {
-        mute: 'border-[var(--b-default)] text-[var(--t-3)] bg-[var(--mute-dim)]',
+        // t-2, not t-3: at 11px this is normal-size text (AA 4.5:1) and t-3 on
+        // mute-dim composites to 4.36:1 at runtime (Tour 15 sweep, /dashboard).
+        mute: 'border-[var(--b-default)] text-[var(--t-2)] bg-[var(--mute-dim)]',
         acc: 'border-[var(--b-acc)] text-[var(--acc-hi)] bg-[var(--acc-dim)]',
         ok: 'border-[var(--ok-edge)] text-[var(--ok)] bg-[var(--ok-dim)]',
         bad: 'border-[var(--bad-edge)] text-[var(--bad)] bg-[var(--bad-dim)]',

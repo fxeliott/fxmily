@@ -125,8 +125,8 @@ export function AccessApprovedEmail({
 
           <Text style={footer}>
             Ce lien expire dans {expiresInDays} jour{expiresInDays > 1 ? 's' : ''} et ne peut servir
-            qu&apos;une seule fois. Si tu n&apos;es plus intéressé·e, tu peux ignorer cet email,
-            aucun compte ne sera créé.
+            qu’une seule fois. Si tu n’es plus intéressé·e, tu peux ignorer cet email, aucun compte
+            ne sera créé.
           </Text>
 
           <Text style={footerSign}>L&apos;équipe Fxmily</Text>

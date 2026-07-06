@@ -30,8 +30,11 @@ const jetbrainsMono = JetBrains_Mono({
 // Signature typographique : Clash Display (Indian Type Foundry, licence ITF FFL
 // — cf. src/fonts/ClashDisplay-LICENSE-FFL.txt). Fichiers woff2 officiels
 // Fontshare utilisés tels quels (la licence interdit la conversion de format).
-// Deux graisses seulement (Semibold 600 + Bold 700) : la face display ne sert
-// qu'aux titres/hero/KPI, le corps de texte reste sur Inter/Geist.
+// Trois graisses (Medium 500 + Semibold 600 + Bold 700) : la face display ne
+// sert qu'aux titres/hero/KPI, le corps de texte reste sur Inter/Geist. Le
+// Medium est la graisse par défaut des gros titres (tour 16) : en dark mode
+// l'halation fait percevoir une graisse un cran au-dessus, un 500 se lit
+// comme un 600 — impact préservé, pavés illisibles éliminés.
 // `adjustFontFallback` calibre la métrique du fallback système pour tuer le CLS
 // pendant le swap ; `--font-display-face` est la variable consommée par
 // `--font-display` dans globals.css.
@@ -41,6 +44,11 @@ const clashDisplay = localFont({
   adjustFontFallback: 'Arial',
   fallback: ['Geist', 'Inter', 'system-ui', 'sans-serif'],
   src: [
+    {
+      path: '../fonts/ClashDisplay-Medium.woff2',
+      weight: '500',
+      style: 'normal',
+    },
     {
       path: '../fonts/ClashDisplay-Semibold.woff2',
       weight: '600',

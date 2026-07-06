@@ -88,7 +88,7 @@ export function SplashHero() {
 
           <div className="flex flex-col items-center gap-4">
             <h1
-              className="f-display font-bold tracking-[-0.045em] text-[var(--t-1)]"
+              className="f-display font-medium tracking-[-0.025em] text-[var(--t-1)]"
               style={{
                 fontFeatureSettings: '"ss01" 1',
                 // Signature d'accueil : la face display (Clash) porte le wow, on

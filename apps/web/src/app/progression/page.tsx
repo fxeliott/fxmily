@@ -316,7 +316,7 @@ function ProgressionHero({
             <span className="t-eyebrow text-[var(--t-3)]">Ma progression</span>
             <h1
               id="progression-hero-heading"
-              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              className="f-display h-rise leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)]"
               style={{
                 fontFeatureSettings: '"ss01" 1',
                 fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',

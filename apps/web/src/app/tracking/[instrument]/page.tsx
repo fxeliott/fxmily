@@ -87,7 +87,7 @@ export default async function TrackingInstrumentPage({
               Suivi · {getAxisLabel(instrument.axis)}
             </span>
             <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {existing ? `Reprendre · ${instrument.title}` : instrument.title}

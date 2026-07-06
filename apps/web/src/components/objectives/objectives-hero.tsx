@@ -30,7 +30,7 @@ export function ObjectivesHero({ view }: { view: ProcessObjectivesView }) {
       <div className="flex flex-col gap-3">
         <span className="t-eyebrow text-[var(--t-3)]">Où j’en suis aujourd’hui</span>
         <div className="flex items-end gap-3">
-          <span className="f-display text-[clamp(2.75rem,2.2rem+2.4vw,4rem)] leading-[0.95] font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
+          <span className="f-display text-[clamp(2.75rem,2.2rem+2.4vw,4rem)] leading-[0.95] font-medium tracking-[-0.02em] text-[var(--t-1)] tabular-nums">
             {cap !== null ? <AnimatedNumber value={cap} /> : '-'}
           </span>
           <span className="t-h3 mb-1.5 text-[var(--t-4)]">/ 100</span>

@@ -87,7 +87,7 @@ export function JourneyRoadmap({
           return (
             <li
               key={stage.id}
-              className="relative z-10 flex flex-1 items-start gap-3 sm:flex-col sm:items-center sm:gap-2.5 sm:text-center"
+              className="group rounded-card relative z-10 -m-2 flex flex-1 items-start gap-3 p-2 transition-colors motion-safe:hover:bg-[var(--acc-dim-2)] sm:flex-col sm:items-center sm:gap-2.5 sm:text-center"
               aria-current={isCurrent ? 'step' : undefined}
             >
               {/* Nœud */}
@@ -100,12 +100,17 @@ export function JourneyRoadmap({
                     transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                   />
                 ) : null}
+                {/* Hover par palier (Tour 16) : un palier non encore atteint réchauffe
+                    son nœud vers l'accent au survol de son étape (`group-hover`),
+                    sans jamais toucher l'état courant (ring) ni un palier déjà
+                    atteint (fond accent plein). motion-safe : neutralisé sous
+                    reduced-motion, la transition-colors du fond de l'étape suffit. */}
                 <span
                   className={cn(
                     'grid h-9 w-9 place-items-center rounded-full border text-[13px] font-semibold tabular-nums transition-colors',
                     isReached
                       ? 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]'
-                      : 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',
+                      : 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)] motion-safe:group-hover:border-[var(--b-acc)] motion-safe:group-hover:text-[var(--acc-hi)]',
                     isCurrent && 'ring-2 ring-[var(--acc)] ring-offset-2 ring-offset-[var(--bg-1)]',
                   )}
                 >

@@ -57,7 +57,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         >
           <header className="mb-6 flex flex-col items-center gap-2">
             <h1
-              className="f-display h-rise text-[34px] leading-[1.02] font-bold tracking-[-0.04em] text-[var(--t-1)] sm:text-[40px]"
+              className="f-display h-rise text-[34px] leading-[1.02] font-medium tracking-[-0.025em] text-[var(--t-1)] sm:text-[40px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Connexion

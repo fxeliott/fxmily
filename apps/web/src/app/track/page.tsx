@@ -94,7 +94,7 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
         <header className="masthead-accent space-y-2">
           <p className="t-eyebrow-lg text-[var(--acc)]">Suivi des habitudes</p>
           <h1
-            className="f-display h-rise text-[28px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            className="f-display h-rise text-[28px] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Tes 5 piliers de pratique

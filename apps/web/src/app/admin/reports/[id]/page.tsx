@@ -141,7 +141,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
         </div>
 
         <h1
-          className="f-display h-rise mt-3 text-[26px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[30px]"
+          className="f-display h-rise mt-3 text-[26px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[30px]"
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           {memberLabel}

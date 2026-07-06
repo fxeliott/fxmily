@@ -165,7 +165,7 @@ export function RouteSegmentError({
         >
           {resolvedEyebrow}
         </p>
-        <h1 className="f-display mt-3 text-3xl leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-4xl">
+        <h1 className="f-display mt-3 text-3xl leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-4xl">
           {headline}
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-[var(--t-2)]">{resolvedDescription}</p>

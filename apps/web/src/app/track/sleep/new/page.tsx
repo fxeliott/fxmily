@@ -58,7 +58,7 @@ export default async function TrackSleepNewPage() {
               <Moon className="h-6 w-6" strokeWidth={1.75} />
             </span>
             <h1
-              className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+              className="f-display h-rise text-[24px] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[28px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Logger ton sommeil

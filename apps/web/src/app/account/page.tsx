@@ -79,7 +79,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
                 Mon espace
               </span>
               <h1
-                className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                className="f-display h-rise leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)]"
                 style={{
                   fontFeatureSettings: '"ss01" 1',
                   fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',

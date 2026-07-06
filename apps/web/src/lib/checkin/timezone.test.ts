@@ -269,6 +269,7 @@ describe('nextQuietHoursEnd (Tour 15 — next local 08:00 as a UTC instant)', ()
     // Europe DST ends Sun 2026-10-25, clocks 03:00→02:00. At 03:00 local that day the
     // zone is back to CET (UTC+1). Member at 03:00 local = 02:00 UTC → next 08:00
     // local = 07:00 UTC (CET offset), NOT 06:00. Proves the offset is read at 08:00.
+    // allow-absolute-date injected-clock-anchor
     expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-10-25T02:00:00Z')).toISOString()).toBe(
       // allow-absolute-date injected-clock-anchor
       '2026-10-25T07:00:00.000Z', // allow-absolute-date injected-clock-anchor

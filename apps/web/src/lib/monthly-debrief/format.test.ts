@@ -58,6 +58,7 @@ describe('formatMonthLabelFr / formatMonthInlineFr — defensive fallback', () =
 });
 
 describe('formatMonthLabelFr / formatMonthInlineFr — mutual consistency', () => {
+  // allow-absolute-date injected-clock-anchor
   it.each(['2026-01-01', '2026-02-01', '2026-05-01', '2026-08-01', '2026-12-01'])(
     // allow-absolute-date injected-clock-anchor
     'for valid input %s the label is the capitalised form of the inline value',

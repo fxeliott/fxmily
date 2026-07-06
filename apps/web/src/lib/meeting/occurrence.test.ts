@@ -28,6 +28,7 @@ describe('DST anchors are Mondays (real meeting days)', () => {
   it('2026-03-30 (post spring-forward, CEST) is a Monday', () => {
     expect(parseLocalDate('2026-03-30').getUTCDay()).toBe(1);
   });
+  // allow-absolute-date injected-clock-anchor
   it('2026-10-26 (post fall-back, CET) is a Monday', () => {
     // allow-absolute-date injected-clock-anchor
     expect(parseLocalDate('2026-10-26').getUTCDay()).toBe(1); // allow-absolute-date injected-clock-anchor
@@ -48,12 +49,14 @@ describe('buildMeetingOccurrence — DST-aware scheduledAt', () => {
     );
   });
 
+  // allow-absolute-date injected-clock-anchor
   it('CET Monday 2026-10-26: 12h Paris → 11:00Z, 20h Paris → 19:00Z', () => {
     // allow-absolute-date injected-clock-anchor
     expect(buildMeetingOccurrence('2026-10-26', 'midday').scheduledAt.toISOString()).toBe(
       // allow-absolute-date injected-clock-anchor
       '2026-10-26T11:00:00.000Z', // allow-absolute-date injected-clock-anchor
     );
+    // allow-absolute-date injected-clock-anchor
     expect(buildMeetingOccurrence('2026-10-26', 'evening').scheduledAt.toISOString()).toBe(
       // allow-absolute-date injected-clock-anchor
       '2026-10-26T19:00:00.000Z', // allow-absolute-date injected-clock-anchor
@@ -61,6 +64,7 @@ describe('buildMeetingOccurrence — DST-aware scheduledAt', () => {
   });
 
   it('date is DERIVED from scheduledAt and round-trips to the input day (§30.7)', () => {
+    // allow-absolute-date injected-clock-anchor
     for (const day of ['2026-03-30', '2026-10-26']) {
       // allow-absolute-date injected-clock-anchor
       for (const slot of MEETING_SLOTS) {

@@ -12,7 +12,21 @@ import type { NextAuthConfig } from 'next-auth';
  */
 
 const PUBLIC_PREFIXES = ['/api/auth', '/legal', '/_next', '/favicon'];
-const PUBLIC_EXACT = new Set(['/', '/login', '/forgot-password', '/rejoindre']);
+// `/offline` (Tour 15) — the PWA offline fallback. It must be public so the
+// service worker can pre-cache it at install (the fetch would 307→/login
+// otherwise) and so an anonymous member who loses connectivity still sees the
+// calm offline page instead of an auth redirect. Purely informational, no data.
+// `/opengraph-image` (Tour 15) — link-preview crawlers (WhatsApp, X, Slack)
+// never carry a session; runtime-proven 307→/login without this entry, which
+// means NO link preview at all. Static brand image, no data.
+const PUBLIC_EXACT = new Set([
+  '/',
+  '/login',
+  '/forgot-password',
+  '/rejoindre',
+  '/offline',
+  '/opengraph-image',
+]);
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;

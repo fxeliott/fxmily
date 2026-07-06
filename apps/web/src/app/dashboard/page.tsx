@@ -30,6 +30,8 @@ import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { MethodGoalCard } from '@/components/objectives/method-goal-card';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
+import { A2HSHint } from '@/components/pwa/a2hs-hint';
+import { TimezoneMismatchNudge } from '@/components/account/timezone-mismatch-nudge';
 import { TrackingCoverageWidget } from '@/components/tracking/tracking-coverage-widget';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
@@ -285,6 +287,11 @@ export default async function DashboardPage() {
       {/* S4 DOD1-04 — makes the advertised `N` shortcut real (renders nothing) */}
       <JournalShortcut />
 
+      {/* Tour 15 — discreet one-time "Add to Home Screen" hint. Renders nothing
+          until the browser fires `beforeinstallprompt` (never on iOS Safari,
+          never when already installed) and self-retires after dismiss. */}
+      <A2HSHint />
+
       <div className="page-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         {/* V2 refonte J1 — north-star hero : point focal unique (état du jour +
             prochaine action). Remplace l'ancien title-row dense et absorbe le streak. */}
@@ -304,6 +311,15 @@ export default async function DashboardPage() {
           dayProgress={dayProgress}
           sessionFocus={sessionFocus}
         />
+
+        {/* Tour 15 — nudge discret « fuseau à vérifier » : quand le fuseau du
+            navigateur diffère du fuseau du profil (qui ancre les journées), un
+            bandeau calme pointe vers le réglage. Client-only, jamais une modale,
+            dismiss persistant par PAIRE de fuseaux (re-montre si la situation
+            change). Ne rend rien sans mismatch (compare en useEffect, 0 SSR). */}
+        <section className="mb-6 empty:hidden">
+          <TimezoneMismatchNudge profileTimezone={timezone} />
+        </section>
 
         {/* Tour 11 (FINDING 1/2/3) — la « ligne de connaissance » discrète sous le
             hero : le pont du matin (écho de la veille OU accueil après absence,

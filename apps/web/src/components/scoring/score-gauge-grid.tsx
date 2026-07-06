@@ -25,6 +25,13 @@ interface ScoreGaugeGridProps {
   score: SerializedBehavioralScore | null;
   /** 30-day behavioral-score history for inline per-dimension sparklines. */
   history?: BehavioralScoreTrendPoint[];
+  /**
+   * Tour 15 — the member joined less than 30 days ago. Floors a low gauge to the
+   * calm "En rodage" band instead of red "Critique" during onboarding. Passed
+   * only from the member's own progression view; the admin coaching view leaves
+   * it false to keep the true diagnostic tone.
+   */
+  rampUp?: boolean;
 }
 
 /**
@@ -57,7 +64,7 @@ function EmptyScoresGrid() {
   );
 }
 
-export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
+export function ScoreGaugeGrid({ score, history, rampUp = false }: ScoreGaugeGridProps) {
   if (score === null) return <EmptyScoresGrid />;
 
   // Micro-tendance par dimension (nulls pré-filtrés — jamais converti en 0).
@@ -110,6 +117,7 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
             hint="Plan + hedge + routine"
             reason={reasonOf(score.components.discipline)}
             trend={trendFor('discipline')}
+            rampUp={rampUp}
           />
           <ScoreGauge
             score={score.emotionalStabilityScore}
@@ -117,6 +125,7 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
             hint="Variance + stress + tilt"
             reason={reasonOf(score.components.emotionalStability)}
             trend={trendFor('emotionalStability')}
+            rampUp={rampUp}
           />
           <ScoreGauge
             score={score.consistencyScore}
@@ -124,6 +133,7 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
             hint="Expectancy + DD + sessions"
             reason={reasonOf(score.components.consistency)}
             trend={trendFor('consistency')}
+            rampUp={rampUp}
           />
           <ScoreGauge
             score={score.engagementScore}
@@ -131,6 +141,7 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
             hint="Fill rate + streak + journal"
             reason={reasonOf(score.components.engagement)}
             trend={trendFor('engagement')}
+            rampUp={rampUp}
           />
         </div>
 

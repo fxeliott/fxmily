@@ -21,8 +21,14 @@ import {
  * re-used by the Server Action without manual conversion.
  */
 
+// A date that always sits inside the schema's accepted window [today−60j,
+// today+1j UTC]. Hardcoding a literal (was '2026-05-06') is a time bomb: it
+// silently crossed the >60j floor on 2026-07-06 and reddened CI. "Yesterday
+// UTC" can never age out and never trips the future-drift guard.
+const RECENT_DATE = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 const validMorning = {
-  date: '2026-05-06',
+  date: RECENT_DATE,
   sleepHours: '7.5',
   sleepQuality: '8',
   morningRoutineCompleted: 'true',
@@ -36,7 +42,7 @@ const validMorning = {
 };
 
 const validEvening = {
-  date: '2026-05-06',
+  date: RECENT_DATE,
   planRespectedToday: 'true',
   hedgeRespectedToday: 'na',
   formationFollowed: 'true',

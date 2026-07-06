@@ -86,7 +86,15 @@ fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 var_re='^(SHELL|PATH|MAILTO)=[^;&|]*$'
 sched='^[0-9*,/[:space:]-]+'
 cron_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-cron[[:space:]]+[a-z-]+[[:space:]]*$"
-backup_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-(backup|caddy-backup|uploads-backup|restore-drill)[[:space:]]*$"
+# ⚠️ Allowlist evolution rule (Tour 15): THIS validator is root-pinned on the
+# host and never self-converges (updating root code from the fxmily-writable
+# staging dir would be an escalation path), so the deployed copy can be OLDER
+# than this file. A crontab line must therefore only use shapes the OLDEST
+# deployed generation accepts — new local tasks route through `fxmily-cron
+# <task>` (converged every deploy), never through a new direct-binary regex.
+# The tour-14 direct `fxmily-restore-drill` line failed the 2026-07-06 deploy
+# against the tour-12 copy on the host; restore-drill now rides fxmily-cron.
+backup_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-(backup|caddy-backup|uploads-backup)[[:space:]]*$"
 autoheal_re="${sched}root[[:space:]]+/usr/local/bin/fxmily-autoheal[[:space:]]*$"
 lineno=0
 while IFS= read -r line || [[ -n "$line" ]]; do

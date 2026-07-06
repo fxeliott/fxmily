@@ -121,7 +121,12 @@ MAILTO=""
 # volume backups AND the 05:00 purge-push-subscriptions (CX22 = 2 vCPU — the
 # scratch-postgres restore should not race another job). Logs the verdict to
 # cron.log; pings HEALTHCHECK_PING_URL_RESTORE on success if set.
-10 5 * * 0                   fxmily   /usr/local/bin/fxmily-restore-drill
+# Tour 15 — fired through the fxmily-cron wrapper (LOCAL task, not an HTTP
+# route): the root validator on the host never self-updates, so crontab lines
+# must only ever use shapes its OLDEST deployed generation accepts. The
+# tour-14 direct `fxmily-restore-drill` line failed the 2026-07-06 deploy
+# against the tour-12 validator still installed on the host.
+10 5 * * 0                   fxmily   /usr/local/bin/fxmily-cron restore-drill
 
 # V1.5 §27 — QCM athlète weekly mindset reminder : Monday 09:00 UTC. The
 # mindset week opens Monday (`weekStart`); one gentle anti-FOMO nudge per

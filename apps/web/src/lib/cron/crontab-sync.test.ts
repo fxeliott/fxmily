@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 // (apps/web/src/lib/cron → repo root). Imports may cross package roots; only the
 // test file itself must live under apps/web/src to be picked up by vitest.config.
 import {
+  LOCAL_CRON_TASKS,
   UNSCHEDULED_CRON_ROUTES,
   checkCronScheduleSync,
   diffCronSchedule,
@@ -120,6 +121,32 @@ describe('diffCronSchedule (pure core)', () => {
     });
     expect(r.ok).toBe(false);
     expect(r.staleAllowlist).toEqual(['deleted-cron']);
+  });
+
+  // Tour 15 — LOCAL wrapper tasks (host binaries fired via `fxmily-cron <task>`,
+  // e.g. restore-drill) are scheduled + allowlisted WITHOUT a route.ts.
+  it('tolerates a LOCAL task in crontab + allowlist with no code route', () => {
+    expect(LOCAL_CRON_TASKS.has('restore-drill')).toBe(true);
+    const r = diffCronSchedule({
+      routes: ['recompute-scores'],
+      crontab: ['recompute-scores', 'restore-drill'],
+      allowlist: ['recompute-scores', 'restore-drill'],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.staleCrontab).toEqual([]);
+    expect(r.staleAllowlist).toEqual([]);
+  });
+
+  it('the tolerance is carried ONLY by LOCAL_CRON_TASKS (empty set → stale again)', () => {
+    const r = diffCronSchedule({
+      routes: ['recompute-scores'],
+      crontab: ['recompute-scores', 'restore-drill'],
+      allowlist: ['recompute-scores', 'restore-drill'],
+      localTasks: new Set(),
+    });
+    expect(r.ok).toBe(false);
+    expect(r.staleCrontab).toEqual(['restore-drill']);
+    expect(r.staleAllowlist).toEqual(['restore-drill']);
   });
 });
 

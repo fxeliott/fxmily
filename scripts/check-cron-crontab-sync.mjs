@@ -48,6 +48,22 @@ export const UNSCHEDULED_CRON_ROUTES = new Set([
   'health',
 ]);
 
+/**
+ * The INVERSE exclusion: wrapper tasks that are scheduled + allowlisted but are
+ * NOT /api/cron routes — the wrapper executes a LOCAL host binary instead of
+ * curling the app. They must be tolerated in the crontab and the allowlist
+ * without a matching route.ts. Keep as small as UNSCHEDULED_CRON_ROUTES and
+ * justify every entry inline.
+ */
+export const LOCAL_CRON_TASKS = new Set([
+  // Tour 15 — weekly proven-restore drill. Routed through fxmily-cron (instead
+  // of a direct `fxmily-restore-drill` crontab line) because the root validator
+  // on the host never self-converges: crontab lines may only use shapes its
+  // OLDEST deployed generation accepts, and `fxmily-cron <task>` is the one
+  // stable shape (the tour-14 direct line failed the 2026-07-06 deploy).
+  'restore-drill',
+]);
+
 const CRON_ROUTES_DIR = join(REPO_ROOT, 'apps', 'web', 'src', 'app', 'api', 'cron');
 const CRONTAB_FILE = join(REPO_ROOT, 'ops', 'cron', 'crontab.fxmily');
 const WRAPPER_FILE = join(REPO_ROOT, 'ops', 'cron', 'fxmily-cron');
@@ -129,6 +145,7 @@ export function diffCronSchedule({
   crontab,
   allowlist,
   excluded = UNSCHEDULED_CRON_ROUTES,
+  localTasks = LOCAL_CRON_TASKS,
 }) {
   // Routes that SHOULD be scheduled = code routes minus the documented exclusions.
   const scheduled = routes.filter((r) => !excluded.has(r));
@@ -143,9 +160,11 @@ export function diffCronSchedule({
   // entry either, since they are never wrapper-invoked.
   const missingFromAllowlist = scheduled.filter((r) => !allowlistSet.has(r)).sort();
   // (3) crontab line firing a route that no longer exists in code (→ 404 spam).
-  const staleCrontab = crontab.filter((r) => !routeSet.has(r)).sort();
+  // Local wrapper tasks (LOCAL_CRON_TASKS) run a host binary, never the app —
+  // they are legitimately scheduled without a route.ts.
+  const staleCrontab = crontab.filter((r) => !routeSet.has(r) && !localTasks.has(r)).sort();
   // (3b) allowlist entry for a route that no longer exists in code (dead allow).
-  const staleAllowlist = allowlist.filter((r) => !routeSet.has(r)).sort();
+  const staleAllowlist = allowlist.filter((r) => !routeSet.has(r) && !localTasks.has(r)).sort();
 
   const ok =
     missingFromCrontab.length === 0 &&

@@ -180,6 +180,21 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
   };
 }
 
+/**
+ * Tour 15 — light-weight pending-proof counter for the `/api/verification/
+ * pending-count` poll endpoint. A single indexed `count` (no joins, no signed
+ * URLs, no position aggregation) — the point is that a client polling every
+ * 10 s costs one cheap query, not the full `getVerificationOverview` fan-out.
+ * The count matches `VerificationOverview.pendingProofsCount` (same predicate)
+ * so the client can compare it against the server-rendered value and only
+ * `router.refresh()` when it changes (a verdict just landed).
+ */
+export async function countPendingProofs(memberId: string): Promise<number> {
+  return db.mt5AccountProof.count({
+    where: { memberId, ocrStatus: 'pending' },
+  });
+}
+
 export class DiscrepancyNotFoundError extends Error {
   override readonly name = 'DiscrepancyNotFoundError';
   constructor() {

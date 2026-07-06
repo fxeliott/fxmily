@@ -32,6 +32,17 @@ const REASON_LABEL: Record<ScoreEventView['reason'], string> = {
 };
 
 /**
+ * Tour 15 — the calm motif shown next to a neutralized event. An off day is a
+ * choix, jamais un manque, so its note stays factual and posé (§33.2). The
+ * `NonNullable` reason is guaranteed by the caller (`excused === true`).
+ */
+const EXCUSAL_NOTE: Record<NonNullable<ScoreEventView['excusedReason']>, string> = {
+  member_reason: 'excusé, motif donné',
+  resolved: 'excusé, levé par la réalité',
+  off_day: 'jour off, rien à rattraper',
+};
+
+/**
  * Short chip labels for the « 2-3 signaux dominants » summary (CONTEXTE GLOBAL).
  * All PLURAL — they summarise a COUNT (`×N`), and staying plural keeps each chip
  * label textually distinct from the singular per-event `REASON_LABEL` above (a
@@ -140,7 +151,7 @@ export function ScoreEventsHistory({
               </span>
               <span className="t-foot text-[var(--t-4)]">
                 {formatEventDate(event.createdAt, timezone)}
-                {event.excused ? ' · excusé, motif donné ou levé par la réalité' : ''}
+                {event.excused ? ` · ${EXCUSAL_NOTE[event.excusedReason ?? 'member_reason']}` : ''}
               </span>
             </span>
             <span

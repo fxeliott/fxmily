@@ -11,16 +11,21 @@ vi.mock('next/navigation', () => ({
 import { ProofAnalysisPoller } from './proof-analysis-poller';
 
 /**
- * Tour 14 — RUNTIME behaviour of the « attente informée » poller, measured with
- * fake timers (real setInterval / visibilitychange, not a "should work" claim):
- *   - refreshes on the interval while a proof is pending;
- *   - never arms a timer (never refreshes) when nothing is pending;
- *   - suspends while the tab is hidden, resumes on the visibility event;
- *   - stops after the 30 min duration cap.
- * POLL_INTERVAL_MS = 25_000, MAX_POLL_DURATION_MS = 30 min (component constants).
+ * Tour 15 — RUNTIME behaviour of the « attente informée » poller, measured with
+ * fake timers + a mocked `fetch` (real setInterval / visibilitychange, not a
+ * "should work" claim). The tour 14 version `router.refresh()`-ed on every tick
+ * (7 DB reads each); tour 15 polls the light /pending-count endpoint and only
+ * refreshes when the count CHANGES:
+ *   - polls on the interval while a proof is pending, but does NOT refresh while
+ *     the fetched count still equals the server baseline;
+ *   - refreshes exactly once when the fetched count differs (a verdict landed);
+ *   - never polls / refreshes when nothing is pending (no timer armed);
+ *   - suspends fetching while the tab is hidden, resumes on the visibility event;
+ *   - tears down its interval + aborts in-flight fetch on unmount.
+ * POLL_INTERVAL_MS = 10_000 (component constant).
  */
 
-const POLL_INTERVAL_MS = 25_000;
+const POLL_INTERVAL_MS = 10_000;
 
 /** Force document.visibilityState (jsdom leaves it read-only 'visible' by default). */
 function setVisibility(state: 'visible' | 'hidden') {
@@ -31,9 +36,21 @@ function setVisibility(state: 'visible' | 'hidden') {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
+/** Mocked fetch that always resolves { pending } for the count endpoint. */
+function mockPending(value: number) {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: async () => ({ pending: value }),
+  } as unknown as Response);
+}
+
+const fetchMock = vi.fn<(...args: unknown[]) => Promise<Response>>();
+
 beforeEach(() => {
   vi.useFakeTimers();
   refreshMock.mockReset();
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
   setVisibility('visible');
 });
 
@@ -41,61 +58,63 @@ afterEach(() => {
   cleanup();
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
-describe('ProofAnalysisPoller — runtime timer behaviour', () => {
-  it('refreshes once per interval while a proof is pending', () => {
+describe('ProofAnalysisPoller — runtime poll behaviour (Tour 15)', () => {
+  it('polls the light endpoint but does NOT refresh while the count is unchanged', async () => {
+    mockPending(1); // baseline = 1, endpoint keeps returning 1
     render(<ProofAnalysisPoller pendingCount={1} />);
-    expect(refreshMock).not.toHaveBeenCalled(); // no immediate refresh on mount
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 2);
-    expect(refreshMock).toHaveBeenCalledTimes(3);
-  });
-
-  it('never refreshes when nothing is pending (no timer armed)', () => {
-    render(<ProofAnalysisPoller pendingCount={0} />);
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 5);
+    // It polled the cheap endpoint...
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/verification/pending-count');
+    // ...but never triggered the expensive full refresh (nothing changed).
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it('suspends while the tab is hidden and resumes when it becomes visible again', () => {
-    render(<ProofAnalysisPoller pendingCount={2} />);
+  it('refreshes exactly once when the fetched count drops below the baseline', async () => {
+    mockPending(0); // a verdict landed: 1 pending -> 0
+    render(<ProofAnalysisPoller pendingCount={1} />);
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+
+    // The poll stopped after the change; extra time adds no further refreshes.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('never polls when nothing is pending (no timer armed)', async () => {
+    render(<ProofAnalysisPoller pendingCount={0} />);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('suspends fetching while the tab is hidden and resumes when it becomes visible', async () => {
+    mockPending(1); // unchanged count so we can assert on fetch, not refresh
+    render(<ProofAnalysisPoller pendingCount={1} />);
 
     setVisibility('hidden');
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 3);
-    // Ticks fired but each one bails because the tab is hidden.
-    expect(refreshMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    // Ticks fired but each one bails because the tab is hidden — no fetch.
+    expect(fetchMock).not.toHaveBeenCalled();
 
-    // Becoming visible triggers an immediate catch-up refresh...
+    // Becoming visible triggers an immediate catch-up poll.
     setVisibility('visible');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
-    // ...then the interval resumes.
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
-    expect(refreshMock).toHaveBeenCalledTimes(2);
+    await vi.runOnlyPendingTimersAsync();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
-  it('stops refreshing after the 30 minute duration cap', () => {
-    render(<ProofAnalysisPoller pendingCount={1} />);
-
-    // 30 min / 25 s = 72 intervals. Advance well past the cap.
-    vi.advanceTimersByTime(31 * 60 * 1000);
-    const callsAfterCap = refreshMock.mock.calls.length;
-
-    // Further time must not add refreshes (the cap short-circuited the tick).
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 10);
-    expect(refreshMock.mock.calls.length).toBe(callsAfterCap);
-    // Sanity: it did refresh a bounded number of times before the cap (≈72).
-    expect(callsAfterCap).toBeGreaterThan(0);
-    expect(callsAfterCap).toBeLessThanOrEqual(72);
-  });
-
-  it('tears down its interval on unmount (no leaked refreshes)', () => {
+  it('tears down its interval on unmount (no leaked polls)', async () => {
+    mockPending(1);
     const { unmount } = render(<ProofAnalysisPoller pendingCount={1} />);
     unmount();
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 5);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5);
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,11 @@ interface BeforeInstallPromptEvent extends Event {
  *  - Once dismissed (or once the native prompt is shown), the flag persists in
  *    localStorage so the hint appears at most once. Never blocking, never modal.
  *
+ * Placement (Tour 16): a full-width bottom banner on mobile (its natural home),
+ * but from `sm` up it tucks into the bottom-RIGHT corner as a discreet card so
+ * it never spans a 1440px desktop viewport where a centred full-bleed toast is
+ * intrusive.
+ *
  * Hydration safety (repo lesson `reference_reduced-motion-hydration`): the JSX
  * tree never branches on `useReducedMotion`; the rise animation is a
  * `motion-safe:` CSS class only. The dismiss flag is read via
@@ -107,7 +112,7 @@ export function A2HSHint(): React.ReactElement | null {
       role="region"
       aria-label="Installer l'application"
       data-slot="a2hs-hint"
-      className="motion-safe:animate-cookie-rise fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:p-5"
+      className="motion-safe:animate-cookie-rise fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:inset-x-auto sm:right-4 sm:bottom-4 sm:mx-0 sm:max-w-sm sm:p-5"
     >
       <span
         aria-hidden="true"

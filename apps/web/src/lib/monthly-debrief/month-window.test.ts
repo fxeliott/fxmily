@@ -33,8 +33,8 @@ describe('computeMonthWindow — civil month containing `now`', () => {
   });
 
   it('February leap year ends on the 29th', () => {
-    const w = computeMonthWindow(new Date('2028-02-10T12:00:00Z'), PARIS);
-    expect(w.monthEndLocal).toBe('2028-02-29');
+    const w = computeMonthWindow(new Date('2028-02-10T12:00:00Z'), PARIS); // allow-absolute-date injected-clock-anchor
+    expect(w.monthEndLocal).toBe('2028-02-29'); // allow-absolute-date injected-clock-anchor
   });
 
   it('30-day and 31-day months are correct', () => {
@@ -70,15 +70,15 @@ describe('computeReportingMonth — previous full civil month', () => {
   });
 
   it('year rollover: batch fires 1 Jan → reports the previous December', () => {
-    const w = computeReportingMonth(new Date('2027-01-01T02:00:00Z'), PARIS);
-    expect(w.monthStartLocal).toBe('2026-12-01');
-    expect(w.monthEndLocal).toBe('2026-12-31');
+    const w = computeReportingMonth(new Date('2027-01-01T02:00:00Z'), PARIS); // allow-absolute-date injected-clock-anchor
+    expect(w.monthStartLocal).toBe('2026-12-01'); // allow-absolute-date injected-clock-anchor
+    expect(w.monthEndLocal).toBe('2026-12-31'); // allow-absolute-date injected-clock-anchor
   });
 
   it('previous month is February in a leap year → ends on the 29th', () => {
-    const w = computeReportingMonth(new Date('2028-03-01T02:00:00Z'), PARIS);
-    expect(w.monthStartLocal).toBe('2028-02-01');
-    expect(w.monthEndLocal).toBe('2028-02-29');
+    const w = computeReportingMonth(new Date('2028-03-01T02:00:00Z'), PARIS); // allow-absolute-date injected-clock-anchor
+    expect(w.monthStartLocal).toBe('2028-02-01'); // allow-absolute-date injected-clock-anchor
+    expect(w.monthEndLocal).toBe('2028-02-29'); // allow-absolute-date injected-clock-anchor
   });
 
   it.each([
@@ -146,6 +146,6 @@ describe('monthWindowFromMonthStart — deterministic admin recompute', () => {
   it('the recomputed monthEnd is service-derived, never trusted from input', () => {
     // Even if a caller passes only the 1st, monthEnd is computed (28..31).
     expect(monthWindowFromMonthStart('2026-02-01', PARIS).monthEndLocal).toBe('2026-02-28');
-    expect(monthWindowFromMonthStart('2028-02-01', PARIS).monthEndLocal).toBe('2028-02-29');
+    expect(monthWindowFromMonthStart('2028-02-01', PARIS).monthEndLocal).toBe('2028-02-29'); // allow-absolute-date injected-clock-anchor
   });
 });

@@ -26,7 +26,7 @@
  * `test.skip`-ped, like the cron-driven session10 chain test.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import type { VerificationVisionOutput } from '@/lib/schemas/verification';

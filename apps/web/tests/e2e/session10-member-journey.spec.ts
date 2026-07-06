@@ -32,7 +32,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type Page } from '@playwright/test';
+import { chromium, expect, test, type Page } from './fixtures';
 
 import { db } from '@/lib/db';
 import {

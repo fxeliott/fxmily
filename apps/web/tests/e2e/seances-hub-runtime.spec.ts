@@ -32,7 +32,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type Page } from '@playwright/test';
+import { chromium, expect, test, type Page } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -67,12 +67,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
@@ -199,7 +193,6 @@ test.describe('Séances — hub + page séance (runtime)', () => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
     const errors = trackConsoleErrors(page);
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -242,7 +235,6 @@ test.describe('Séances — hub + page séance (runtime)', () => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
     const errors = trackConsoleErrors(page);
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -301,7 +293,6 @@ test.describe('Séances — hub + page séance (runtime)', () => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
     const errors = trackConsoleErrors(page);
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -325,7 +316,6 @@ test.describe('Séances — hub + page séance (runtime)', () => {
   }) => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 

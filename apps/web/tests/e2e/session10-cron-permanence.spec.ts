@@ -23,7 +23,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /**
  * Every secret-gated cron under app/api/cron. `health` IS gated too (POST-only,

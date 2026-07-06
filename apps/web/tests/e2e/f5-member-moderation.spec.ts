@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, dismissCookieBannerOn, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import {
@@ -51,13 +51,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
   return { ok: true };
 }
 
-/** Pre-seed the cookie-banner dismissal BEFORE any document loads (canon S2/S4). */
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
-
 async function tokenVersionOf(userId: string): Promise<number> {
   const row = await db.user.findUnique({ where: { id: userId }, select: { tokenVersion: true } });
   if (!row) throw new Error(`user ${userId} vanished`);
@@ -86,7 +79,6 @@ test.describe('F5 — Modération de membres (admin)', () => {
   }) => {
     if (!admin) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
@@ -108,7 +100,6 @@ test.describe('F5 — Modération de membres (admin)', () => {
     const adminUser = admin;
 
     // --- MEMBER: log in on the default page and prove /dashboard is reachable.
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
     await page.goto('/dashboard');
@@ -120,7 +111,7 @@ test.describe('F5 — Modération de membres (admin)', () => {
     const adminContext = await browser.newContext();
     try {
       const adminPage = await adminContext.newPage();
-      await dismissCookieBanner(adminPage);
+      await dismissCookieBannerOn(adminPage);
       await adminPage.goto('/login');
       await loginAs(adminPage, adminContext.request, adminUser.email, adminUser.password);
 
@@ -210,7 +201,7 @@ test.describe('F5 — Modération de membres (admin)', () => {
     const adminContext2 = await browser.newContext();
     try {
       const adminPage = await adminContext2.newPage();
-      await dismissCookieBanner(adminPage);
+      await dismissCookieBannerOn(adminPage);
       await adminPage.goto('/login');
       await loginAs(adminPage, adminContext2.request, adminUser.email, adminUser.password);
 
@@ -241,7 +232,7 @@ test.describe('F5 — Modération de membres (admin)', () => {
     const restoredContext = await browser.newContext();
     try {
       const restoredPage = await restoredContext.newPage();
-      await dismissCookieBanner(restoredPage);
+      await dismissCookieBannerOn(restoredPage);
       await restoredPage.goto('/login');
       await loginAs(restoredPage, restoredContext.request, memberUser.email, memberUser.password);
       await restoredPage.goto('/dashboard');

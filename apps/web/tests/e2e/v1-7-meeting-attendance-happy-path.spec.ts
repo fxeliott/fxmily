@@ -28,7 +28,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';

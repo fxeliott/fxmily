@@ -80,8 +80,8 @@ describe('shiftLocalDate', () => {
     expect(shiftLocalDate('2026-03-01', -1)).toBe('2026-02-28');
   });
   it('handles year boundaries', () => {
-    expect(shiftLocalDate('2026-12-31', 1)).toBe('2027-01-01');
-    expect(shiftLocalDate('2027-01-01', -1)).toBe('2026-12-31');
+    expect(shiftLocalDate('2026-12-31', 1)).toBe('2027-01-01'); // allow-absolute-date injected-clock-anchor
+    expect(shiftLocalDate('2027-01-01', -1)).toBe('2026-12-31'); // allow-absolute-date injected-clock-anchor
   });
   it('returns the same string when shift is 0', () => {
     expect(shiftLocalDate('2026-05-06', 0)).toBe('2026-05-06');
@@ -270,7 +270,8 @@ describe('nextQuietHoursEnd (Tour 15 — next local 08:00 as a UTC instant)', ()
     // zone is back to CET (UTC+1). Member at 03:00 local = 02:00 UTC → next 08:00
     // local = 07:00 UTC (CET offset), NOT 06:00. Proves the offset is read at 08:00.
     expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-10-25T02:00:00Z')).toISOString()).toBe(
-      '2026-10-25T07:00:00.000Z',
+      // allow-absolute-date injected-clock-anchor
+      '2026-10-25T07:00:00.000Z', // allow-absolute-date injected-clock-anchor
     );
   });
 });

@@ -18,17 +18,11 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
 
 let member: SeededUser | null = null;
 
@@ -91,7 +85,6 @@ test.describe('S4 — /journal : les photos §31 LEGACY restent affichées (real
       select: { id: true },
     });
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
 

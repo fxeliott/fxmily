@@ -18,7 +18,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type Page } from '@playwright/test';
+import { chromium, expect, test, type Page } from './fixtures';
 
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
@@ -75,12 +75,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
   return { ok: true };
 }
 
-async function dismissCookieBanner(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
-
 function trackConsoleErrors(page: Page): () => string[] {
   const errors: string[] = [];
   const ALLOW = [/React DevTools/i, /favicon/i, /Download the React/i];
@@ -124,7 +118,6 @@ test.describe('Séances admin — go/no-go (runtime)', () => {
     const errors = trackConsoleErrors(page);
     const today = todayParis();
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
@@ -162,7 +155,6 @@ test.describe('Séances admin — go/no-go (runtime)', () => {
   test('B — un membre est redirigé hors de /admin/seances', async ({ page, request }) => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 

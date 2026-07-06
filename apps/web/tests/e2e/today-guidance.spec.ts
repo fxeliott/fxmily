@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { Prisma } from '@/generated/prisma/client';
 import { CURRENT_CALENDAR_INSTRUMENT_VERSION } from '@/lib/calendar/instrument-v1';

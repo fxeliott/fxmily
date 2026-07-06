@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 /**
  * J9 — Public-surface E2E for the Web Push notifications dispatcher.

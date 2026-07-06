@@ -159,7 +159,7 @@ describe('persistGeneratedSnapshots (J-E monthly re-profiling)', () => {
   it('recomputes monthEnd from monthStart (ignores a forged request.monthEnd)', async () => {
     await persistGeneratedSnapshots({
       monthStart: '2026-04-01',
-      monthEnd: '2026-12-31', // incoherent — must be ignored
+      monthEnd: '2026-12-31', // incoherent — must be ignored // allow-absolute-date injected-clock-anchor
       results: [ok('user-active-1')],
     });
     const call = vi.mocked(db.memberProfileMonthlySnapshot.upsert).mock.calls[0]?.[0];

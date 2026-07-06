@@ -21,7 +21,7 @@
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 
-import { expect, request as playwrightRequest, test } from '@playwright/test';
+import { expect, request as playwrightRequest, test } from './fixtures';
 
 import { loginAs } from '@/test/e2e-auth';
 

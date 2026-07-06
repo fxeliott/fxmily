@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 /**
  * J-T2 — Public-surface E2E for Mode Entraînement (SPEC §21).

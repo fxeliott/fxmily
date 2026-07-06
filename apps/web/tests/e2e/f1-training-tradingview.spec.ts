@@ -25,7 +25,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -44,12 +44,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 test.describe('F1/J1 — Lien TradingView requis (Mode Entraînement)', () => {
@@ -84,7 +78,6 @@ test.describe('F1/J1 — Lien TradingView requis (Mode Entraînement)', () => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
     const memberUser = member;
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
 
@@ -173,7 +166,6 @@ test.describe('F1/J1 — Lien TradingView requis (Mode Entraînement)', () => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
     const memberUser = member;
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
 

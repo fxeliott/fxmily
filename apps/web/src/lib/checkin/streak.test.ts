@@ -88,8 +88,8 @@ describe('computeStreak', () => {
   });
 
   it('handles year boundaries', () => {
-    const days: CheckinDay[] = [day('2027-01-02'), day('2027-01-01'), day('2026-12-31')];
-    expect(computeStreak(days, '2027-01-02')).toBe(3);
+    const days: CheckinDay[] = [day('2027-01-02'), day('2027-01-01'), day('2026-12-31')]; // allow-absolute-date injected-clock-anchor
+    expect(computeStreak(days, '2027-01-02')).toBe(3); // allow-absolute-date injected-clock-anchor
   });
 
   it('ignores duplicates of the same date silently', () => {

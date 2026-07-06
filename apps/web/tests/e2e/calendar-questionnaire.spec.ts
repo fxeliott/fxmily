@@ -34,8 +34,8 @@
 
 import { existsSync } from 'node:fs';
 
-import { expect, test } from '@playwright/test';
-import { chromium } from '@playwright/test';
+import { expect, test } from './fixtures';
+import { chromium } from './fixtures';
 
 import { CURRENT_CALENDAR_INSTRUMENT_VERSION } from '@/lib/calendar/instrument-v1';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';

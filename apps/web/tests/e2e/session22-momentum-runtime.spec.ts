@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type ConsoleMessage } from '@playwright/test';
+import { chromium, expect, test, type ConsoleMessage } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -33,12 +33,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 /**
@@ -114,7 +108,6 @@ test.describe('S22 — MomentumCard surfacée au membre (runtime, posture §2)',
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, declining.email, declining.password);
 
@@ -147,7 +140,6 @@ test.describe('S22 — MomentumCard surfacée au membre (runtime, posture §2)',
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, fresh.email, fresh.password);
 

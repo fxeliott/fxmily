@@ -48,18 +48,18 @@ describe('OffDaysManager — optimistic upcoming list', () => {
   it('shows the freshly-declared days immediately, without a reload', async () => {
     declareRangeMock.mockResolvedValue({
       ok: true,
-      from: '2026-07-07',
-      to: '2026-07-08',
+      from: '2026-07-07', // allow-absolute-date injected-clock-anchor
+      to: '2026-07-08', // allow-absolute-date injected-clock-anchor
       days: 2,
       upcoming: [
-        { date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Repos' },
-        { date: '2026-07-08', label: 'mercredi 8 juillet', reason: 'Repos' },
+        { date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Repos' }, // allow-absolute-date injected-clock-anchor
+        { date: '2026-07-08', label: 'mercredi 8 juillet', reason: 'Repos' }, // allow-absolute-date injected-clock-anchor
       ],
     });
     renderManager();
 
     expect(screen.queryByText('Jours off à venir')).toBeNull();
-    fillRange('2026-07-07', '2026-07-08');
+    fillRange('2026-07-07', '2026-07-08'); // allow-absolute-date injected-clock-anchor
     fireEvent.click(screen.getByRole('button', { name: /Poser ces jours off/ }));
 
     await waitFor(() => {
@@ -73,17 +73,17 @@ describe('OffDaysManager — optimistic upcoming list', () => {
   it('dedupes on date (re-declaring updates the reason) and keeps chronological order', async () => {
     declareRangeMock.mockResolvedValue({
       ok: true,
-      from: '2026-07-07',
-      to: '2026-07-07',
+      from: '2026-07-07', // allow-absolute-date injected-clock-anchor
+      to: '2026-07-07', // allow-absolute-date injected-clock-anchor
       days: 1,
-      upcoming: [{ date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Formation' }],
+      upcoming: [{ date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Formation' }], // allow-absolute-date injected-clock-anchor
     });
     renderManager([
-      { date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Repos' },
-      { date: '2026-07-09', label: 'jeudi 9 juillet', reason: null },
+      { date: '2026-07-07', label: 'mardi 7 juillet', reason: 'Repos' }, // allow-absolute-date injected-clock-anchor
+      { date: '2026-07-09', label: 'jeudi 9 juillet', reason: null }, // allow-absolute-date injected-clock-anchor
     ]);
 
-    fillRange('2026-07-07', '2026-07-07');
+    fillRange('2026-07-07', '2026-07-07'); // allow-absolute-date injected-clock-anchor
     fireEvent.click(screen.getByRole('button', { name: /Poser ces jours off/ }));
 
     await waitFor(() => {
@@ -102,7 +102,7 @@ describe('OffDaysManager — optimistic upcoming list', () => {
     declareRangeMock.mockResolvedValue({ ok: false, error: 'invalid_input' });
     renderManager();
 
-    fillRange('2026-07-07', '2026-07-08');
+    fillRange('2026-07-07', '2026-07-08'); // allow-absolute-date injected-clock-anchor
     fireEvent.click(screen.getByRole('button', { name: /Poser ces jours off/ }));
 
     await waitFor(() => {
@@ -112,8 +112,8 @@ describe('OffDaysManager — optimistic upcoming list', () => {
   });
 
   it('removes a cancelled day from the list', async () => {
-    cancelMock.mockResolvedValue({ ok: true, date: '2026-07-07' });
-    renderManager([{ date: '2026-07-07', label: 'mardi 7 juillet', reason: null }]);
+    cancelMock.mockResolvedValue({ ok: true, date: '2026-07-07' }); // allow-absolute-date injected-clock-anchor
+    renderManager([{ date: '2026-07-07', label: 'mardi 7 juillet', reason: null }]); // allow-absolute-date injected-clock-anchor
 
     fireEvent.click(screen.getByRole('button', { name: 'Retirer le jour off du mardi 7 juillet' }));
 

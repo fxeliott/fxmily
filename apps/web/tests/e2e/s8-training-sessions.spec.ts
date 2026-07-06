@@ -35,7 +35,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import {
@@ -60,12 +60,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 test.describe('S8 — Mode Entraînement : session de backtest (create + group + admin)', () => {
@@ -125,7 +119,6 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     // resolve instantly; only a genuine hang would consume the larger budget.
     test.slow();
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -311,7 +304,6 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     test.slow();
     const TRAINING_COMMENT = 'Backtest propre, mais entrée 2 bougies trop tôt (correction e2e S8).';
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 

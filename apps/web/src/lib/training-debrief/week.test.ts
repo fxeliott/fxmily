@@ -38,7 +38,7 @@ describe('currentParisWeekStart', () => {
     for (const iso of [
       '2026-05-13T10:00:00.000Z',
       '2026-01-11T23:30:00.000Z',
-      '2026-12-31T12:00:00.000Z',
+      '2026-12-31T12:00:00.000Z', // allow-absolute-date injected-clock-anchor
       '2026-03-29T01:30:00.000Z', // EU DST spring-forward day
     ]) {
       const ws = currentParisWeekStart(new Date(iso));

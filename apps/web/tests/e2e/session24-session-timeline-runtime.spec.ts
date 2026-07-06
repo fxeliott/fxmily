@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type ConsoleMessage, type Page } from '@playwright/test';
+import { chromium, expect, test, type ConsoleMessage, type Page } from './fixtures';
 
 import { db } from '@/lib/db';
 import {
@@ -44,12 +44,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 /** Console errors that are dev-server noise, never a real defect. */
@@ -168,7 +162,6 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, fresh.email, fresh.password);
 
@@ -207,7 +200,6 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, stopped.email, stopped.password);
 
@@ -240,7 +232,6 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, profiled.email, profiled.password);
 
@@ -279,7 +270,6 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, traded.email, traded.password);
 

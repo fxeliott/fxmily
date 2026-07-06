@@ -92,7 +92,7 @@ export default async function SeancePage({ params }: SeancePageProps) {
               {seance.slotLong}
             </span>
             <h1
-              className="f-display text-[26px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[30px]"
+              className="f-display text-[26px] leading-[1.1] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[30px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {seance.title}

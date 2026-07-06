@@ -113,7 +113,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
                 <p className="t-eyebrow-lg text-[var(--t-3)]">Module REFLECT</p>
                 <h1
                   id="review-hero-heading"
-                  className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                  className="f-display h-rise leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)]"
                   style={{
                     fontFeatureSettings: '"ss01" 1',
                     fontSize: 'clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)',

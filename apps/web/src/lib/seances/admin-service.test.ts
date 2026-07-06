@@ -78,14 +78,14 @@ describe('declareSeanceGoNoGo — create (no-backfill floor)', () => {
     vi.mocked(db.replaySession.findUnique).mockResolvedValue(null as never);
 
     await declareSeanceGoNoGo(
-      { date: '2026-07-13', slot: 'debrief', status: 'scheduled', time: '20:00' },
+      { date: '2026-07-13', slot: 'debrief', status: 'scheduled', time: '20:00' }, // allow-absolute-date injected-clock-anchor
       NOW,
     );
 
     const arg = vi.mocked(db.replaySession.create).mock.calls[0]![0] as {
       data: Record<string, unknown>;
     };
-    expect(arg.data.date).toEqual(parseLocalDate('2026-07-13'));
+    expect(arg.data.date).toEqual(parseLocalDate('2026-07-13')); // allow-absolute-date injected-clock-anchor
     expect(arg.data.time).toBe('20h00');
   });
 

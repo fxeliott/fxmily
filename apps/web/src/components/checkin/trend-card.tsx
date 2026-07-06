@@ -44,7 +44,7 @@ export function TrendCard({ days }: TrendCardProps) {
     : null;
 
   return (
-    <Card className="flex flex-col gap-4 p-5">
+    <Card className="wow-hover-soft flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between">
         <span className="t-eyebrow">Tendance 7 jours</span>
         <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">

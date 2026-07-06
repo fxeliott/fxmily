@@ -58,7 +58,7 @@ export default async function RejoindrePage() {
               <span className="t-eyebrow">Demande d&apos;accès</span>
             </div>
             <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Rejoindre Fxmily

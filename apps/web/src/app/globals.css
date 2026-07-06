@@ -839,12 +839,13 @@
 @layer components {
   .f-display {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
     /* Clash Display a des espaces étroits et les call-sites resserrent le
-       tracking jusqu'à -0.04em (le tracking négatif s'applique AUSSI aux
-       espaces) : sans compensation les mots fusionnent — « Monrythme »
-       (screenshots T14). Couvre tous les headings inline `f-display`. */
-    word-spacing: 0.08em;
+       tracking (le tracking négatif s'applique AUSSI aux espaces) : sans
+       compensation les mots fusionnent — « Monrythme » (screenshots T14).
+       Couvre tous les headings inline `f-display`. Tour 16 : tracking et
+       word-spacing desserrés ensemble (les deux bougent d'un même cran). */
+    word-spacing: 0.05em;
     font-feature-settings: 'ss01' 1;
   }
   .f-body {
@@ -859,16 +860,18 @@
 
   .t-display {
     font-family: var(--font-display);
-    font-size: 72px;
-    line-height: 0.94;
-    /* Clash Display porte déjà beaucoup de présence : tracking resserré à
-       grande taille + graisse 700 (sa graisse maxi ; 800 n'existe pas et
-       serait un faux-bold synthétisé). Le tracking négatif s'applique AUSSI
-       aux espaces et la face a des espaces étroits : sans word-spacing
-       compensatoire, « Mon rythme » se lit « Monrythme » (screenshots T14). */
-    letter-spacing: -0.045em;
-    word-spacing: 0.1em;
-    font-weight: 700;
+    font-size: 64px;
+    line-height: 1;
+    /* Tour 16 — recalibrage lisibilité (diagnostic prod : pavés illisibles).
+       En dark mode l'halation fait percevoir une graisse un cran au-dessus :
+       Medium 500 se LIT comme un 600 — impact préservé, plus de pavé. Le
+       tracking desserré (-0.045 → -0.025em) décolle des apertures quasi
+       fermées ; le word-spacing compensatoire bouge du même cran (le
+       tracking négatif s'applique AUSSI aux espaces — anti « Monrythme »,
+       screenshots T14). */
+    letter-spacing: -0.025em;
+    word-spacing: 0.06em;
+    font-weight: 500;
     font-feature-settings: 'ss01' 1;
   }
   /* V1.9 TIER C B5 — fluid display variant for hero headlines that need to
@@ -882,37 +885,38 @@
    horizontal-scrolling). */
   .t-display-fluid {
     font-family: var(--font-display);
-    font-size: clamp(40px, 7vw, 60px);
-    line-height: 0.94;
-    letter-spacing: -0.045em;
-    word-spacing: 0.1em; /* voir .t-display — anti « Monrythme » */
-    font-weight: 700;
+    font-size: clamp(36px, 6vw, 54px);
+    line-height: 1;
+    letter-spacing: -0.025em; /* voir .t-display — recalibrage tour 16 */
+    word-spacing: 0.06em; /* voir .t-display — anti « Monrythme » */
+    font-weight: 500;
     font-feature-settings: 'ss01' 1;
     overflow-wrap: anywhere;
     hyphens: auto;
   }
   .t-h1 {
     font-family: var(--font-display);
-    /* Saut d'échelle Tour 14 : 32px figé → fluide 36→44px. La face display
-       encaisse la montée sans écraser la hiérarchie mobile (clamp borné). */
-    font-size: clamp(36px, 3vw, 44px);
-    line-height: 1.02;
-    letter-spacing: -0.035em;
-    word-spacing: 0.08em; /* voir .t-display — anti « Monrythme » */
-    font-weight: 700;
+    /* Saut d'échelle Tour 14 : 32px figé → fluide. Tour 16 : borne haute
+       44 → 40px + Medium 500 (halation dark-mode) — voir .t-display. */
+    font-size: clamp(32px, 2.8vw, 40px);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    word-spacing: 0.06em; /* voir .t-display — anti « Monrythme » */
+    font-weight: 500;
   }
   .t-h2 {
     font-family: var(--font-display);
     font-size: 20px;
     line-height: 1.18;
-    letter-spacing: -0.02em;
+    /* 600 conservé : à 20px l'halation reste faible, le pinch n'apparaît pas. */
+    letter-spacing: -0.015em;
     font-weight: 600;
   }
   .t-h3 {
     font-family: var(--font-display);
     font-size: 15px;
     line-height: 1.3;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.005em;
     font-weight: 600;
   }
   /* S19.2 — long-prose question heading (wizard prompts run 150-220 chars). t-h1
@@ -925,7 +929,8 @@
     font-size: clamp(1.3125rem, 1.05rem + 1.1vw, 1.625rem);
     line-height: 1.3;
     letter-spacing: -0.02em;
-    font-weight: 600;
+    /* 500 (tour 16) : prose longue 21-26px, le Medium respire mieux. */
+    font-weight: 500;
     overflow-wrap: anywhere;
     hyphens: auto;
   }
@@ -2579,6 +2584,43 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
   box-shadow: var(--acc-2-glow);
 }
 
+/* ---- Hover soft-lift (Tour 16) — `.wow-hover-soft` ----
+   La primitive de survol DOUCE et générique posée à la RACINE d'une carte
+   (bordure + fond déjà présents) — pour les ~12 modules qui n'avaient AUCUNE
+   réaction au survol (incohérence dans une même rangée bento). Au survol :
+   la bordure passe à l'accent, la carte se soulève de 1px et un halo teinté
+   accent apparaît (réutilise `--sh-card-hover`, l'ombre de survol déjà définie).
+   Pas d'animation d'entrée — uniquement le hover.
+
+   Gardée `@media (hover: hover)` (jamais de collage tactile sur mobile) ; le
+   translateY est en plus enveloppé motion-safe (comme les autres primitives wow
+   du fichier) → sous `prefers-reduced-motion` la bordure + le halo restent, seul
+   le lift est neutralisé. La transition ne porte que border-color / transform /
+   box-shadow (compositor + repaint borné, CLS 0). forced-colors : rien de spécial,
+   la bordure système suffit. */
+.wow-hover-soft {
+  transition:
+    border-color 200ms var(--e-smooth),
+    box-shadow 200ms var(--e-smooth);
+}
+@media (hover: hover) {
+  .wow-hover-soft:hover {
+    border-color: var(--b-acc);
+    box-shadow: var(--sh-card-hover);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .wow-hover-soft {
+      transition:
+        border-color 200ms var(--e-smooth),
+        transform 200ms var(--e-smooth),
+        box-shadow 200ms var(--e-smooth);
+    }
+    .wow-hover-soft:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
 /* ---- Reduced-motion: belt-and-braces for the continuous login orbs +
    celebration loops. The global filet already handles duration/iteration;
    here we also pin the orbs to their resting transform so no residual frame
@@ -3008,9 +3050,16 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
 }
 
 /* ---- GradientBorder (gradient-border.tsx) — anneau de marque --grad-brand
-   (bleu→indigo→cyan) qui peut tourner. @property enregistre l'angle conique
-   pour l'interpoler ; sans support (rare en 2026, Firefox 128+) l'anneau reste
-   statique = fallback gracieux. DÉCORATIF only (jamais un CTA). ---- */
+   (bleu→indigo→cyan) qui peut tourner. Tour 16 : le ::before est MASQUÉ en
+   anneau (mask-composite: exclude sur la zone padding) — seul le liseré est
+   peint, jamais la surface. Un inner transparent est donc sans danger (le
+   bug d'origine : nappe conique pleine + couture tournante sous la carte
+   pré-trade quand l'inner était `!bg-transparent`). @property enregistre
+   l'angle conique pour l'interpoler ; sans support (rare en 2026, Firefox
+   128+) l'anneau reste statique = fallback gracieux. DÉCORATIF only (jamais
+   un CTA). Variantes : défaut = anneau plein qui tourne ;
+   data-variant='beam' = liseré bleu subtil + segment lumineux qui parcourt
+   le périmètre + glow ambiant (accent mono-focal du dashboard). ---- */
 @property --gb-angle {
   syntax: '<angle>';
   initial-value: 0deg;
@@ -3018,7 +3067,7 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
 }
 .gradient-border {
   position: relative;
-  padding: 1px;
+  padding: var(--gb-width, 1px);
   border-radius: var(--gb-radius, var(--r-card-lg));
   isolation: isolate;
 }
@@ -3028,6 +3077,7 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
+  padding: var(--gb-width, 1px);
   background: conic-gradient(
     from var(--gb-angle),
     oklch(0.62 0.19 254 / 0.9),
@@ -3036,10 +3086,44 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
     oklch(0.55 0.21 262 / 0.9),
     oklch(0.62 0.19 254 / 0.9)
   );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.gradient-border[data-variant='beam'] {
+  --gb-width: 1.5px;
+}
+.gradient-border[data-variant='beam']::before {
+  background:
+    conic-gradient(
+      from var(--gb-angle),
+      transparent 0deg,
+      transparent 264deg,
+      oklch(0.62 0.19 254 / 0.55) 300deg,
+      oklch(0.78 0.14 230 / 0.95) 330deg,
+      oklch(0.7 0.13 217 / 0.55) 348deg,
+      transparent 360deg
+    ),
+    linear-gradient(oklch(0.62 0.19 254 / 0.28) 0 0);
+}
+.gradient-border[data-variant='beam']::after {
+  /* Glow ambiant doux sous la carte — décoratif, hors hit-testing. */
+  content: '';
+  position: absolute;
+  inset: -14px;
+  z-index: -2;
+  border-radius: calc(var(--gb-radius, var(--r-card-lg)) + 12px);
+  background: radial-gradient(60% 70% at 50% 100%, oklch(0.62 0.19 254 / 0.14), transparent 70%);
+  pointer-events: none;
 }
 .gradient-border-inner {
   height: 100%;
-  border-radius: calc(var(--gb-radius, var(--r-card-lg)) - 1px);
+  border-radius: calc(var(--gb-radius, var(--r-card-lg)) - var(--gb-width, 1px));
   background: var(--bg-1);
 }
 @keyframes gbSpin {
@@ -3060,10 +3144,22 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
     animation-play-state: running;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Beam figé = segment lumineux gelé à un angle arbitraire → on ne garde
+     que le liseré de base, calme et constant. */
+  .gradient-border[data-variant='beam']::before {
+    background: linear-gradient(oklch(0.62 0.19 254 / 0.28) 0 0);
+  }
+}
 @media (forced-colors: active) {
   .gradient-border::before {
     background: none;
     border: 1px solid CanvasText;
+    -webkit-mask: none;
+    mask: none;
+  }
+  .gradient-border[data-variant='beam']::after {
+    display: none;
   }
 }
 

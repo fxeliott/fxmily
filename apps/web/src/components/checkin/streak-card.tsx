@@ -121,7 +121,7 @@ export function StreakCard({ streak, todayFilled, compact, justCrossed }: Streak
   const previousMilestone = [0, ...MILESTONES].filter((m) => m <= streak).at(-1) ?? 0;
 
   return (
-    <Card primary className="relative flex flex-col gap-4 p-5">
+    <Card primary className="wow-hover-soft relative flex flex-col gap-4 p-5">
       <div className="flex items-start justify-between gap-2">
         <span className="t-eyebrow">Streak check-in</span>
         <div className="flex items-center gap-2">

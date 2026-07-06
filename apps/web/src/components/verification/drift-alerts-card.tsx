@@ -61,7 +61,7 @@ export function DriftAlertsCard({
           const status = STATUS_META[alert.status];
           return (
             <li key={alert.id}>
-              <Card className="flex flex-col gap-2 p-4">
+              <Card className="wow-hover-soft flex flex-col gap-2 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--t-1)]">
                     <Compass

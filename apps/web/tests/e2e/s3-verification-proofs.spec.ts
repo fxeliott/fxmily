@@ -21,7 +21,7 @@
 
 import path from 'node:path';
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { db } from '@/lib/db';

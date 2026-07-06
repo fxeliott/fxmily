@@ -1,9 +1,10 @@
-import { ArrowLeft, Database, Download, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Database, ShieldCheck } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { ExportDataButton } from '@/components/account/export-data-button';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Code } from '@/components/ui/code';
@@ -21,8 +22,10 @@ import { db } from '@/lib/db';
  *    button — the route handler responds with `Content-Disposition:
  *    attachment` so the browser downloads the JSON without navigation.
  *
- * No client JS — the only interaction is a form submit. Keeps the page
- * tiny and accessible (every assistive tech understands a submit button).
+ * The form stays a native POST (accessible, works with JS disabled). The
+ * submit control (`<ExportDataButton>`) is a thin client enhancement: it only
+ * adds a pending state (disable + label swap, self-re-arming after ~5s since a
+ * download triggers no navigation) to prevent a double-tap second export.
  */
 
 export const metadata: Metadata = {
@@ -271,14 +274,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
           </ul>
 
           <form action="/api/account/data/export" method="POST" className="mt-6">
-            <button
-              type="submit"
-              className={btnVariants({ kind: 'primary', size: 'l' })}
-              aria-label="Télécharger l’export JSON de mes données"
-            >
-              <Download aria-hidden="true" className="h-4 w-4" />
-              Télécharger l&apos;export JSON
-            </button>
+            <ExportDataButton />
             <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />
               Chaque export est tracé dans tes logs (action <Code>account.data.exported</Code>).

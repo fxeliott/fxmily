@@ -123,7 +123,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
             )}
           </div>
           <h1
-            className="f-display h-rise text-foreground relative text-[32px] leading-[1.05] font-bold tracking-[-0.03em] sm:text-[40px] md:text-[48px]"
+            className="f-display h-rise text-foreground relative text-[32px] leading-[1.05] font-medium tracking-[-0.02em] sm:text-[40px] md:text-[48px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {card.title}

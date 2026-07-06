@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import {
   cleanupTestUsers,
@@ -37,12 +37,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
   return { ok: true };
 }
 
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
-
 test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
   test.beforeAll(async () => {
     const probe = await isChromiumLaunchable();
@@ -69,7 +63,6 @@ test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
   }) => {
     if (!admin || !alpha || !bravo) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
@@ -101,7 +94,6 @@ test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
   }) => {
     if (!admin) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 

@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { CatchUpRecentCue } from '@/components/checkin/catch-up-recent-cue';
 import { CheckinEchoCard } from '@/components/checkin/checkin-echo-card';
+import { MorningEveningBridge } from '@/components/illustrations/morning-evening-bridge';
+import { DayRecapCard } from '@/components/checkin/day-recap-card';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
@@ -20,7 +22,10 @@ import {
   buildMorningCheckinEcho,
   type CheckinEcho,
 } from '@/lib/coaching/checkin-echo';
+import { countUnseenAnnotationsByTrade } from '@/lib/annotations/member-service';
+import { getOpenMicroObjective } from '@/lib/coaching/micro-objective';
 import { echoProfileDims } from '@/lib/coaching/trade-echo';
+import { buildDayRecap, type DayRecap, type DayRecapTrade } from '@/lib/day-recap';
 import {
   countCheckins,
   getCheckin,
@@ -135,6 +140,16 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
       ? await buildCheckinEcho(userId, timezone, justDoneSlot, status.today)
       : null;
 
+  // Tour 16 — the DAY RECAP: a factual, deterministic photo of the day, shown
+  // ONLY after the EVENING wrap (the moment the day is closed). Complements the
+  // reflective echo above it with counters + key process facts + the open
+  // micro-objective. Built exclusively on the evening-done path (mirror of the
+  // `checkinEcho` gate) so its extra reads never touch a plain landing visit.
+  const dayRecap =
+    justDone && justDoneSlot === 'evening'
+      ? await buildEveningDayRecap(userId, status.today, timezone, todayIsOff)
+      : null;
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 — ambient mesh + drifting orbs behind the hub (tone blue défaut,
@@ -162,18 +177,26 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
             Retour au tableau
           </Link>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="t-eyebrow">{formatLocalDate(status.today)}</span>
-            <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-              style={{ fontFeatureSettings: '"ss01" 1' }}
-            >
-              Check-in quotidien
-            </h1>
-            <p className="t-lead">
-              Deux temps : matin pour cadrer, soir pour réfléchir. Trois minutes chacun. C&apos;est
-              ce qui construit le score discipline.
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="t-eyebrow">{formatLocalDate(status.today)}</span>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Check-in quotidien
+              </h1>
+              <p className="t-lead">
+                Deux temps : matin pour cadrer, soir pour réfléchir. Trois minutes chacun.
+                C&apos;est ce qui construit le score discipline.
+              </p>
+            </div>
+            {/* Tour 16 — accent maison : le pont matin/soir (les deux temps du
+                jour). Thème pile aligné sur le lead. Le wrapper porte le
+                responsive ; masqué en mobile pour ne pas serrer le titre. */}
+            <div aria-hidden className="mt-1 hidden shrink-0 sm:block">
+              <MorningEveningBridge className="w-full max-w-[132px]" />
+            </div>
           </div>
         </header>
 
@@ -200,6 +223,10 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
                 declared. Renders above the confirmation so the member reads the
                 mirror first, then the plain streak confirmation. */}
             {checkinEcho ? <CheckinEchoCard echo={checkinEcho} /> : null}
+            {/* Tour 16 — day recap under the reflective echo, evening wrap only:
+                the factual photo of the day (counters + process facts + open
+                micro-objective). Additive context, never the confirmation. */}
+            {dayRecap ? <DayRecapCard recap={dayRecap} /> : null}
             <DoneBanner slot={justDoneSlot} streak={streak.current} />
           </>
         ) : null}
@@ -375,6 +402,67 @@ async function countTradesEnteredOnLocalDay(
   return db.trade.count({
     where: { userId, enteredAt: { gte: dayStart, lt: nextDayStart } },
   });
+}
+
+/**
+ * Tour 16 — assemble the DAY RECAP for the evening wrap. Reads the day's trades
+ * (outcome + exitReason only), the just-written evening self-reports, and the
+ * member's open micro-objective, then folds them through the PURE `buildDayRecap`
+ * (lib/day-recap.ts — no DB, fully unit-tested). Best-effort: any read failure
+ * degrades to `null` (the DoneBanner still confirms the save), never breaks the
+ * confirmation page. Mirror of `buildCheckinEcho`'s try/catch discipline.
+ *
+ * The trade scope reuses the local-day window (`enteredAt` between the member's
+ * local midnight boundaries → UTC via `localInstantToUtc`, DST-correct, F2
+ * pattern), the SAME predicate `countTradesEnteredOnLocalDay` uses — so the
+ * counter and the outcomes agree by construction.
+ *
+ * Corrections: there is NO day-scoped discrepancy service, so we cross the
+ * member-wide `countUnseenAnnotationsByTrade` map with the day's trade IDs to
+ * count admin corrections attached to today's trades — a per-trade signal folded
+ * to a day count at this call site (the pure module only receives the number).
+ */
+async function buildEveningDayRecap(
+  userId: string,
+  today: string,
+  timezone: string,
+  isOffDay: boolean,
+): Promise<DayRecap | null> {
+  try {
+    const dayStart = localInstantToUtc(today, 0, 0, 0, 0, timezone);
+    const nextDayStart = localInstantToUtc(shiftLocalDate(today, 1), 0, 0, 0, 0, timezone);
+    const [rows, evening, microObjective, unseenByTrade] = await Promise.all([
+      db.trade.findMany({
+        where: { userId, enteredAt: { gte: dayStart, lt: nextDayStart } },
+        select: { id: true, outcome: true, exitReason: true },
+      }),
+      getCheckin(userId, today, 'evening'),
+      getOpenMicroObjective(userId),
+      countUnseenAnnotationsByTrade(userId),
+    ]);
+
+    const trades: DayRecapTrade[] = rows.map((r) => ({
+      outcome: r.outcome,
+      exitReason: r.exitReason,
+    }));
+
+    // Sum the unseen-correction counts of the day's trades only (the map spans
+    // ALL the member's trades; trades with zero unseen are simply absent).
+    const unseenCorrectionsToday = rows.reduce((sum, r) => sum + (unseenByTrade.get(r.id) ?? 0), 0);
+
+    return buildDayRecap({
+      trades,
+      isOffDay,
+      planRespectedToday: evening?.planRespectedToday ?? null,
+      intentionKept: evening?.intentionKept ?? null,
+      formationFollowed: evening?.formationFollowed ?? null,
+      openMicroObjectiveTitle: microObjective?.title ?? null,
+      unseenCorrectionsToday,
+    });
+  } catch {
+    // Never let the recap break the confirmation page — the save already landed.
+    return null;
+  }
 }
 
 function SlotCard({

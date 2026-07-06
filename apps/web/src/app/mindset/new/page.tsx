@@ -56,7 +56,7 @@ export default async function NewMindsetCheckPage() {
               Mindset · Auto-évaluation
             </span>
             <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {existing ? 'Reprendre mon auto-évaluation' : 'Auto-évaluation de la semaine'}

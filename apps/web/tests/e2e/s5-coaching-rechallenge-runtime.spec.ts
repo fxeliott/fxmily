@@ -24,7 +24,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -73,12 +73,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 test.describe('S5 re-challenge — profil S2 exploité + contraste chips light', () => {
@@ -179,7 +173,6 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
       if (m.type() === 'error') consoleErrors.push(m.text());
     });
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
     await page.goto('/progression');
@@ -206,7 +199,6 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
   }) => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
     await page.goto('/progression');
@@ -253,7 +245,6 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
       if (m.type() === 'error') consoleErrors.push(m.text());
     });
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberLifestyle.email, memberLifestyle.password);
     await page.goto('/progression');

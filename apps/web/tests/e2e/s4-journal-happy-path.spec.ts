@@ -32,25 +32,11 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
-
-/**
- * The cookie-info banner is fixed-bottom and localStorage-gated → on a fresh
- * e2e context it COVERS bottom-anchored targets (pagination link, CTAs) and
- * the click retries forever (canon S2 e2e). A reactive dismiss races the
- * banner's delayed client mount (isVisible=false → it appears later and
- * obstructs the click anyway), so we pre-seed the dismissal flag BEFORE any
- * document loads — `cookie-banner.tsx:9` STORAGE_KEY contract.
- */
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
 
 /** TradeCard renders as `li > a[href="/journal/<id>"]` inside the list `<ul>`. */
 const TRADE_CARD_SELECTOR = 'main ul > li > a[href^="/journal/"]';
@@ -92,7 +78,6 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + lien Trad
   }) => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -254,7 +239,6 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + lien Trad
       }),
     });
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 

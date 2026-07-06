@@ -26,12 +26,14 @@
     profile       day 2   06:40   (J-E monthly deep re-profiling; day 2 so the
                                    digest of the just-ended month lands first)
 
-  Tasks run as the CURRENT user with LogonType S4U ("run whether the user is
-  logged on or not", no stored password) so the worker keeps ticking on an
-  always-on PC even when the screen is locked. `claude --print` authenticates
-  with the user's Claude Max OAuth under ~/.claude, which S4U can read.
-  If your environment refuses S4U for `claude` auth, re-run with
-  `-LogonType Interactive` (the worker then only ticks while you are logged on).
+  Tasks run as the CURRENT user with LogonType Interactive (DEFAULT): the worker
+  ticks while you are logged on (an always-on PC left logged in keeps ticking).
+  `claude --print` authenticates with the account currently logged in under
+  ~/.claude (.credentials.json). Interactive is MANDATORY for that OAuth to be
+  readable: S4U was PROVEN incapable of reading the Claude OAuth on 2026-07-02
+  (an S4U task looks green but every batch fails silently — see watchdog.ps1).
+  `-LogonType S4U` remains selectable but emits a loud warning; do not use it
+  for these batches.
 
   Idempotent: existing Fxmily worker tasks are replaced (-Force).
 
@@ -39,7 +41,8 @@
   Poll cadence for the onboarding pipeline (default 20).
 
 .PARAMETER LogonType
-  S4U (default) or Interactive.
+  Interactive (default) or S4U. Interactive is required for `claude` to read
+  the Claude OAuth (S4U proven incapable 2026-07-02); S4U triggers a warning.
 
 .PARAMETER WhatIf
   Show what would be registered without changing anything.
@@ -56,7 +59,7 @@ param(
   [int]$OnboardingIntervalMinutes = 20,
 
   [ValidateSet('S4U', 'Interactive')]
-  [string]$LogonType = 'S4U',
+  [string]$LogonType = 'Interactive',
 
   [string]$BashPath = 'C:\Program Files\Git\bin\bash.exe',
 
@@ -68,6 +71,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $TaskFolder = '\Fxmily\'
 $TaskPrefix = 'Fxmily-worker-'
+
+# S4U was PROVEN incapable of reading the Claude OAuth on 2026-07-02: an S4U
+# task registers and looks green, but `claude --print` cannot reach the auth
+# under ~/.claude, so every batch fails silently. Interactive is the default and
+# the only supported mode; warn loudly if S4U is requested explicitly.
+if ($LogonType -eq 'S4U') {
+  Write-Warning 'S4U proven incapable of reading the Claude OAuth (2026-07-02): the tasks will register and look green, but every batch will fail silently. Use -LogonType Interactive (the default). Continuing with S4U as requested.'
+}
 
 # --- Resolve the worker script + translate to a bash (MSYS) path --------------
 $WorkerDir = Split-Path -Parent $MyInvocation.MyCommand.Path

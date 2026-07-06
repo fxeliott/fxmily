@@ -1,9 +1,11 @@
-import { ArrowLeft, CalendarClock } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { EquityCurve } from '@/components/illustrations/equity-curve';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   civilDayKey,
   groupMeetingsByDay,
@@ -70,12 +72,12 @@ export default async function ReunionsPage() {
             </span>
             <h1
               id="reunions-heading"
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Tes réunions
             </h1>
-            <p className="t-cap max-w-prose text-[var(--t-3)]">
+            <p className="t-lead max-w-prose text-[var(--t-3)]">
               Déclare ta présence, en live ou en rediffusion, et confirme que tu as lu
               l&apos;analyse ou le bilan de chaque séance. Tu peux rattraper une réunion dans les{' '}
               {MEETING_WINDOW_DAYS} jours.
@@ -148,13 +150,20 @@ export default async function ReunionsPage() {
             Liste des réunions par jour
           </h2>
           {meetings.length === 0 ? (
-            <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] p-6 text-center">
-              <p className="t-body text-[var(--t-2)]">Pas encore de réunion à déclarer.</p>
-              <p className="t-cap mt-1 text-[var(--t-3)]">
-                Les réunions Fxmily ont lieu du lundi au vendredi, à 12h et 20h (heure de Paris).
-                Elles apparaîtront ici une fois passées.
-              </p>
-            </div>
+            <EmptyState
+              icon={Users}
+              illustration={<EquityCurve className="mx-auto w-full max-w-[200px]" />}
+              headline="Pas encore de réunion à déclarer."
+              lead="Dès qu’une réunion est passée, elle apparaît ici pour que tu déclares ta présence, en direct ou en rediffusion."
+              guides={[
+                'Les réunions Fxmily ont lieu du lundi au vendredi, à 12h et 20h (heure de Paris).',
+                'Chaque réunion passée s’ajoute ici, prête à déclarer.',
+                `Tu as ${MEETING_WINDOW_DAYS} jours pour la rattraper en replay.`,
+              ]}
+              tip="Rien à rattraper pour l’instant, ta présence se déclare une fois la première réunion tenue."
+              ctaPrimary="Retour au tableau de bord"
+              ctaHref="/dashboard"
+            />
           ) : (
             groupMeetingsByDay(meetings, timezone).map((day) => (
               <MeetingDayGroup

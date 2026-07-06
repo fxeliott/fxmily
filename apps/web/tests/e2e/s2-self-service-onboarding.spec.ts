@@ -23,7 +23,7 @@
  * dotenv; there is NO graceful DB-env skip), like every other DB-backed e2e.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import {
   cleanupAccessRequests,

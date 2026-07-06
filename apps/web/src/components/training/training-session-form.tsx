@@ -82,7 +82,7 @@ export function TrainingSessionForm() {
           </div>
           <h1
             id="training-session-heading"
-            className="f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            className="f-display text-[22px] leading-[1.1] font-semibold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Ouvrir une session de backtest

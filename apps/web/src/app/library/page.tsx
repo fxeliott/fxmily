@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
+import { FocusTarget } from '@/components/illustrations/focus-target';
 import { AnimatedCardGrid } from '@/components/library/animated-card-grid';
 import { CategoryFilterTabs } from '@/components/library/category-filter-tabs';
 import { CATEGORY_LABEL } from '@/components/library/category-meta';
@@ -91,17 +92,24 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
             (eyebrow t-eyebrow-lg + h1 f-display h-rise + lead t-lead). */}
         <header className="mb-6 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-                <BookOpen className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                Module Mark Douglas
-              </span>
-              <h1
-                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-                style={{ fontFeatureSettings: '"ss01" 1' }}
-              >
-                Ta bibliothèque psychologie trader
-              </h1>
+            <div className="flex items-center gap-4">
+              {/* Tour 16 — accent maison : cible / focus (recentrer l'attention).
+                  Le wrapper porte le responsive ; le SVG est w-full, borné. */}
+              <div aria-hidden className="hidden shrink-0 lg:block">
+                <FocusTarget className="w-full max-w-[64px]" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                  <BookOpen className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  Module Mark Douglas
+                </span>
+                <h1
+                  className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
+                  style={{ fontFeatureSettings: '"ss01" 1' }}
+                >
+                  Ta bibliothèque psychologie trader
+                </h1>
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {unseenCount > 0 && (

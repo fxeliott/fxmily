@@ -114,7 +114,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
             <div className="flex flex-col gap-1.5">
               <span className="t-eyebrow">Journal</span>
               <h1
-                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 Mes trades
@@ -125,6 +125,11 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
               Nouveau trade
             </Link>
           </div>
+
+          <p className="t-lead max-w-[58ch] text-[var(--t-3)]">
+            Chaque trade documenté, du plan à la clôture : la mémoire fidèle de ton exécution,
+            jamais un verdict.
+          </p>
         </header>
 
         <NextStepRail currentPath="/journal" />

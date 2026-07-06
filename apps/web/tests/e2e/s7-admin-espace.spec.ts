@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import {
@@ -60,15 +60,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
   return { ok: true };
 }
 
-/** Pre-seed the cookie-banner dismissal BEFORE any document loads (the banner
- *  is fixed-bottom + localStorage-gated; a reactive dismiss races its delayed
- *  mount — canon S2/S4). */
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
-}
-
 test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', () => {
   test.beforeAll(async () => {
     const probe = await isChromiumLaunchable();
@@ -110,8 +101,6 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     request,
   }) => {
     if (!admin || !member) throw new Error('seed missing — beforeAll did not run');
-
-    await dismissCookieBanner(page);
 
     // --- ADMIN: log in + open the member's Trades tab.
     await page.goto('/login');
@@ -187,7 +176,6 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
   }) => {
     if (!admin || !member) throw new Error('seed missing — beforeAll did not run');
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
@@ -223,7 +211,6 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     const adminId = admin.id;
     const TRAINING_COMMENT = 'Backtest propre, mais entrée 2 bougies trop tôt (correction e2e S7).';
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
@@ -290,7 +277,6 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     // reframe, asserted by a fragment that drops typographic apostrophes.
     const PRESET_FRAGMENT = 'Bon process, peu importe';
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, adminUser.email, adminUser.password);
 

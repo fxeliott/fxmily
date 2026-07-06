@@ -443,7 +443,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <h1
-                className="f-display h-rise text-[24px] leading-[1.05] font-bold tracking-[-0.03em] break-words text-[var(--t-1)] sm:text-[28px]"
+                className="f-display h-rise text-[24px] leading-[1.05] font-medium tracking-[-0.02em] break-words text-[var(--t-1)] sm:text-[28px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 {detail.displayName}

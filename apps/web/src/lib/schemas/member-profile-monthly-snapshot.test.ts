@@ -149,7 +149,7 @@ describe('J-E — memberProfileMonthlySnapshotPersistInputSchema', () => {
       ...validOutput(),
       userId: 'clv0abcd1234efgh5678ijkl9',
       monthStart: new Date('2026-07-01T00:00:00.000Z'),
-      monthEnd: new Date('2026-07-31T00:00:00.000Z'),
+      monthEnd: new Date('2026-07-31T00:00:00.000Z'), // allow-absolute-date injected-clock-anchor
       cost: {
         claudeModel: 'claude-opus-4-8',
         inputTokens: 4200,
@@ -171,7 +171,7 @@ describe('J-E — memberProfileMonthlySnapshotPersistInputSchema', () => {
       evolution_narrative: VALID_NARRATIVE,
       userId: 'x'.repeat(41),
       monthStart: new Date('2026-07-01T00:00:00.000Z'),
-      monthEnd: new Date('2026-07-31T00:00:00.000Z'),
+      monthEnd: new Date('2026-07-31T00:00:00.000Z'), // allow-absolute-date injected-clock-anchor
       cost: { claudeModel: 'claude-opus-4-8', inputTokens: 1, outputTokens: 1, costEur: 0 },
     });
     expect(parsed.success).toBe(false);

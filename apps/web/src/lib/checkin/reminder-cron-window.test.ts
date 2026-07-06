@@ -74,7 +74,7 @@ function parisInstant(isoDate: string, hour: number, minute: number, offset: str
 describe('check-in reminder cron ↔ Paris window coverage (host-local crond, DST-safe)', () => {
   const ticks = checkinTicksParisLocal();
   const seasons: ReadonlyArray<readonly [label: string, isoDate: string, offset: string]> = [
-    ['summer (CEST, UTC+2)', '2026-07-15', '+02:00'],
+    ['summer (CEST, UTC+2)', '2026-07-15', '+02:00'], // allow-absolute-date injected-clock-anchor
     ['winter (CET, UTC+1)', '2026-01-15', '+01:00'],
   ];
 

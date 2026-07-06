@@ -114,3 +114,55 @@ jobs:
 
           echo "::error title=Cron heartbeat alert::HTTP $HTTP_CODE — at least one cron is stale or never ran, and self-heal could not fix it. See body above."
           exit 1
+
+      # Tour 16 — apex probe. Every heartbeat above targets the `app.` subdomain
+      # (`APP_URL`), so the tour-12 incident where the bare apex `fxmilyapp.com`
+      # went CF 522 was INVISIBLE to this watcher. This step probes the apex
+      # directly and asserts it still redirects to the app. It is a SEPARATE step
+      # so an apex failure surfaces on its own line and cannot be masked by a
+      # green heartbeat. FAIL on 5xx (apex genuinely down); WARN (never fail) on
+      # anything that is not a 301/308 → app.fxmilyapp.com (a changed redirect
+      # shape is worth a look but not an outage).
+      - name: Probe bare apex redirect (fxmilyapp.com)
+        run: |
+          set +e
+          APEX_URL="https://fxmilyapp.com"
+          # -sI = silent HEAD; -o headers to parse status + Location. No -L: we
+          # want to SEE the redirect itself, not follow it to the app.
+          HEADERS=$(curl -sI --max-time 30 "$APEX_URL")
+          CURL_RC=$?
+          if [ "$CURL_RC" != "0" ]; then
+            echo "::warning title=Apex probe inconclusive::curl could not reach $APEX_URL (exit $CURL_RC). DNS/TLS blip or network — not treated as an outage."
+            exit 0
+          fi
+          # First status line (e.g. "HTTP/2 308"); grab the numeric code.
+          APEX_CODE=$(echo "$HEADERS" | sed -n 's/^HTTP\/[0-9.]* \([0-9][0-9][0-9]\).*/\1/p' | head -n1)
+          # Location header (redirect target), lower-cased key, CR stripped.
+          APEX_LOC=$(echo "$HEADERS" | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p' | head -n1)
+          echo "::group::Apex response"
+          echo "status=$APEX_CODE location=$APEX_LOC"
+          echo "$HEADERS"
+          echo "::endgroup::"
+
+          case "$APEX_CODE" in
+            5??)
+              echo "::error title=Apex down::$APEX_URL returned HTTP $APEX_CODE (the bare apex is failing — the tour-12 CF 522 class, invisible to the app.* heartbeats)."
+              exit 1
+              ;;
+            301|308)
+              case "$APEX_LOC" in
+                https://app.fxmilyapp.com*|http://app.fxmilyapp.com*)
+                  echo "✅ Apex redirects to app.fxmilyapp.com (HTTP $APEX_CODE)"
+                  exit 0
+                  ;;
+                *)
+                  echo "::warning title=Apex redirect changed::$APEX_URL returned HTTP $APEX_CODE but Location is '$APEX_LOC' (expected app.fxmilyapp.com). Worth a look; not an outage."
+                  exit 0
+                  ;;
+              esac
+              ;;
+            *)
+              echo "::warning title=Apex response unexpected::$APEX_URL returned HTTP '$APEX_CODE' (expected a 301/308 redirect to app.fxmilyapp.com). Not a 5xx, so not failed — but check the apex config."
+              exit 0
+              ;;
+          esac

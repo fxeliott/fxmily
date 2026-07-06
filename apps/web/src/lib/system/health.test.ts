@@ -36,9 +36,37 @@ const {
   getWorkerHealthReport,
   getVerificationBacklogHealth,
   getUploadsPersistenceHealth,
+  buildHostActionsReport,
   parseProcMounts,
   mountForPath,
 } = await import('./health');
+
+// Minimal report shapes for the PURE `buildHostActionsReport` fold (no DB). The
+// cron + worker reports are branded by DISTINCT action unions, so each report's
+// entries are built loosely then cast to the exact param type the function wants
+// (the fold only reads `action`/`status`/timings, never the brand).
+type CronReportArg = Parameters<typeof buildHostActionsReport>[0];
+type WorkerReportArg = Parameters<typeof buildHostActionsReport>[1];
+type LooseEntry = { action: string; status: string } & Record<string, unknown>;
+function entry(overrides: { action: string; status: string } & Partial<Record<string, unknown>>) {
+  return {
+    label: overrides.action,
+    periodMs: HOUR,
+    lastRanAt: null,
+    ageMs: null,
+    toleranceMs: 2 * HOUR,
+    errorCount: 0,
+    windowed: false,
+    firstRunDeadline: null,
+    ...overrides,
+  } as LooseEntry;
+}
+function cronReport(entries: LooseEntry[]): CronReportArg {
+  return { ranAt: '2026-07-06T00:00:00Z', overall: 'green', entries } as unknown as CronReportArg;
+}
+function workerReport(entries: LooseEntry[]): WorkerReportArg {
+  return { ranAt: '2026-07-06T00:00:00Z', overall: 'green', entries } as unknown as WorkerReportArg;
+}
 
 const GIB = 1024 * 1024 * 1024;
 /** Build a `statfsSync`-shaped result with `bsize`=4096 and the given free/total GiB. */
@@ -548,7 +576,7 @@ describe('getCronHealthReport', () => {
    * entry green → amber via the shared metadata.errors read.
    */
   it('classifies the autoheal watchdog: fresh green, 100-min amber, 3h red', async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
 
     // period=1h, greenMultiplier default 1.5 → green ≤ 90min; tolerance ×2 → red past 2h.
     auditGroupByMock.mockResolvedValueOnce([
@@ -583,7 +611,7 @@ describe('getCronHealthReport', () => {
   });
 
   it('escalates a fresh autoheal heartbeat that reported an escalation to amber', async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'cron.autoheal.heartbeat',
@@ -647,7 +675,7 @@ describe('getWorkerHealthReport', () => {
    * all-green — the operator's "everything is generating" glance.
    */
   it("returns 'green' when every pipeline pulled within 1.5× its period", async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'onboarding.batch.pulled',
@@ -692,7 +720,7 @@ describe('getWorkerHealthReport', () => {
    * at some point in 24h) and must read red.
    */
   it('classifies an overnight-off PC as amber and a dead worker as red (onboarding)', async () => {
-    const now = new Date('2026-07-10T08:00:00.000Z');
+    const now = new Date('2026-07-10T08:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'onboarding.batch.pulled',
@@ -724,7 +752,7 @@ describe('getWorkerHealthReport', () => {
    * about a pipeline behaving exactly as designed.
    */
   it("classifies a pipeline whose first run is not due yet as 'pending' (not never_ran)", async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'onboarding.batch.pulled',
@@ -768,7 +796,7 @@ describe('getWorkerHealthReport', () => {
    */
   it("flips pending to 'never_ran' once the first-run deadline has passed", async () => {
     // onboarding: expectedSince 2026-07-02, tolerance 24h → deadline Jul 3.
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([]);
 
     const report = await getWorkerHealthReport(now);
@@ -785,7 +813,7 @@ describe('getWorkerHealthReport', () => {
    * board inherits the escalation, not just the age check.
    */
   it('escalates a fresh pull that reported errors to amber', async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     auditGroupByMock.mockResolvedValueOnce([
       {
         // Tour 13 — verification now ticks every 20 min (was daily), so a
@@ -934,7 +962,7 @@ describe('getVerificationBacklogHealth', () => {
     proofCountMock.mockResolvedValueOnce(0);
     proofFindFirstMock.mockResolvedValueOnce(null);
 
-    const backlog = await getVerificationBacklogHealth(new Date('2026-07-10T12:00:00.000Z'));
+    const backlog = await getVerificationBacklogHealth(new Date('2026-07-10T12:00:00.000Z')); // allow-absolute-date injected-clock-anchor
 
     expect(backlog.status).toBe('idle');
     expect(backlog.pendingCount).toBe(0);
@@ -947,7 +975,7 @@ describe('getVerificationBacklogHealth', () => {
    * catch it on the next 20-min tick. Green, with the honest pending count.
    */
   it("returns 'green' when the oldest pending proof is younger than 1h", async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     proofCountMock.mockResolvedValueOnce(3);
     proofFindFirstMock.mockResolvedValueOnce({
       uploadedAt: new Date(now.getTime() - 20 * MIN),
@@ -963,7 +991,7 @@ describe('getVerificationBacklogHealth', () => {
 
   /** Between 1h and 6h → amber (running late, worth an eye). */
   it("returns 'amber' when the oldest pending proof is between 1h and 6h old", async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     proofCountMock.mockResolvedValueOnce(1);
     proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 2 * HOUR) });
 
@@ -976,7 +1004,7 @@ describe('getVerificationBacklogHealth', () => {
    * PC is stuck. Red, honestly (this is the signal the operator must act on).
    */
   it("returns 'red' when the oldest pending proof is older than 6h", async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     proofCountMock.mockResolvedValueOnce(2);
     proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 7 * HOUR) });
 
@@ -991,7 +1019,7 @@ describe('getVerificationBacklogHealth', () => {
    * and must not redden the board. Pin the WHERE clauses.
    */
   it('scopes both queries to pending proofs of active members, oldest first', async () => {
-    const now = new Date('2026-07-10T12:00:00.000Z');
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     proofCountMock.mockResolvedValueOnce(1);
     proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 30 * MIN) });
 
@@ -1126,5 +1154,83 @@ describe('getUploadsPersistenceHealth', () => {
     const health = getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads');
     expect(health.status).toBe('unknown');
     expect(health.fsType).toBeNull();
+  });
+});
+
+describe('buildHostActionsReport', () => {
+  it('returns no items when all host-actionable heartbeats are healthy', () => {
+    const report = buildHostActionsReport(
+      cronReport([entry({ action: 'cron.autoheal.heartbeat', status: 'green' })]),
+      workerReport([entry({ action: 'worker.watchdog.heartbeat', status: 'green' })]),
+    );
+    expect(report.items).toHaveLength(0);
+  });
+
+  it('surfaces the autoheal never_ran as a blocked action with the root sync command', () => {
+    const report = buildHostActionsReport(
+      cronReport([
+        entry({
+          action: 'cron.autoheal.heartbeat',
+          status: 'never_ran',
+          firstRunDeadline: '2026-07-05T02:00:00Z', // allow-absolute-date opaque-fixture
+        }),
+      ]),
+      workerReport([]),
+    );
+    expect(report.items).toHaveLength(1);
+    const item = report.items[0]!;
+    expect(item.severity).toBe('blocked');
+    expect(item.command).toBe('sudo -u fxmily sudo /usr/local/bin/fxmily-sync-cron');
+    expect(item.reference).toBe('ops/cron/README.md');
+    // never_ran with no lastRanAt → the "since" is the first-run deadline.
+    expect(item.sinceIso).toBe('2026-07-05T02:00:00Z'); // allow-absolute-date opaque-fixture
+  });
+
+  it('uses lastRanAt as the "since" for a red (ran then went stale) heartbeat', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-04T10:00:00Z', // allow-absolute-date opaque-fixture
+        }),
+      ]),
+    );
+    expect(report.items[0]!.sinceIso).toBe('2026-07-04T10:00:00Z'); // allow-absolute-date opaque-fixture
+    expect(report.items[0]!.severity).toBe('blocked');
+  });
+
+  it('marks a pending first-run heartbeat as informational, not blocked', () => {
+    const report = buildHostActionsReport(
+      cronReport([
+        entry({
+          action: 'cron.autoheal.heartbeat',
+          status: 'pending',
+          firstRunDeadline: '2026-07-07T00:00:00Z', // allow-absolute-date injected-clock-anchor
+        }),
+      ]),
+      workerReport([]),
+    );
+    expect(report.items[0]!.severity).toBe('pending');
+  });
+
+  it('ignores heartbeats with no known host remediation', () => {
+    const report = buildHostActionsReport(
+      cronReport([entry({ action: 'cron.weekly_reports.scan', status: 'red' })]),
+      workerReport([entry({ action: 'onboarding.batch.pulled', status: 'never_ran' })]),
+    );
+    expect(report.items).toHaveLength(0);
+  });
+
+  it('sorts blocked actions before pending ones', () => {
+    const report = buildHostActionsReport(
+      cronReport([
+        entry({ action: 'cron.autoheal.heartbeat', status: 'pending' }),
+        entry({ action: 'verification.batch.pulled', status: 'red' }),
+      ]),
+      workerReport([]),
+    );
+    expect(report.items.map((i) => i.severity)).toEqual(['blocked', 'pending']);
   });
 });

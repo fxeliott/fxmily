@@ -26,8 +26,8 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { expect, test } from '@playwright/test';
-import { chromium } from '@playwright/test';
+import { expect, test } from './fixtures';
+import { chromium } from './fixtures';
 
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';

@@ -19,6 +19,9 @@
     "test:e2e": "turbo run test:e2e",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css,yml,yaml}\"",
+    "check:test-dates": "node scripts/check-no-absolute-dates-in-tests.mjs",
+    "check:e2e-copy": "node scripts/check-e2e-copy-sync.mjs",
+    "check:cron-sync": "node scripts/check-cron-crontab-sync.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

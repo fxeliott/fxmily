@@ -1,1 +1,13 @@
+# Guardrail (tour 14 incident) — a lint-staged run that is interrupted mid-commit
+# leaves a "lint-staged automatic backup" stash behind. If the next commit runs
+# with that stash still present, lint-staged pops it OVER the manual recovery and
+# silently re-introduces the duplicated content (twice shipped a red CI). Refuse
+# to commit while such a stash exists so the developer resolves it consciously.
+if git stash list | grep -q 'lint-staged automatic backup'; then
+  echo "✖ Stash lint-staged détecté : un commit précédent a été interrompu."
+  echo "  Inspecte \`git stash list\`, récupère ou droppe le stash AVANT de re-committer"
+  echo "  (risque de duplication silencieuse)."
+  exit 1
+fi
+
 pnpm exec lint-staged

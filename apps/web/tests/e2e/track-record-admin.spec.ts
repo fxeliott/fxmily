@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 /**
  * T5 — Public-surface E2E for the Admin Track Record CRUD.

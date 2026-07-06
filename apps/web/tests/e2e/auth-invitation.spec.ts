@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 /**
  * J1 — End-to-end smoke test for the full invitation → onboarding → login flow.

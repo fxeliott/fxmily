@@ -102,7 +102,7 @@ export default async function PreTradeDonePage({ params }: PreTradeDonePageProps
             <div className="flex min-w-0 flex-col gap-1.5">
               <span className="t-eyebrow-lg text-[var(--t-3)]">Pré-trade · Pause enregistrée</span>
               <h1
-                className="f-display h-rise text-[26px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[30px]"
+                className="f-display h-rise text-[26px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[30px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 Ta pause est prise.

@@ -51,7 +51,7 @@ export default function OfflinePage(): React.ReactElement {
         <p className="text-[11px] font-medium tracking-[0.2em] text-[var(--t-3)] uppercase">
           Hors ligne
         </p>
-        <h1 className="f-display mt-3 text-3xl leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-4xl">
+        <h1 className="f-display mt-3 text-3xl leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-4xl">
           Tu es hors ligne
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-[var(--t-2)]">

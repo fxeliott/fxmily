@@ -441,7 +441,7 @@ export function EveningCheckinWizard({
               tabIndex={-1}
               // See morning wizard — programmatic-focus heading, no visual
               // outline. Audit J5 H3.
-              className="f-display text-[20px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
+              className="f-display text-[20px] leading-[1.1] font-semibold tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {STEP_TITLES[step]}

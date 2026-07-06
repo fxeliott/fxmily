@@ -27,7 +27,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const TZ = 'Europe/Paris';
 // Mid-September → `computeReportingMonth` = the just-ended civil month = August
 // 2026, which ends on a Monday (mid-week) → the straddling-week scenario.
-const NOW = new Date('2026-09-15T10:00:00Z');
+const NOW = new Date('2026-09-15T10:00:00Z'); // allow-absolute-date injected-clock-anchor
 
 vi.mock('@/lib/db', () => ({
   db: {

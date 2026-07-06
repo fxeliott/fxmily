@@ -52,6 +52,45 @@ realign, the global lock + `MultipleInstances IgnoreNew` make the later tick
 skip cleanly, and the next tick — or the server-side overdue-alert net — picks
 the work up.
 
+## Claude auth & multi-comptes
+
+The worker holds **no** Claude credentials of its own. Auth lives in a single
+file, `~/.claude/.credentials.json`, and each `claude login` **overwrites** it —
+so there is exactly **one active Claude account per machine** at any moment.
+Every `claude --print` (one child process per member) reads that file at
+startup, which means:
+
+- **The worker automatically follows the active account.** Switch accounts with
+  `claude login` in any terminal and the very next batch tick uses the new one —
+  no worker restart, no config change. Switching **during** a batch is safe too:
+  the member currently in flight finishes on the old account, the next member
+  picks up the new one (`status.json` records an `accountEnd` different from
+  `account` as the switch signal — a local-only field, never sent anywhere).
+- **LogonType Interactive is mandatory** (see Install). S4U cannot read that
+  OAuth file (proven 2026-07-02): an S4U task looks green while every batch fails
+  silently. `install-worker.ps1` defaults to Interactive and warns on S4U;
+  `watchdog.ps1` raises `task_logon_type:<name>` if it ever finds a non-Interactive
+  worker task.
+- **Logged out or capped → graceful skip, automatic resume.** Before touching
+  `claude`, each tick runs `claude auth status --json` (instant, zero quota). If
+  nobody is logged in, the tick skips cleanly (`status.json` → `skipped:"no_claude_auth"`,
+  `authOk:false`) and does **not** burn the cohort against a broken auth — it
+  resumes on its own once you log back in (pull is idempotent, so unprocessed
+  members are re-picked). If a run hits a Claude usage/rate limit, the pipeline
+  stops early, persists whatever it already generated, and exits 75; `run-batch.sh`
+  drops a `logs/quota-halt.stamp` and every tick then skips
+  (`skipped:"quota_cooldown"`) for `FXMILY_QUOTA_COOLDOWN_MIN` minutes (default
+  60, env-overridable) before resuming automatically at the next quota window. A
+  cap is **benign**: `run-batch.sh` reports success (0) to Task Scheduler so a
+  bare cap never raises a scheduler alert, while `status.json` still carries
+  `exitCode:75` + `quotaCapped:true` and the watchdog surfaces `claude_quota:capped`
+  on `/admin/system`.
+
+**PII note:** the active account email is written **only** to local logs and
+`status.json` (both under `ops/worker/logs/`, git-ignored, pruned after 14 days).
+It is **never** included in the watchdog heartbeat, whose contract is counts-only
+(no token, no username).
+
 ## Install
 
 1. Provide the token (never committed):
@@ -64,13 +103,16 @@ the work up.
 2. Register the tasks (no admin rights needed):
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File ops\worker\install-worker.ps1
+   powershell -ExecutionPolicy Bypass -File ops\worker\install-worker.ps1 -LogonType Interactive
    ```
 
-   Tasks run as **you** with LogonType **S4U** ("whether logged on or not") so the
-   worker keeps ticking on an always-on PC. `claude --print` uses your Claude Max
-   OAuth under `~/.claude`. If S4U can't reach that auth in your setup, re-run with
-   `-LogonType Interactive` (ticks only while you're logged on).
+   Tasks run as **you** with LogonType **Interactive** (the default). `claude
+--print` reads the account currently logged in under `~/.claude`
+   (`.credentials.json`). **Interactive is mandatory**: S4U was proven incapable
+   of reading the Claude OAuth on 2026-07-02 — an S4U task registers and looks
+   green, but every batch fails silently. Leave the PC logged in (screen may be
+   locked) and the worker keeps ticking. `-LogonType S4U` is still accepted but
+   emits a loud warning; don't use it for these batches.
 
 ## Self-healing watchdog (tour 12)
 

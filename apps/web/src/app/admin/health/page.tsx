@@ -76,7 +76,7 @@ export default async function AdminHealthPage(): Promise<React.ReactElement> {
           Santé métier
         </p>
         <h1
-          className="f-display h-rise mt-2 flex items-center gap-3 text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+          className="f-display h-rise mt-2 flex items-center gap-3 text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           <HeartPulse aria-hidden="true" className="h-7 w-7 text-[var(--acc-hi)]" />

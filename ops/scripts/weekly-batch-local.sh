@@ -224,3 +224,7 @@ echo "  envelope       : $ENVELOPE_FILE"
 echo "  results        : $RESULTS_FILE"
 echo "  persist result : $BATCH_DIR/persist-result.json"
 echo "  claude errors  : $BATCH_DIR/claude-errors.log"
+
+# Volet B — surface a rate/usage-limit halt to the worker as exit 75 (benign
+# cooldown) even though the partial persist above succeeded. 0 otherwise.
+exit "$(core_run_exit_code)"

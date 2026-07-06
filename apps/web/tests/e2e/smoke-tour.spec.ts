@@ -11,7 +11,7 @@
  * `checkin-happy-path.spec.ts`.
  */
 
-import { test } from '@playwright/test';
+import { test } from './fixtures';
 
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';

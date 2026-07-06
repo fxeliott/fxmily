@@ -40,7 +40,7 @@ export function MethodGoalCard({
       data-rule={goal.rule}
       aria-labelledby="method-goal-heading"
       className={cn(
-        'rounded-card border border-[var(--b-acc)] bg-[var(--acc-dim)]',
+        'wow-hover-soft rounded-card border border-[var(--b-acc)] bg-[var(--acc-dim)]',
         compact ? 'p-4' : 'p-5',
         className,
       )}

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type ConsoleMessage, type Page } from '@playwright/test';
+import { chromium, expect, test, type ConsoleMessage } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -43,12 +43,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 /** Console errors that are dev-server noise, never a real defect. */
@@ -183,7 +177,6 @@ test.describe('S26 — Fidélité à ta gestion (capture au close + miroir /prog
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, closeMember.email, closeMember.password);
 
@@ -236,7 +229,6 @@ test.describe('S26 — Fidélité à ta gestion (capture au close + miroir /prog
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, mirrorMember.email, mirrorMember.password);
 

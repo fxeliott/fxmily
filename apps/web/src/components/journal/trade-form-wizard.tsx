@@ -355,7 +355,7 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
             id="wizard-heading"
             ref={headingRef}
             tabIndex={-1}
-            className="masthead-accent f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            className="masthead-accent f-display text-[22px] leading-[1.1] font-semibold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {STEP_TITLES[step]}

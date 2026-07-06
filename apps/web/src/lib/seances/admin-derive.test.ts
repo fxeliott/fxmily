@@ -224,7 +224,7 @@ describe('futureSeanceCells / isWeekendDate', () => {
       expect([...slots].sort()).toEqual(['analyse', 'debrief']);
     }
     // Horizon is inclusive of today + ADMIN_SEANCE_HORIZON_DAYS days.
-    const maxOffsetDate = '2026-07-13'; // 2026-06-29 + 14 (a Monday)
+    const maxOffsetDate = '2026-07-13'; // 2026-06-29 + 14 (a Monday) // allow-absolute-date injected-clock-anchor
     expect(cells.some((c) => c.date === maxOffsetDate)).toBe(true);
     expect(ADMIN_SEANCE_HORIZON_DAYS).toBe(14);
   });

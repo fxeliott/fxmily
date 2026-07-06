@@ -65,7 +65,7 @@ export function MentalMapCard({
       data-slot="mental-map-card"
       aria-labelledby="mental-map-heading"
       className={cn(
-        'rounded-card border border-[var(--b-acc)] bg-[var(--acc-dim)]',
+        'wow-hover-soft rounded-card border border-[var(--b-acc)] bg-[var(--acc-dim)]',
         compact ? 'p-4' : 'p-5',
         className,
       )}

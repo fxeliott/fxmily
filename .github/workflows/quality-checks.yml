@@ -1,0 +1,79 @@
+name: Quality Checks
+
+# Permanent guardrails turning two recurring CI-red classes into mechanical
+# gates (mirrors the pattern of cron-sync-check.yml — pure, read-only, zero-dep):
+#
+#   • check-no-absolute-dates-in-tests.mjs — a FUTURE-dated literal hard-coded in
+#     a test is a time-bomb: green today, red on an arbitrary later date. Fails
+#     the PR that introduces a new one (annotate deliberate ones with
+#     `// allow-absolute-date`).
+#   • check-e2e-copy-sync.mjs — a Playwright spec asserting UI copy that was
+#     edited in `src/` (and not updated in the spec) fails as an opaque locator
+#     timeout in the 25-min E2E run. Fails the PR at check time with the exact
+#     orphaned literal instead.
+#
+# Both scripts only read files already in the checkout (node:fs / node:path,
+# no install), so this job is fast and has ZERO production side-effect. The same
+# logic is ALSO enforced by the Vitest suite (apps/web/src/lib/quality/*.test.ts)
+# so a coverage run catches it too — this standalone workflow gives the failure
+# its own precise red signal without needing the full test job.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**/*.test.ts'
+      - 'apps/web/**/*.test.tsx'
+      - 'apps/web/tests/e2e/**'
+      - 'apps/web/src/**'
+      - 'scripts/check-no-absolute-dates-in-tests.mjs'
+      - 'scripts/check-e2e-copy-sync.mjs'
+      - '.github/workflows/quality-checks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**/*.test.ts'
+      - 'apps/web/**/*.test.tsx'
+      - 'apps/web/tests/e2e/**'
+      - 'apps/web/src/**'
+      - 'scripts/check-no-absolute-dates-in-tests.mjs'
+      - 'scripts/check-e2e-copy-sync.mjs'
+      - '.github/workflows/quality-checks.yml'
+  workflow_dispatch:
+
+# Cancel superseded PR runs ; never cancel a `main` run (mirrors ci.yml).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Strict read-only default — the checks only read files already in the checkout.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Test-suite guardrails
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Don't persist GITHUB_TOKEN in `.git/config` post-step (zizmor
+          # artipacked defense — mirrors ci.yml / deploy.yml / cron-sync-check.yml).
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: No future-dated absolute literals in tests
+        # Zero dependencies — node:fs / node:path only, no `pnpm install` needed.
+        run: node scripts/check-no-absolute-dates-in-tests.mjs
+
+      - name: E2E copy assertions in sync with src
+        run: node scripts/check-e2e-copy-sync.mjs

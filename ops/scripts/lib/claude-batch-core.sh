@@ -22,7 +22,11 @@
 #   - official `claude` binary only (core_sanity_checks)
 #   - `--bare` is FORBIDDEN (breaks OAuth Max keychain auth — weekly R4
 #     empirical fix, 2026-05). Never add it back.
-#   - human-in-the-loop : the orchestrators are run manually by Eliot
+#   - single active Claude account per machine : the orchestrators authenticate
+#     with whatever account is currently logged in under ~/.claude
+#     (.credentials.json). They no longer require a human to run them — the J2
+#     worker (ops/worker/) schedules them — but they stay serialised, one
+#     `claude --print` at a time, exactly as a human ran them by hand.
 #
 # Sourcing contract :
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -550,4 +554,22 @@ core_should_halt() {
     return 0
   fi
   return 1
+}
+
+# Exit code a pipeline should terminate with AFTER it has finished persisting
+# whatever it managed to generate. Echoes 75 (EX_TEMPFAIL) when the run latched
+# CORE_RATE_LIMITED — a BENIGN "come back next quota window" signal that
+# run-batch.sh turns into an inter-tick cooldown so the worker stops hammering a
+# capped account — otherwise 0. Called at the very end of each pipeline (past the
+# partial persist) so a rate-limit halt never discards work already done and
+# never masks a persist failure (those keep their own non-zero exit). A run that
+# tripped only the consecutive-failure breaker (generic, not a usage limit)
+# stays 0 here : it already surfaces via the per-member error slugs + logs and
+# does not warrant a machine-wide cooldown.
+core_run_exit_code() {
+  if [ "${CORE_RATE_LIMITED:-0}" -eq 1 ]; then
+    echo 75
+  else
+    echo 0
+  fi
 }

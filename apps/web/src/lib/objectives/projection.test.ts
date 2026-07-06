@@ -44,7 +44,7 @@ describe('dayOffset / addDaysIso', () => {
   it('addDaysIso ajoute des jours et reformate', () => {
     expect(addDaysIso('2026-01-01', 7)).toBe('2026-01-08');
     expect(addDaysIso('2026-01-01', 0)).toBe('2026-01-01');
-    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01'); // allow-absolute-date injected-clock-anchor
   });
 });
 

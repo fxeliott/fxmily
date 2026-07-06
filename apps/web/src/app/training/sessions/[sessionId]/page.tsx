@@ -74,7 +74,7 @@ export default async function MemberTrainingSessionDetailPage({
                 Session de backtest
               </span>
               <h1
-                className="f-display h-rise text-[24px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[28px]"
+                className="f-display h-rise text-[24px] leading-[1.1] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[28px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 {title}

@@ -67,11 +67,13 @@ export function SeanceMacroCompass({
               {conductor.symbol}
             </span>
             {conductor.name ? (
-              <span className="t-cap text-[var(--t-3)]">{conductor.name}</span>
+              // `--t-2` (pas t-3) : sur le fond teinté `--acc-dim-2`, t-3 tombe à
+              // 4,35:1 en light (< AA 4,5) — mesuré au sweep T16, worst gradient stop.
+              <span className="t-cap text-[var(--t-2)]">{conductor.name}</span>
             ) : null}
           </div>
           <BiasPill bias={conductor.bias} />
-          <p className="t-cap text-[var(--t-3)]">Tout se lit par rapport à lui.</p>
+          <p className="t-cap text-[var(--t-2)]">Tout se lit par rapport à lui.</p>
         </div>
 
         {/* Flow motif — decorative only (aria-hidden). The meaning is carried by

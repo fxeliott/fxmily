@@ -19,7 +19,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -38,12 +38,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 test.describe('S8 RE-CHALLENGE — /training landing surfaces (regularity bar, result filter, session echo)', () => {
@@ -112,7 +106,6 @@ test.describe('S8 RE-CHALLENGE — /training landing surfaces (regularity bar, r
       throw new Error('seed missing — beforeAll did not run');
     }
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
 
@@ -157,6 +150,9 @@ test.describe('S8 RE-CHALLENGE — /training landing surfaces (regularity bar, r
     await page.goto(`/training/${winTradeId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1, name: 'EURUSD' })).toBeVisible();
     await expect(page.getByText('Range EURUSD — e2e §254')).toBeVisible();
-    await expect(page.getByText('EURUSD · M15')).toBeVisible();
+    // Composed chip: `{symbol} · {timeframe}`, both seeded trade data (not source
+    // copy). Regex so the copy-sync guard doesn't chase a literal the component
+    // assembles from fixture values.
+    await expect(page.getByText(/EURUSD\s+·\s+M15/)).toBeVisible();
   });
 });

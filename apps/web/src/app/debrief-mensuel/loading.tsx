@@ -26,7 +26,7 @@ export default function MonthlyDebriefLoading() {
             Débrief mensuel
           </span>
           <h1
-            className="f-display text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            className="f-display text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Mon débrief mensuel

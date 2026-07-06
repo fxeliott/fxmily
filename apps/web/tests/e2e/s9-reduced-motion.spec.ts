@@ -13,7 +13,7 @@
  *   pnpm --filter @fxmily/web exec playwright test s9-reduced-motion --project=chromium
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const ANIMATED_ROUTES = ['/', '/login', '/rejoindre'];
 

@@ -1,9 +1,11 @@
-import { ArrowLeft, Clapperboard } from 'lucide-react';
+import { ArrowLeft, Clapperboard, PlaySquare } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { EquityCurve } from '@/components/illustrations/equity-curve';
+import { EmptyState } from '@/components/ui/empty-state';
 import { SeanceCard } from '@/components/seances/seance-card';
 import { SeancesDisclaimer } from '@/components/seances/seances-disclaimer';
 import { SeancesStatGrid } from '@/components/seances/seances-stat-grid';
@@ -66,12 +68,12 @@ export default async function SeancesPage() {
             </span>
             <h1
               id="seances-heading"
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Les séances
             </h1>
-            <p className="t-cap max-w-prose text-[var(--t-3)]">
+            <p className="t-lead max-w-prose text-[var(--t-3)]">
               Le replay de chaque séance et son analyse, actif par actif. Rattrape une réunion que
               tu as manquée, ou revois un point précis quand tu veux.
             </p>
@@ -134,13 +136,20 @@ export default async function SeancesPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] p-6 text-center">
-              <p className="t-body text-[var(--t-2)]">Le hub est prêt.</p>
-              <p className="t-cap mt-1 text-[var(--t-3)]">
-                Les replays et comptes rendus des séances apparaîtront ici dès la première séance
-                publiée.
-              </p>
-            </div>
+            <EmptyState
+              icon={PlaySquare}
+              illustration={<EquityCurve className="mx-auto w-full max-w-[200px]" />}
+              headline="Le hub est prêt."
+              lead="Chaque séance de la semaine y sera déposée en replay, avec son analyse actif par actif, dès qu’elle est publiée."
+              guides={[
+                'Les séances de Réunion Trading ont lieu en semaine, en direct.',
+                'Le replay et le compte rendu arrivent ici juste après.',
+                'Rien à rattraper pour l’instant, tu es à jour.',
+              ]}
+              tip="Reviens quand une première séance est publiée, tu la retrouveras ici avec son analyse complète."
+              ctaPrimary="Voir mon calendrier"
+              ctaHref="/calendrier"
+            />
           )}
         </section>
 

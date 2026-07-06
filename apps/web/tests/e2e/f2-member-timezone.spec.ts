@@ -25,7 +25,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -48,12 +48,6 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
     };
   }
   return { ok: true };
-}
-
-async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
-  });
 }
 
 test.describe('F2 — Fuseau horaire par membre', () => {
@@ -85,7 +79,6 @@ test.describe('F2 — Fuseau horaire par membre', () => {
     if (!backtestMember) throw new Error('seed missing — beforeAll did not run');
     const memberUser = backtestMember;
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
 
@@ -168,7 +161,6 @@ test.describe('F2 — Fuseau horaire par membre', () => {
     if (!settingsMember) throw new Error('seed missing — beforeAll did not run');
     const memberUser = settingsMember;
 
-    await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, memberUser.email, memberUser.password);
 

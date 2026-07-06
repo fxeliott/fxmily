@@ -1,13 +1,12 @@
-import { ArrowLeft, ArrowRight, Compass, MessageCircleHeart } from 'lucide-react';
+import { ArrowLeft, Compass } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
 import { startInterviewFormAction } from '@/app/onboarding/interview/actions';
 import { auth } from '@/auth';
-import { btnVariants } from '@/components/ui/btn';
+import { StartInterviewButton } from '@/components/onboarding/start-interview-button';
 import { getInterviewForUser } from '@/lib/onboarding-interview/service';
-import { cn } from '@/lib/utils';
 
 export const metadata = {
   title: 'Entretien onboarding',
@@ -137,14 +136,7 @@ export default async function OnboardingInterviewLandingPage() {
         className="wow-rise flex w-full"
         style={{ '--rise-delay': '180ms' } as CSSProperties}
       >
-        <button
-          type="submit"
-          className={cn(btnVariants({ kind: 'primary', size: 'l' }), 'w-full justify-center')}
-        >
-          <MessageCircleHeart className="h-4 w-4" strokeWidth={1.75} />
-          Commencer mon entretien
-          <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
-        </button>
+        <StartInterviewButton />
       </form>
     </main>
   );

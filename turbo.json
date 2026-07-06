@@ -6,7 +6,18 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["DATABASE_URL", "AUTH_SECRET", "AUTH_URL", "CRON_SECRET"]
+      "env": [
+        "DATABASE_URL",
+        "AUTH_SECRET",
+        "AUTH_URL",
+        "CRON_SECRET",
+        "ADMIN_BATCH_TOKEN",
+        "MONTHLY_ADMIN_BATCH_TOKEN",
+        "CALENDAR_ADMIN_BATCH_TOKEN",
+        "VERIFICATION_ADMIN_BATCH_TOKEN",
+        "SEANCES_ADMIN_BATCH_TOKEN",
+        "PROFILE_ADMIN_BATCH_TOKEN"
+      ]
     },
     "dev": {
       "cache": false,

@@ -3013,9 +3013,16 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
 }
 
 /* ---- GradientBorder (gradient-border.tsx) — anneau de marque --grad-brand
-   (bleu→indigo→cyan) qui peut tourner. @property enregistre l'angle conique
-   pour l'interpoler ; sans support (rare en 2026, Firefox 128+) l'anneau reste
-   statique = fallback gracieux. DÉCORATIF only (jamais un CTA). ---- */
+   (bleu→indigo→cyan) qui peut tourner. Tour 16 : le ::before est MASQUÉ en
+   anneau (mask-composite: exclude sur la zone padding) — seul le liseré est
+   peint, jamais la surface. Un inner transparent est donc sans danger (le
+   bug d'origine : nappe conique pleine + couture tournante sous la carte
+   pré-trade quand l'inner était `!bg-transparent`). @property enregistre
+   l'angle conique pour l'interpoler ; sans support (rare en 2026, Firefox
+   128+) l'anneau reste statique = fallback gracieux. DÉCORATIF only (jamais
+   un CTA). Variantes : défaut = anneau plein qui tourne ;
+   data-variant='beam' = liseré bleu subtil + segment lumineux qui parcourt
+   le périmètre + glow ambiant (accent mono-focal du dashboard). ---- */
 @property --gb-angle {
   syntax: '<angle>';
   initial-value: 0deg;
@@ -3023,7 +3030,7 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
 }
 .gradient-border {
   position: relative;
-  padding: 1px;
+  padding: var(--gb-width, 1px);
   border-radius: var(--gb-radius, var(--r-card-lg));
   isolation: isolate;
 }
@@ -3033,6 +3040,7 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
+  padding: var(--gb-width, 1px);
   background: conic-gradient(
     from var(--gb-angle),
     oklch(0.62 0.19 254 / 0.9),
@@ -3041,10 +3049,44 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
     oklch(0.55 0.21 262 / 0.9),
     oklch(0.62 0.19 254 / 0.9)
   );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.gradient-border[data-variant='beam'] {
+  --gb-width: 1.5px;
+}
+.gradient-border[data-variant='beam']::before {
+  background:
+    conic-gradient(
+      from var(--gb-angle),
+      transparent 0deg,
+      transparent 264deg,
+      oklch(0.62 0.19 254 / 0.55) 300deg,
+      oklch(0.78 0.14 230 / 0.95) 330deg,
+      oklch(0.7 0.13 217 / 0.55) 348deg,
+      transparent 360deg
+    ),
+    linear-gradient(oklch(0.62 0.19 254 / 0.28) 0 0);
+}
+.gradient-border[data-variant='beam']::after {
+  /* Glow ambiant doux sous la carte — décoratif, hors hit-testing. */
+  content: '';
+  position: absolute;
+  inset: -14px;
+  z-index: -2;
+  border-radius: calc(var(--gb-radius, var(--r-card-lg)) + 12px);
+  background: radial-gradient(60% 70% at 50% 100%, oklch(0.62 0.19 254 / 0.14), transparent 70%);
+  pointer-events: none;
 }
 .gradient-border-inner {
   height: 100%;
-  border-radius: calc(var(--gb-radius, var(--r-card-lg)) - 1px);
+  border-radius: calc(var(--gb-radius, var(--r-card-lg)) - var(--gb-width, 1px));
   background: var(--bg-1);
 }
 @keyframes gbSpin {
@@ -3065,10 +3107,22 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
     animation-play-state: running;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Beam figé = segment lumineux gelé à un angle arbitraire → on ne garde
+     que le liseré de base, calme et constant. */
+  .gradient-border[data-variant='beam']::before {
+    background: linear-gradient(oklch(0.62 0.19 254 / 0.28) 0 0);
+  }
+}
 @media (forced-colors: active) {
   .gradient-border::before {
     background: none;
     border: 1px solid CanvasText;
+    -webkit-mask: none;
+    mask: none;
+  }
+  .gradient-border[data-variant='beam']::after {
+    display: none;
   }
 }
 

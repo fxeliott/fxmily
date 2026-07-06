@@ -99,6 +99,22 @@ describe('GradientBorder', () => {
     );
     expect(container.querySelector('.gradient-border')?.getAttribute('data-trigger')).toBe('hover');
   });
+
+  it('omits data-variant by default and emits it for the beam variant', () => {
+    const { container: ring } = render(
+      <GradientBorder>
+        <p>x</p>
+      </GradientBorder>,
+    );
+    expect(ring.querySelector('.gradient-border')?.hasAttribute('data-variant')).toBe(false);
+
+    const { container: beam } = render(
+      <GradientBorder variant="beam">
+        <p>x</p>
+      </GradientBorder>,
+    );
+    expect(beam.querySelector('.gradient-border')?.getAttribute('data-variant')).toBe('beam');
+  });
 });
 
 describe('Reveal / RevealGroup', () => {

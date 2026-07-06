@@ -615,17 +615,21 @@ export default async function DashboardPage() {
         {/* V2.3 — Pré-trade circuit breaker (ADR-003 Trigger A). Nudge calme « pause
             30s » au-dessus du journal. Non-bloquant — un miroir, pas une barrière.
             (Les ANALYTICS pré-trade ont migré vers /patterns ; ceci est le CTA.) */}
-        {/* Tour 12 (B) — accent électrique MONO-FOCAL de la page : l'anneau
-            conique bleu→indigo→cyan (gradient-border, data-trigger='always')
-            borde LE CTA prioritaire du jour, le pré-trade. Un seul par page
-            (discipline mono-focale) ; décoratif, l'interactivité reste dans le
-            Link. Radius aligné sur `rounded-card` (12px). */}
+        {/* Tour 12 (B) — accent électrique MONO-FOCAL de la page : le
+            gradient-border borde LE CTA prioritaire du jour, le pré-trade.
+            Tour 16 : variante « beam » (liseré bleu subtil + segment lumineux
+            qui parcourt le périmètre + glow ambiant) — le ::before est masqué
+            en anneau, la nappe conique pleine sous la carte (bug) est morte à
+            la racine. L'inner opaque (--bg-1) porte le voile --acc-dim du
+            Link ; plus de bordure propre au Link (le liseré la remplace). Un
+            seul par page (discipline mono-focale) ; décoratif, l'interactivité
+            reste dans le Link. Radius aligné sur `rounded-card` (12px). */}
         <section className="mb-6" aria-labelledby="pre-trade-heading">
-          <GradientBorder trigger="always" radius="var(--r-card)" innerClassName="!bg-transparent">
+          <GradientBorder trigger="always" variant="beam" radius="var(--r-card)">
             <HoverLift className="block">
               <Link
                 href="/pre-trade/new"
-                className="wow-hover-glow rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                className="wow-hover-glow rounded-card block bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
                   <div className="flex items-start gap-3">

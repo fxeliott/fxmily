@@ -270,6 +270,13 @@ test.describe('Séances — hub + page séance (runtime)', () => {
     // SVG label → assert at least one visible match, not strict-single).
     await expect(page.getByText('101,8', { exact: true }).first()).toBeVisible();
 
+    // Premium overview + method primer (compass / basket / choreography schemas).
+    await expect(page.getByRole('heading', { name: /Le plan du jour/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /chor[ée]graphie/ })).toBeVisible();
+    // The compass names the macro conductor; the choreography carries its red thread.
+    await expect(page.getByText(/Chef d.orchestre/).first()).toBeVisible();
+    await expect(page.getByText(/sens inverse du mouvement final/)).toBeVisible();
+
     // Bias overview table + the assets' bias.
     await expect(page.getByRole('heading', { name: "Vue d'ensemble des biais" })).toBeVisible();
     await expect(page.getByText('Baissier').first()).toBeVisible();

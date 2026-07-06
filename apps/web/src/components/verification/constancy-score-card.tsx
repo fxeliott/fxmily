@@ -21,7 +21,7 @@ const AXES: ReadonlyArray<{
   {
     key: 'regularity',
     label: 'Régularité',
-    hint: 'Tes check-ins remplis, jour après jour',
+    hint: 'Tes check-ins remplis sur tes jours actifs, tes jours off ne comptent pas',
   },
   {
     key: 'discipline',

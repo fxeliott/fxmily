@@ -8,6 +8,7 @@ import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
 
 import { db } from '@/lib/db';
 import {
+  MAX_BACKFILL_SUGGESTIONS,
   PAST_HORIZON_DAYS,
   type EveningCheckinInput,
   type MorningCheckinInput,
@@ -486,6 +487,94 @@ export async function getYesterdayBackfill(
   const eveningMissing = !slots.has('evening');
   if (!morningMissing && !eveningMissing) return null;
   return { date: yesterday, morningMissing, eveningMissing };
+}
+
+/**
+ * Tour 15 — one recent expected (non-off) day the member never fully filled, so
+ * the hub's multi-day rattrapage cue can list it as a clickable catch-up row.
+ * A day appears iff at least ONE slot is missing (mirrors {@link YesterdayBackfill}).
+ */
+export interface RecentBackfillDay {
+  /** The local date (YYYY-MM-DD) — the value to pass as `?date=`. */
+  date: LocalDateString;
+  morningMissing: boolean;
+  eveningMissing: boolean;
+}
+
+/**
+ * Tour 15 — the last few EXPECTED (non-off) local days the member never fully
+ * filled, newest first, capped at {@link MAX_BACKFILL_SUGGESTIONS}. Extends the
+ * yesterday-only cue ({@link getYesterdayBackfill}) so a member who missed two
+ * or three days sees each one as its own clickable rattrapage row.
+ *
+ * Off-aware (Tour 14): weekends kept off + explicit `MemberOffDay` declarations
+ * are stepped over — an off day was chosen rest, never something "to catch up"
+ * (§31.2, no pressure). Bounded to the backfill horizon
+ * ({@link PAST_HORIZON_DAYS}) so we never offer a day the submit would reject.
+ *
+ * Walk: from local yesterday backwards, skip off days, and for each expected day
+ * collect the missing slots — stop once we have {@link MAX_BACKFILL_SUGGESTIONS}
+ * incomplete days OR we reach the horizon. TODAY is excluded on purpose: it is
+ * the normal same-day flow (the hub surfaces it separately), never a rattrapage.
+ *
+ * One indexed range query on the check-ins + one cached off-day context query.
+ * Returns `[]` when everything recent is covered or off (no cue, no pressure).
+ */
+export async function getRecentBackfillDays(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+  maxDays: number = MAX_BACKFILL_SUGGESTIONS,
+): Promise<RecentBackfillDay[]> {
+  const today = todayFor(timezone, now);
+  const yesterday = shiftLocalDate(today, -1);
+  // The oldest local day we would ever offer — the backfill horizon lower bound
+  // (same window the Zod submit + `resolveBackfillDateParam` enforce), so a
+  // listed day is always a day the member could actually catch up.
+  const horizonStart = shiftLocalDate(today, -PAST_HORIZON_DAYS);
+
+  // Off-day context + filled slots over the whole horizon, resolved once. The
+  // check-in query is bounded by the same lower pin the walk uses.
+  const [offCtx, rows] = await Promise.all([
+    getOffDaySet(userId, horizonStart, yesterday),
+    db.dailyCheckin.findMany({
+      where: {
+        userId,
+        date: { gte: parseLocalDate(horizonStart), lte: parseLocalDate(yesterday) },
+      },
+      select: { date: true, slot: true },
+    }),
+  ]);
+
+  // Bucket filled slots by local-date string for O(1) per-day lookup.
+  const slotsByDate = new Map<LocalDateString, Set<CheckinSlot>>();
+  for (const r of rows) {
+    const key = r.date.toISOString().slice(0, 10);
+    let set = slotsByDate.get(key);
+    if (!set) {
+      set = new Set();
+      slotsByDate.set(key, set);
+    }
+    set.add(r.slot);
+  }
+
+  const out: RecentBackfillDay[] = [];
+  let cursor = yesterday;
+  while (out.length < maxDays && cursor >= horizonStart) {
+    // Step over off days (weekend kept off / explicit declaration): a rest is
+    // never something to catch up. Filled or not, an off day yields no cue.
+    if (!isOffDay(cursor, offCtx)) {
+      const slots = slotsByDate.get(cursor);
+      const morningMissing = !slots?.has('morning');
+      const eveningMissing = !slots?.has('evening');
+      if (morningMissing || eveningMissing) {
+        out.push({ date: cursor, morningMissing, eveningMissing });
+      }
+    }
+    cursor = shiftLocalDate(cursor, -1);
+  }
+
+  return out;
 }
 
 /**

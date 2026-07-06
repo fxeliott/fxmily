@@ -13,6 +13,7 @@ import {
   type LocalDateString,
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
+import { isMemberInRampUp } from './ramp-up';
 // SPEC §30.4 J-M4 — the count-only meeting-attendance primitive (different
 // module from training: `@/lib/meeting`, so it does NOT touch the single
 // `@/lib/training` import the anti-leak firewall pins on this touchpoint).
@@ -621,6 +622,25 @@ export const getLatestBehavioralScore = cache(
       orderBy: { date: 'desc' },
     });
     return row === null ? null : serializeBehavioralScore(row);
+  },
+);
+
+/**
+ * Tour 15 — is the member in their onboarding "ramp-up" window (joined less than
+ * {@link RAMP_UP_DAYS} ago)? The member's OWN progression view passes the result
+ * to the score gauges so a low score reads "En rodage" (calm) instead of red
+ * "Critique" during the first month (SPEC §31.2 — never punitive in onboarding).
+ * One tiny indexed read (`joinedAt`), memoised for the render. Missing user row
+ * (should never happen for an authed member) → not ramp-up (safe, non-flooring).
+ */
+export const getMemberRampUp = cache(
+  async (userId: string, now: Date = new Date()): Promise<boolean> => {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { joinedAt: true },
+    });
+    if (!user) return false;
+    return isMemberInRampUp(user.joinedAt, now);
   },
 );
 

@@ -8,11 +8,13 @@ vi.mock('@/lib/notifications/enqueue', () => ({
 }));
 
 import { db } from '@/lib/db';
+import type { OffDayContext } from '@/lib/checkin/off-days';
 
 import { ALERT_RULES } from './alerts';
 import {
   currentPeriodStart,
   foldConstancy,
+  isEventExcused,
   listRecentConstancyScores,
   ritualEventId,
 } from './constancy';
@@ -115,6 +117,80 @@ describe('foldConstancy — le score monte et descend (DoD #3)', () => {
     );
     // Only regularity (50%) present → value == regularity exactly.
     expect(r.value).toBe(50);
+  });
+});
+
+describe('isEventExcused — off-aware excusal rule (Tour 15)', () => {
+  // weekendsOff on, no explicit off day: only Sat/Sun are off.
+  const weekendsOffCtx: OffDayContext = { weekendsOff: true, explicitDates: new Set() };
+  // weekendsOff off, one explicitly declared off weekday (a Wednesday).
+  const explicitCtx: OffDayContext = {
+    weekendsOff: false,
+    explicitDates: new Set(['2026-06-17']), // Wednesday
+  };
+
+  it('a member reason excuses regardless of the day (pre-Tour-15 rule intact)', () => {
+    expect(
+      isEventExcused({ memberReason: 'panne internet', status: 'open', offContext: null }),
+    ).toBe(true);
+  });
+
+  it('a resolved discrepancy excuses (reality retracted the accusation)', () => {
+    expect(isEventExcused({ memberReason: null, status: 'resolved', offContext: null })).toBe(true);
+  });
+
+  it('🚨 WEEK-END OFF — a forgot event on a Saturday (weekendsOff=true) is neutralized', () => {
+    // 2026-06-13 is a Saturday.
+    expect(
+      isEventExcused({
+        memberReason: null,
+        status: 'open',
+        eventLocalDate: '2026-06-13',
+        offContext: weekendsOffCtx,
+      }),
+    ).toBe(true);
+  });
+
+  it('a WEEKDAY event (weekendsOff=true, no explicit) is NOT excused', () => {
+    // 2026-06-16 is a Tuesday — an ordinary active day, still penalized.
+    expect(
+      isEventExcused({
+        memberReason: null,
+        status: 'open',
+        eventLocalDate: '2026-06-16',
+        offContext: weekendsOffCtx,
+      }),
+    ).toBe(false);
+  });
+
+  it('🚨 MemberOffDay — an explicitly declared weekday off neutralizes the event', () => {
+    expect(
+      isEventExcused({
+        memberReason: null,
+        status: 'open',
+        eventLocalDate: '2026-06-17', // the declared Wednesday
+        offContext: explicitCtx,
+      }),
+    ).toBe(true);
+  });
+
+  it('🚨 weekendsOff=FALSE — a weekend event is STILL penalized (no free pass)', () => {
+    // 2026-06-13 Saturday, but the member does NOT keep weekends off and did not
+    // declare it — it stays a real miss.
+    expect(
+      isEventExcused({
+        memberReason: null,
+        status: 'open',
+        eventLocalDate: '2026-06-13',
+        offContext: explicitCtx,
+      }),
+    ).toBe(false);
+  });
+
+  it('no offContext → only member reason / resolved apply (byte-identical to old rule)', () => {
+    expect(
+      isEventExcused({ memberReason: null, status: 'open', eventLocalDate: '2026-06-13' }),
+    ).toBe(false);
   });
 });
 

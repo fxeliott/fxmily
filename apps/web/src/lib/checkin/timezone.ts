@@ -271,3 +271,57 @@ export const REMINDER_WINDOWS = {
   morning: { startMin: MORNING_REMINDER_START_MIN, endMin: MORNING_REMINDER_END_MIN },
   evening: { startMin: EVENING_REMINDER_START_MIN, endMin: EVENING_REMINDER_END_MIN },
 } as const;
+
+// ── Quiet hours (Tour 15) ───────────────────────────────────────────────────
+//
+// A FIXED nightly silence window [22:00, 08:00) in the member's LOCAL time. Non
+// transactional pushes (reminders, nudges, echoes, digests) MUST NOT fire in
+// this window — a 03:00 buzz in the member's own timezone is exactly the anxious
+// cadence Mark Douglas' posture forbids. There is deliberately NO per-member
+// preference yet (YAGNI); the window is a product constant.
+//
+// The window is half-open: 22:00 is inside (silence starts), 08:00 is outside
+// (delivery resumes). It straddles midnight, so "inside" means local minutes
+// >= 22:00 OR < 08:00.
+export const QUIET_HOURS_START_MIN = 22 * 60; // 22:00 — silence begins (inclusive)
+export const QUIET_HOURS_END_MIN = 8 * 60; // 08:00 — delivery resumes (exclusive)
+
+/**
+ * Is `now` inside the member's local quiet-hours window [22:00, 08:00)?
+ *
+ * Uses the same `Intl`-based local-minutes extraction as the reminder gates, so
+ * it is DST-correct (the offset is read for the queried instant, never computed
+ * by naive arithmetic). An invalid / absent timezone falls back to UTC inside
+ * `localMinutes` — the caller is expected to pass an already-`safeTimeZone`d
+ * value, but the fallback keeps this total.
+ */
+export function isWithinQuietHours(timezone: string, now: Date): boolean {
+  const m = localMinutes(now, timezone);
+  // Straddles midnight: [22:00, 24:00) ∪ [00:00, 08:00).
+  return m >= QUIET_HOURS_START_MIN || m < QUIET_HOURS_END_MIN;
+}
+
+/**
+ * The next local 08:00 (quiet-hours end) as a UTC instant, given the member's
+ * timezone and the current instant.
+ *
+ *   - local time < 08:00  → today's 08:00 local (we're in the after-midnight
+ *     tail of the window).
+ *   - local time >= 08:00 → tomorrow's 08:00 local (covers the 22:00–23:59 head
+ *     of the window AND any daytime call — the caller only defers when
+ *     {@link isWithinQuietHours} is true, so daytime never reaches here in
+ *     practice, but the function stays well-defined for any instant).
+ *
+ * DST-safe: 08:00 is converted via {@link localInstantToUtc}, which reads the
+ * actual offset for that wall-clock moment. Spring-forward/fall-back transitions
+ * happen around 01:00–03:00 in the cohorts we serve, so 08:00 local always
+ * exists — no skipped/ambiguous-hour edge to resolve here.
+ */
+export function nextQuietHoursEnd(timezone: string, now: Date): Date {
+  const nowMinutes = localMinutes(now, timezone);
+  const todayLocal = localDateOf(now, timezone);
+  // If we're already at/after 08:00 local, the next 08:00 is tomorrow.
+  const targetLocalDate =
+    nowMinutes < QUIET_HOURS_END_MIN ? todayLocal : shiftLocalDate(todayLocal, 1);
+  return localInstantToUtc(targetLocalDate, 8, 0, 0, 0, timezone);
+}

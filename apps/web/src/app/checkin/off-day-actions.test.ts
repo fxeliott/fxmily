@@ -268,7 +268,19 @@ describe('declareOffDayRangeAction', () => {
     const to = shiftLocalDate(today(), 4); // 4 inclusive days
     const result = await declareOffDayRangeAction(from, to, 'Vacances');
 
-    expect(result).toEqual({ ok: true, from, to, days: 4 });
+    // Tour 15 — the action returns the written days with server-formatted
+    // labels so the client list updates immediately (no reload needed).
+    expect(result).toEqual({
+      ok: true,
+      from,
+      to,
+      days: 4,
+      upcoming: [0, 1, 2, 3].map((i) => ({
+        date: shiftLocalDate(from, i),
+        label: expect.stringMatching(/^[a-zéû]+ \d{1,2} [a-zéû]+$/) as unknown as string,
+        reason: 'Vacances',
+      })),
+    });
     expect(transactionMock).toHaveBeenCalledTimes(1);
     expect(upsertMock).toHaveBeenCalledTimes(4);
     // Each upsert is member-scoped and carries the shared sanitised reason.
@@ -288,7 +300,13 @@ describe('declareOffDayRangeAction', () => {
     authMock.mockResolvedValueOnce(activeSession());
     const d = shiftLocalDate(today(), 2);
     const result = await declareOffDayRangeAction(d, d);
-    expect(result).toEqual({ ok: true, from: d, to: d, days: 1 });
+    expect(result).toEqual({
+      ok: true,
+      from: d,
+      to: d,
+      days: 1,
+      upcoming: [{ date: d, label: expect.any(String) as unknown as string, reason: null }],
+    });
     expect(upsertMock).toHaveBeenCalledTimes(1);
   });
 

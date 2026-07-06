@@ -52,7 +52,7 @@ export async function sendEmail({
       [
         '',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-        `📧  [dev fallback] no RESEND_API_KEY set — email NOT sent`,
+        `📧  [dev fallback] no RESEND_API_KEY set : email NOT sent`,
         `    To:      ${to}`,
         `    Subject: ${subject}`,
         '',

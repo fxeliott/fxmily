@@ -1,4 +1,11 @@
-import { ArrowLeft, ClipboardCheck, MessageSquarePlus, ScaleIcon, Timer } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeft,
+  ClipboardCheck,
+  MessageSquarePlus,
+  ScaleIcon,
+  Timer,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -9,8 +16,10 @@ import { TriageSection, type TriageRow } from '@/components/admin/a-traiter/tria
 import {
   getTriageQueueCounts,
   listOpenDiscrepancies,
+  listRecentBehavioralSignals,
   listStaleOpenTrades,
   listUncommentedClosedTrades,
+  BEHAVIORAL_SIGNAL_RECENT_DAYS,
   STALE_OPEN_TRADE_HOURS,
 } from '@/lib/admin/attention-service';
 
@@ -41,10 +50,15 @@ function parseCursor(value: string | undefined): string | undefined {
 }
 
 /** Build a « voir plus » href that advances ONE section's cursor while keeping
- *  the other two sections on their current page. */
+ *  the other sections on their current page. */
 function moreHref(
-  current: { tc?: string | undefined; to?: string | undefined; ec?: string | undefined },
-  key: 'tc' | 'to' | 'ec',
+  current: {
+    tc?: string | undefined;
+    to?: string | undefined;
+    ec?: string | undefined;
+    sg?: string | undefined;
+  },
+  key: 'tc' | 'to' | 'ec' | 'sg',
   next: string,
 ): string {
   const params = new URLSearchParams();
@@ -52,12 +66,13 @@ function moreHref(
   if (merged.tc) params.set('tc', merged.tc);
   if (merged.to) params.set('to', merged.to);
   if (merged.ec) params.set('ec', merged.ec);
+  if (merged.sg) params.set('sg', merged.sg);
   const qs = params.toString();
   return qs ? `/admin/a-traiter?${qs}` : '/admin/a-traiter';
 }
 
 interface AtraiterPageProps {
-  searchParams: Promise<{ tc?: string; to?: string; ec?: string }>;
+  searchParams: Promise<{ tc?: string; to?: string; ec?: string; sg?: string }>;
 }
 
 /**
@@ -76,18 +91,20 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const { tc: rawTc, to: rawTo, ec: rawEc } = await searchParams;
+  const { tc: rawTc, to: rawTo, ec: rawEc, sg: rawSg } = await searchParams;
   const cursors = {
     tc: parseCursor(rawTc),
     to: parseCursor(rawTo),
     ec: parseCursor(rawEc),
+    sg: parseCursor(rawSg),
   };
 
-  const [counts, uncommented, staleOpen, gaps] = await Promise.all([
+  const [counts, uncommented, staleOpen, gaps, signals] = await Promise.all([
     getTriageQueueCounts(),
     listUncommentedClosedTrades({ cursor: cursors.tc }),
     listStaleOpenTrades({ cursor: cursors.to }),
     listOpenDiscrepancies({ cursor: cursors.ec }),
+    listRecentBehavioralSignals({ cursor: cursors.sg }),
   ]);
 
   const uncommentedRows: TriageRow[] = uncommented.items.map((t) => {
@@ -136,6 +153,24 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
     title: `${d.memberLabel} · ${d.label}`,
     meta: `Détecté le ${DATE_FMT.format(new Date(d.detectedAt))}`,
     ariaLabel: `Traiter l'écart de ${d.memberLabel}`,
+  }));
+
+  const signalRows: TriageRow[] = signals.items.map((s) => ({
+    id: s.id,
+    href: s.href,
+    title: s.memberLabel,
+    // The signals are the already-stored `triggeredBy` labels (« 3 trades
+    // perdants consécutifs sur 24h »…). Join the distinct recent ones, then the
+    // most-recent date — factual, never a verdict (SPEC §2).
+    meta: `${s.signals.join(' · ')} · dernier signal le ${DATE_FMT.format(new Date(s.latestAt))}`,
+    ariaLabel: `Ouvrir la fiche de ${s.memberLabel} (${s.signals.length} signal${
+      s.signals.length > 1 ? 'aux' : ''
+    } récent${s.signals.length > 1 ? 's' : ''})`,
+    trailing: (
+      <Pill tone="acc" dot>
+        {s.signals.length} signal{s.signals.length > 1 ? 'aux' : ''}
+      </Pill>
+    ),
   }));
 
   const allClear = counts.total === 0;
@@ -219,6 +254,17 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
             shownCount={gapRows.length}
             moreHref={gaps.nextCursor ? moreHref(cursors, 'ec', gaps.nextCursor) : null}
             emptyLabel="Aucun écart entre le déclaré et la réalité en attente. Tout est réconcilié."
+          />
+
+          <TriageSection
+            icon={Activity}
+            title="Signaux comportementaux"
+            tone="acc"
+            count={counts.behavioralSignals}
+            rows={signalRows}
+            shownCount={signalRows.length}
+            moreHref={signals.nextCursor ? moreHref(cursors, 'sg', signals.nextCursor) : null}
+            emptyLabel={`Aucun signal comportemental détecté ces ${BEHAVIORAL_SIGNAL_RECENT_DAYS} derniers jours. Le climat est calme.`}
           />
         </div>
       )}

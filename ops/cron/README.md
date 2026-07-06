@@ -170,7 +170,9 @@ GREEN (persistent volume). Verify no DB-referenced proof 404s: pick a known
 
 - `cron-watch.yml` polls `/api/cron/health` hourly, self-heals the
   detection-only crons (re-fires the 5 overdue-alert nudges +
-  verification-scan when stale), and fails loudly only if still red.
+  verification-scan + the Tour-15 `admin-daily-brief` when stale — all pure
+  reads whose worst duplicate effect is a repeated admin email), and fails
+  loudly only if still red.
 - `/usr/local/bin/fxmily-autoheal` (root, every minute) restarts the
   `fxmily-web` / `fxmily-postgres` container when its Docker HEALTHCHECK goes
   unhealthy, holds a machine-wide lock against double instances, and POSTs an

@@ -3,6 +3,7 @@ import 'server-only';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AccessApprovedEmail } from '@/lib/email/templates/access-approved';
+import { AdminDailyBriefEmail } from '@/lib/email/templates/admin-daily-brief';
 import { AccessRejectedEmail } from '@/lib/email/templates/access-rejected';
 import { AccessRequestReceivedAlertEmail } from '@/lib/email/templates/access-request-received-alert';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
@@ -17,6 +18,7 @@ import { PasswordResetEmail } from '@/lib/email/templates/password-reset';
 import { VerificationOverdueAlertEmail } from '@/lib/email/templates/verification-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
 import { WeeklyReportOverdueAlertEmail } from '@/lib/email/templates/weekly-report-overdue-alert';
+import type { AdminDailyBrief } from '@/lib/admin/daily-brief';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 import type { NotificationTypeSlug } from '@/lib/schemas/push-subscription';
@@ -330,6 +332,13 @@ export function buildAdminReportUrl(reportId: string): string {
 export function buildAdminDashboardUrl(): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   return `${base}/admin`;
+}
+
+/** Build the absolute URL to the « À traiter » work queue — used by the Tour 15
+ * daily admin brief (the CTA where every brief count becomes an actionable list). */
+export function buildAdminTriageUrl(): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/admin/a-traiter`;
 }
 
 /** Build the absolute URL to the MEMBER monthly debrief page (V1.4 §25).
@@ -1057,5 +1066,98 @@ export async function sendVerificationOverdueAlertEmail({
       `délai de courtoisie. Aucune preuve n'est analysée sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
+  });
+}
+
+// ----- Tour 15 — daily ADMIN brief (« mon tableau de bord du matin ») --------
+
+export interface SendAdminDailyBriefParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** The composed brief (counts only, PII-free — see lib/admin/daily-brief.ts). */
+  brief: AdminDailyBrief;
+}
+
+/** FR date label (Europe/Paris) for the brief header — a bare civil date, no
+ *  member identity attached (PII-free invariant). */
+function formatBriefDateFr(iso: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Paris',
+  }).format(new Date(iso));
+}
+
+/**
+ * Send the Tour 15 daily admin brief (« point du matin »). ONLY the operator
+ * gets it — count-only, ZERO member PII (mirror of the overdue nudges). Sent
+ * EVERY day (a standing report, not a conditional alert): an all-calm day still
+ * gets a « rien ne réclame ton attention » email, so silence always means a
+ * broken cron, never a quiet day. Best-effort at the call site
+ * (`lib/admin/daily-brief.ts`): a delivery failure degrades to a Sentry warning +
+ * the heartbeat outcome, it never throws back into the cron.
+ */
+export async function sendAdminDailyBriefEmail({
+  to,
+  brief,
+}: SendAdminDailyBriefParams): Promise<{ id: string | null; delivered: boolean }> {
+  const triageUrl = buildAdminTriageUrl();
+  const adminUrl = buildAdminDashboardUrl();
+  const dateLabel = formatBriefDateFr(brief.composedAt);
+  const { triage, newSignalMembers, disengagedMembers } = brief;
+
+  const allCalm = triage.total === 0 && newSignalMembers === 0 && disengagedMembers === 0;
+  const subject = allCalm
+    ? `Brief du jour · rien ne réclame ton attention · ${dateLabel}`
+    : `Brief du jour · ${triage.total} en file, ${newSignalMembers} signal${
+        newSignalMembers > 1 ? 'aux' : ''
+      } depuis hier · ${dateLabel}`;
+
+  const lines: string[] = [];
+  lines.push(`Fxmily · brief du jour (${dateLabel}).`);
+  lines.push('');
+  if (allCalm) {
+    lines.push('Rien ne réclame ton attention aujourd’hui.');
+    lines.push(
+      'La file est vide, aucun nouveau signal comportemental depuis hier, personne ne décroche.',
+    );
+  } else {
+    lines.push('File de travail :');
+    lines.push(`  - ${triage.uncommentedClosed} trade(s) à commenter`);
+    lines.push(`  - ${triage.staleOpen} trade(s) resté(s) ouvert(s)`);
+    lines.push(`  - ${triage.openDiscrepancies} écart(s) en attente`);
+    lines.push(`  - ${triage.behavioralSignals} membre(s) avec un signal comportemental récent`);
+    lines.push(`  → ${triage.total} élément(s) au total.`);
+    lines.push('');
+    lines.push('Depuis hier :');
+    lines.push(`  - ${newSignalMembers} membre(s) avec un nouveau signal comportemental`);
+    lines.push(
+      `  - ${disengagedMembers} membre(s) qui décroche(nt) (pas revu(s) depuis une semaine)`,
+    );
+  }
+  lines.push('');
+  lines.push(`Ouvre la file de travail : ${triageUrl}`);
+  lines.push('');
+  lines.push(
+    'Brief automatique quotidien. Compteurs uniquement, aucune donnée nominative dans cet email : le détail reste dans ton espace admin.',
+  );
+
+  return sendEmail({
+    to,
+    subject,
+    react: AdminDailyBriefEmail({
+      dateLabel,
+      uncommentedClosed: triage.uncommentedClosed,
+      staleOpen: triage.staleOpen,
+      openDiscrepancies: triage.openDiscrepancies,
+      behavioralSignals: triage.behavioralSignals,
+      triageTotal: triage.total,
+      newSignalMembers,
+      disengagedMembers,
+      triageUrl,
+      adminUrl,
+    }),
+    text: lines.join('\n'),
   });
 }

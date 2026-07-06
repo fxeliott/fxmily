@@ -446,6 +446,143 @@ export async function listOpenDiscrepancies(
   };
 }
 
+// =============================================================================
+// Tour 15 — « Signaux comportementaux » : the coach reads the behavioral signals
+// the AI already detected, grouped per member.
+//
+// The J7 Mark Douglas engine already stores, for every card pushed to a member,
+// the human FR label of the behavioral pattern that triggered it
+// (`MarkDouglasDelivery.triggeredBy`, e.g. « 3 trades perdants consécutifs sur
+// 24h »). That signal was surfaced to the MEMBER but never to the COACH's work
+// queue — so a live emotional/discipline signal (revenge trading, over-sizing,
+// a constancy dip already flagged) sat in the DB while the coach had to open
+// each member to notice it. This section reads those STORED signals back,
+// grouped per member, with ZERO new computation (no scan, no scoring — the
+// almost-free path the audit called for). Each row links straight to the member
+// fiche where the coach already has « semer un objectif » / « Renforcer ».
+//
+// Window : the last 7 days (recent enough that the signal is still actionable).
+//
+// Performance / honest caveat : unlike the three row-paginated sections above,
+// this one GROUPS by member, so it reads the deliveries of the last 7 days once
+// (a bounded cohort-wide scan: the `@@index([userId, createdAt])` has userId
+// first, so a createdAt-only filter cannot use it — acceptable because the
+// window is 7 days × a coaching-size cohort) and folds them into one entry per
+// member in memory,
+// then paginates the MEMBERS by a memberId cursor. Bounded and fine at
+// coaching-cohort scale (tens of members). A delivery id could not be the cursor
+// here (the unit is a member, not a delivery), so the cursor is the member id;
+// members are ordered by their most-recent signal first (the natural attention
+// order), memberId tiebreaking a same-instant collision so the cursor can never
+// skip or repeat a member.
+// =============================================================================
+
+/** Window for "recent" behavioral signals surfaced to the coach. */
+export const BEHAVIORAL_SIGNAL_RECENT_DAYS = 7;
+
+export interface BehavioralSignalItem {
+  /** Member id — also the cursor and the deep-link target segment. */
+  readonly id: string;
+  readonly memberLabel: string;
+  /** Distinct recent signal labels (`triggeredBy`), most-recent first, deduped. */
+  readonly signals: readonly string[];
+  /** ISO instant of this member's most recent signal (drives the ordering + meta). */
+  readonly latestAt: string;
+  /** How many deliveries fed this member's signals over the window (context). */
+  readonly signalCount: number;
+  /** Direct link to the member fiche where the coach already has the actions. */
+  readonly href: string;
+}
+
+/**
+ * Cohort-wide behavioral signals of the last `BEHAVIORAL_SIGNAL_RECENT_DAYS`
+ * days, GROUPED per member, most-recent signal first. Pure read of the already
+ * stored `MarkDouglasDelivery.triggeredBy` labels — never a new scan/score.
+ * Members are the pagination unit (one row = one member); `cursor` is a member
+ * id from a previous page's `nextCursor`.
+ */
+export async function listRecentBehavioralSignals(
+  options: TriageListOptions = {},
+): Promise<TriagePage<BehavioralSignalItem>> {
+  const limit = clampLimit(options.limit);
+  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+  const recentFloor = new Date(Date.now() - BEHAVIORAL_SIGNAL_RECENT_DAYS * DAY_MS);
+
+  // Read the window's deliveries once (bounded), newest first. `id` DESC breaks a
+  // same-`createdAt` tie deterministically so the in-memory fold is stable.
+  const rows = await db.markDouglasDelivery.findMany({
+    where: {
+      createdAt: { gte: recentFloor },
+      user: { status: { not: 'deleted' } },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      triggeredBy: true,
+      createdAt: true,
+      user: MEMBER_LABEL_SELECT,
+    },
+  });
+
+  // Fold into one accumulator per member. Rows arrive newest-first, so the first
+  // time a member is seen is its latest signal, and pushing labels in arrival
+  // order keeps `signals` most-recent-first; a Set dedupes repeats of the same
+  // pattern (« 3 trades perdants… » fired twice this week shows once).
+  interface Acc {
+    memberId: string;
+    memberLabel: string;
+    signals: string[];
+    seen: Set<string>;
+    latestAt: Date;
+    signalCount: number;
+  }
+  const byMember = new Map<string, Acc>();
+  for (const row of rows) {
+    const memberId = row.user.id;
+    let acc = byMember.get(memberId);
+    if (!acc) {
+      acc = {
+        memberId,
+        memberLabel: memberLabel(row.user),
+        signals: [],
+        seen: new Set(),
+        latestAt: row.createdAt, // rows are DESC → first seen = latest
+        signalCount: 0,
+      };
+      byMember.set(memberId, acc);
+    }
+    acc.signalCount += 1;
+    if (!acc.seen.has(row.triggeredBy)) {
+      acc.seen.add(row.triggeredBy);
+      acc.signals.push(row.triggeredBy);
+    }
+  }
+
+  // Order members by their most-recent signal first, memberId tiebreaking a
+  // same-instant collision (stable cursor). Then apply the memberId cursor +
+  // look-ahead the same way the row-paginated sections do.
+  const ordered = Array.from(byMember.values()).sort((a, b) => {
+    const delta = b.latestAt.getTime() - a.latestAt.getTime();
+    return delta !== 0 ? delta : a.memberId.localeCompare(b.memberId);
+  });
+
+  const startIndex = cursor ? ordered.findIndex((m) => m.memberId === cursor) + 1 : 0;
+  const window = ordered.slice(startIndex, startIndex + limit + 1);
+  const hasMore = window.length > limit;
+  const page = hasMore ? window.slice(0, limit) : window;
+
+  return {
+    items: page.map((m) => ({
+      id: m.memberId,
+      memberLabel: m.memberLabel,
+      signals: m.signals,
+      latestAt: m.latestAt.toISOString(),
+      signalCount: m.signalCount,
+      href: `/admin/members/${m.memberId}`,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.memberId ?? null) : null,
+  };
+}
+
 export interface TriageQueueCounts {
   /** Cohort closed trades with no admin annotation. */
   readonly uncommentedClosed: number;
@@ -453,6 +590,8 @@ export interface TriageQueueCounts {
   readonly staleOpen: number;
   /** Cohort open discrepancies. */
   readonly openDiscrepancies: number;
+  /** Cohort members with ≥1 behavioral signal in the last 7 days. */
+  readonly behavioralSignals: number;
   /** Sum — the single number the hub card shows. */
   readonly total: number;
 }
@@ -464,8 +603,9 @@ export interface TriageQueueCounts {
  */
 export async function getTriageQueueCounts(): Promise<TriageQueueCounts> {
   const staleFloor = new Date(Date.now() - STALE_OPEN_TRADE_MS);
+  const signalFloor = new Date(Date.now() - BEHAVIORAL_SIGNAL_RECENT_DAYS * DAY_MS);
 
-  const [uncommentedClosed, staleOpen, openDiscrepancies] = await Promise.all([
+  const [uncommentedClosed, staleOpen, openDiscrepancies, signalMembers] = await Promise.all([
     db.trade.count({
       where: {
         closedAt: { not: null },
@@ -483,12 +623,27 @@ export async function getTriageQueueCounts(): Promise<TriageQueueCounts> {
     db.discrepancy.count({
       where: { status: 'open', member: { status: { not: 'deleted' } } },
     }),
+    // Behavioral-signal count = number of DISTINCT members with ≥1 delivery in the
+    // last 7 days (the section lists one row per member, so its badge counts
+    // members, not deliveries). `groupBy(['userId'])` over the same window +
+    // non-deleted filter as the loader; `.length` of the grouped rows = distinct
+    // members (served by @@index([userId, createdAt])).
+    db.markDouglasDelivery.groupBy({
+      by: ['userId'],
+      where: {
+        createdAt: { gte: signalFloor },
+        user: { status: { not: 'deleted' } },
+      },
+    }),
   ]);
+
+  const behavioralSignals = signalMembers.length;
 
   return {
     uncommentedClosed,
     staleOpen,
     openDiscrepancies,
-    total: uncommentedClosed + staleOpen + openDiscrepancies,
+    behavioralSignals,
+    total: uncommentedClosed + staleOpen + openDiscrepancies + behavioralSignals,
   };
 }

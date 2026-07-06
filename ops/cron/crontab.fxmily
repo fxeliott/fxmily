@@ -41,6 +41,7 @@
 #   - verification-scan         daily 11:30 UTC                    (S3 §33.5)
 #   - weekly-report-overdue-alert daily 11:40 UTC                  (J8 perm.)
 #   - verification-batch-overdue-alert daily 11:50 UTC            (AUTONOMY-1 perm.)
+#   - admin-daily-brief         daily 07:05 Paris                  (Tour 15 brief)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -205,6 +206,18 @@ MAILTO=""
 # lib/system/health.ts). 11:50 UTC offsets the 11:00/11:10/11:20/11:40 permanence
 # nudges and the 11:30 verification scan.
 50 11 * * *                  fxmily   /usr/local/bin/fxmily-cron verification-batch-overdue-alert
+
+# Tour 15 — daily ADMIN brief (« point du matin ») : 07:05 Paris-LOCAL. The coach
+# gets a count-only, PII-free brief of where to look today (triage counts, new
+# behavioral signals since yesterday, members drifting away — all REUSED from
+# already-stored signals). A STANDING report, not an alert: it emails every day
+# (even a calm one) so silence means a broken cron, never a quiet day. Pure read +
+# idempotent ; emits cron.admin_daily_brief.scan heartbeat (monitored by
+# lib/system/health.ts). 07:05 Paris is the first workable morning slot: crond
+# reads this hour as HOST-LOCAL Europe/Paris (see header), and minute :05 sits
+# clear of the check-in-reminder ticks (0,15,30,45) at 07h so the two short jobs
+# never race on the CX22. It NEVER drives Claude (no generation on a server).
+5 7 * * *                    fxmily   /usr/local/bin/fxmily-cron admin-daily-brief
 
 # §9-C SELF-HEALING — container autoheal watchdog : every minute, as ROOT.
 # `restart: unless-stopped` (docker-compose.prod.yml) only restarts a container

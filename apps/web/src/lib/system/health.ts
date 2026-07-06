@@ -91,6 +91,7 @@ type CronAction =
   | 'cron.monthly_debrief_overdue.scan'
   | 'cron.onboarding_profile_overdue.scan'
   | 'cron.weekly_report_overdue.scan'
+  | 'cron.admin_daily_brief.scan'
   | 'cron.verification_scan.scan'
   | 'cron.verification_overdue.scan'
   // S10 — three wired prod crons that were emitting a heartbeat but were NOT
@@ -204,6 +205,19 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.weekly_report_overdue.scan',
     label: 'Weekly report overdue nudge',
     periodMs: DAY, // crontab: daily 11:40 UTC (13:40 Paris)
+  },
+  {
+    // Tour 15 — daily ADMIN brief (« point du matin »). Standing report sent
+    // once a day so the coach knows where to look without opening the app. A
+    // STANDING report (unlike the overdue nudges): it emits a heartbeat every
+    // run whether or not there is anything to flag, so a broken brief cron
+    // surfaces red here instead of failing silently. `expectedSince` keeps it
+    // `pending` (calm "premier run à venir") until the deploy that wires the
+    // crontab line has run once, instead of shouting "Jamais exécuté".
+    action: 'cron.admin_daily_brief.scan',
+    label: 'Daily admin brief',
+    periodMs: DAY, // crontab: daily 07:05 Paris local (`5 7 * * *`, TZ=Europe/Paris)
+    expectedSince: '2026-07-06T00:00:00Z',
   },
   {
     // AUTONOMY-1 — MT5 proof vision overdue safety-net (vérification permanence,
@@ -599,11 +613,13 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     expectedSince: WORKER_INSTALLED_AT,
   },
   {
-    // Tour 13 — moved from daily 04:10 to a 20-min interval (verification
-    // screens are analysed "sur le moment"). Same cadence + tolerance rationale
-    // as the onboarding pipeline: green ≤ 30 min (worker alive), amber up to 24h
-    // (PC off overnight is normal and calm), red past 24h (the task itself is
-    // broken — the PC was necessarily on at some point that day).
+    // Tour 13 — moved from daily 04:10 to an interval; Tour 15 tightened the
+    // real cadence to every 5 min (install-worker.ps1, per-pipeline
+    // IntervalMinutes). `periodMs` deliberately stays at 20 min: it is the
+    // ALERT baseline, not the cadence — green ≤ 30 min tolerates ticks skipped
+    // by the inter-pipeline lock (a long `claude --print` holds it), amber up
+    // to 24h (PC off overnight is normal and calm), red past 24h (the task
+    // itself is broken — the PC was necessarily on at some point that day).
     action: 'verification.batch.pulled',
     label: 'Worker · vision preuves MT5',
     periodMs: 20 * MIN,
@@ -952,14 +968,14 @@ export function getUploadsPersistenceHealth(
 /**
  * Tour 13 — verification backlog health.
  *
- * The verification pipeline now ticks every 20 min (install-worker.ps1), so an
- * uploaded MT5 proof should turn from `pending` to `done`/`failed` within
- * minutes, not overnight. This is an INSTANT probe (a single indexed count +
- * min-timestamp on `mt5_account_proofs`), NOT an audit-gap heartbeat: it reads
- * the OLDEST still-`pending` proof and flags how long the member has been
- * waiting for their reality to be read.
+ * The verification pipeline now ticks every 5 min (install-worker.ps1, Tour
+ * 15), so an uploaded MT5 proof should turn from `pending` to `done`/`failed`
+ * within minutes, not overnight. This is an INSTANT probe (a single indexed
+ * count + min-timestamp on `mt5_account_proofs`), NOT an audit-gap heartbeat:
+ * it reads the OLDEST still-`pending` proof and flags how long the member has
+ * been waiting for their reality to be read.
  *
- *   red   → oldest pending > 6h  (the 20-min worker would have caught it; the
+ *   red   → oldest pending > 6h  (the 5-min worker would have caught it; the
  *           pipeline or the local PC is stuck — honest, not alarmist).
  *   amber → oldest pending > 1h  (running late; worth an eye).
  *   green → a backlog exists but it is fresh (< 1h — normal in-flight state).

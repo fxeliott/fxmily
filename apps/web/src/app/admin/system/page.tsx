@@ -221,7 +221,7 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
               Les captures d&apos;historique MT5 sont analysées « sur le moment » : le worker passe
-              toutes les 20 minutes. On surveille la preuve la plus ancienne encore en attente. Vert
+              toutes les 5 minutes. On surveille la preuve la plus ancienne encore en attente. Vert
               en dessous d&apos;{formatBacklogDuration(verificationBacklog.amberMs)} · Ambre au-delà
               · Rouge au-delà de {formatBacklogDuration(verificationBacklog.redMs)} (le worker
               aurait dû la traiter).

@@ -80,16 +80,20 @@ export function isCopyLiteral(s) {
  * @param {string} s
  */
 export function normalizeCopy(s) {
-  return s
-    .replace(/&apos;|&#39;|&rsquo;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&gt;/g, '>')
-    .replace(/&lt;/g, '<')
-    .replace(/[‘’′]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    s
+      .replace(/&apos;|&#39;|&rsquo;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&gt;/g, '>')
+      .replace(/&lt;/g, '<')
+      // '&amp;' LAST — decoding it earlier would re-expose entities it encoded
+      // ('&amp;gt;' must yield '&gt;', not '>'), the classic double-unescape.
+      .replace(/&amp;/g, '&')
+      .replace(/[‘’′]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 /**

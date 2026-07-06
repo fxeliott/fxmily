@@ -2584,6 +2584,43 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
   box-shadow: var(--acc-2-glow);
 }
 
+/* ---- Hover soft-lift (Tour 16) — `.wow-hover-soft` ----
+   La primitive de survol DOUCE et générique posée à la RACINE d'une carte
+   (bordure + fond déjà présents) — pour les ~12 modules qui n'avaient AUCUNE
+   réaction au survol (incohérence dans une même rangée bento). Au survol :
+   la bordure passe à l'accent, la carte se soulève de 1px et un halo teinté
+   accent apparaît (réutilise `--sh-card-hover`, l'ombre de survol déjà définie).
+   Pas d'animation d'entrée — uniquement le hover.
+
+   Gardée `@media (hover: hover)` (jamais de collage tactile sur mobile) ; le
+   translateY est en plus enveloppé motion-safe (comme les autres primitives wow
+   du fichier) → sous `prefers-reduced-motion` la bordure + le halo restent, seul
+   le lift est neutralisé. La transition ne porte que border-color / transform /
+   box-shadow (compositor + repaint borné, CLS 0). forced-colors : rien de spécial,
+   la bordure système suffit. */
+.wow-hover-soft {
+  transition:
+    border-color 200ms var(--e-smooth),
+    box-shadow 200ms var(--e-smooth);
+}
+@media (hover: hover) {
+  .wow-hover-soft:hover {
+    border-color: var(--b-acc);
+    box-shadow: var(--sh-card-hover);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .wow-hover-soft {
+      transition:
+        border-color 200ms var(--e-smooth),
+        transform 200ms var(--e-smooth),
+        box-shadow 200ms var(--e-smooth);
+    }
+    .wow-hover-soft:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
 /* ---- Reduced-motion: belt-and-braces for the continuous login orbs +
    celebration loops. The global filet already handles duration/iteration;
    here we also pin the orbs to their resting transform so no residual frame

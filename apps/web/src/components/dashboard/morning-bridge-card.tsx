@@ -30,7 +30,11 @@ export function MorningBridgeCard({ bridge }: { bridge: MorningBridge }) {
   const iconTone = bridge.tone === 'ok' ? 'text-[var(--ok)]' : 'text-[var(--t-3)]';
 
   return (
-    <Card data-slot="morning-bridge" data-kind={bridge.kind} className={cn('border p-4', surface)}>
+    <Card
+      data-slot="morning-bridge"
+      data-kind={bridge.kind}
+      className={cn('wow-hover-soft border p-4', surface)}
+    >
       <div className="flex items-start gap-3">
         <span
           aria-hidden

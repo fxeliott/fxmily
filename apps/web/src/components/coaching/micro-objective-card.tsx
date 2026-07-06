@@ -65,7 +65,7 @@ export function MicroObjectiveCard({
       data-axis={objective.axis}
       aria-labelledby="micro-objective-heading"
       className={cn(
-        'rounded-card flex flex-col gap-3.5 border border-[var(--b-acc)] bg-[var(--acc-dim)]',
+        'wow-hover-soft rounded-card flex flex-col gap-3.5 border border-[var(--b-acc)] bg-[var(--acc-dim)]',
         compact ? 'p-4' : 'p-5',
         className,
       )}

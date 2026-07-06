@@ -102,7 +102,7 @@ export function RealityVsDeclared({
       : "Position retirée de l'historique depuis";
 
   return (
-    <div className="rounded-card grid grid-cols-2 gap-px overflow-hidden border border-[var(--cy-edge)] bg-[var(--cy-edge)]">
+    <div className="wow-hover-soft rounded-card grid grid-cols-2 gap-px overflow-hidden border border-[var(--cy-edge)] bg-[var(--cy-edge)]">
       {/* Déclaré */}
       <div className="flex flex-col gap-1.5 bg-[var(--bg-1)] p-3">
         <span className="t-cap font-semibold text-[var(--t-3)]">{declaredHeader}</span>

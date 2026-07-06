@@ -120,7 +120,7 @@ export function MomentumCard({
 
   return (
     <aside
-      className={`rounded-card flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 ${className}`.trim()}
+      className={`wow-hover-soft rounded-card flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 ${className}`.trim()}
       aria-label="Un signal de tes données"
       data-slot="momentum-card"
     >

@@ -209,7 +209,7 @@ export function MemberRecapCard({
       data-slot="member-recap-card"
       aria-labelledby="member-recap-heading"
       className={cn(
-        'rounded-card-lg flex flex-col gap-4 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5',
+        'wow-hover-soft rounded-card-lg flex flex-col gap-4 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5',
         className,
       )}
     >

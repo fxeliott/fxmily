@@ -23,9 +23,11 @@ ko() { echo "  ✗ $1" >&2; fail=$((fail + 1)); }
 echo "Smoke prod for $APP_URL"
 echo "─────────────────────────"
 
-# Step 1 — health endpoint
-if curl -fsS --max-time 10 "$APP_URL/api/health" | grep -q '"ok"\s*:\s*true'; then
-  ok "GET /api/health → 200 + ok:true"
+# Step 1 — health endpoint. The route answers `{"status":"ok"|"degraded",...}`
+# (apps/web/src/app/api/health/route.ts), NOT `{"ok":true}` like the cron
+# routes below — the two shapes are different on purpose, keep them apart.
+if curl -fsS --max-time 10 "$APP_URL/api/health" | grep -q '"status"\s*:\s*"ok"'; then
+  ok "GET /api/health → 200 + status:ok"
 else
   ko "GET /api/health failed"
 fi

@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   ScanEye,
   ShieldCheck,
+  Terminal,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { logAudit } from '@/lib/auth/audit';
 import {
+  buildHostActionsReport,
   getCronHealthReport,
   getDiskHealth,
   getSystemSnapshot,
@@ -28,6 +30,7 @@ import {
   type DiskHealth,
   type DiskStatus,
   type HeartbeatHealthEntry,
+  type HostActionItem,
   type UploadsPersistenceHealth,
   type UploadsPersistenceStatus,
   type VerificationBacklogHealth,
@@ -82,6 +85,11 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   // the container's ephemeral overlay (wiped every deploy). Detection only.
   const uploads = getUploadsPersistenceHealth();
 
+  // Tour 16 — pending host actions, folded from the two reports above (pure, no
+  // extra I/O). Surfaces the small set of heartbeat gaps that need a HOST command
+  // (root cron sync / worker installer) with the literal command + since when.
+  const hostActions = buildHostActionsReport(report, workerReport);
+
   // The masthead pill must reflect the WHOLE page: a green server-cron board
   // with a red local worker — a proof queue stuck for hours, or member uploads
   // living on the ephemeral layer — is still an incident for the operator.
@@ -117,7 +125,7 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           Observability
         </p>
         <h1
-          className="f-display h-rise mt-2 flex items-center gap-3 text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+          className="f-display h-rise mt-2 flex items-center gap-3 text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           État système
@@ -133,6 +141,8 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           ).
         </p>
       </header>
+
+      <HostActionsSection items={hostActions.items} />
 
       <section
         aria-labelledby="disk-heading"
@@ -492,6 +502,121 @@ function SnapshotCard({
       <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${accentClass}`}>{value}</p>
       <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--t-4)]">{sublabel}</p>
     </div>
+  );
+}
+
+/**
+ * Tour 16 — « Actions hôte en attente ». Lists the heartbeat gaps that need a
+ * HOST-side command (root cron sync / worker installer), each with the literal
+ * command + since when. When empty, a calm "tout est à jour" note. The footer
+ * documents what is NOT surfaced here (apex + raw worker cadence) so the operator
+ * knows the boundary rather than assuming silence = everything is covered.
+ */
+function HostActionsSection({ items }: { items: HostActionItem[] }): React.ReactElement {
+  const blocked = items.filter((i) => i.severity === 'blocked').length;
+  return (
+    <section
+      aria-labelledby="host-actions-heading"
+      className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+        >
+          <Terminal className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2
+            id="host-actions-heading"
+            className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+          >
+            Actions hôte en attente
+            <Pill tone={blocked > 0 ? 'bad' : items.length > 0 ? 'warn' : 'ok'}>
+              {blocked > 0
+                ? `${blocked} à traiter`
+                : items.length > 0
+                  ? `${items.length} à venir`
+                  : 'À jour'}
+            </Pill>
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+            Les signaux ci-dessus qui demandent une commande à lancer sur l&apos;hôte (ou la machine
+            worker) pour être rétablis. Chaque entrée donne la commande exacte à exécuter et depuis
+            quand le signal est ouvert.
+          </p>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="mt-5 text-[11px] text-[var(--t-4)]">
+          Aucune action hôte en attente. Tous les heartbeats à remédiation hôte connue (autoheal,
+          worker) sont sains.
+        </p>
+      ) : (
+        <ul className="mt-5 flex flex-col gap-3">
+          {items.map((item) => (
+            <HostActionRow key={item.key} item={item} />
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-5 flex items-start gap-1.5 text-[11px] text-[var(--t-4)]">
+        <ShieldCheck aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--t-4)]" />
+        <span>
+          Périmètre : seuls les signaux dont l&apos;hôte porte une remédiation connue apparaissent
+          ici. La <strong>cadence brute</strong>&#32;du worker n&apos;est pas exposée par le modèle
+          (statut sain/lent/bloqué uniquement), et l&apos;<strong>apex</strong>{' '}
+          <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+            fxmilyapp.com
+          </code>{' '}
+          n&apos;a pas de sonde côté serveur (elle vit dans{' '}
+          <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+            cron-watch.yml
+          </code>
+          , côté GitHub) : ces deux points ne sont volontairement pas listés ici.
+        </span>
+      </p>
+    </section>
+  );
+}
+
+/** One pending host action: label + severity, explanation, the literal command,
+ *  and since when the signal has been open. */
+function HostActionRow({ item }: { item: HostActionItem }): React.ReactElement {
+  const tone = item.severity === 'blocked' ? 'bad' : 'warn';
+  const sinceLabel = item.severity === 'blocked' ? 'Ouvert depuis' : 'Premier run attendu avant';
+  return (
+    <li className="rounded-xl border border-[var(--b-subtle)] bg-[var(--bg-2)] p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium text-[var(--t-1)]">{item.label}</p>
+        <Pill tone={tone}>{item.severity === 'blocked' ? 'À traiter' : 'À venir'}</Pill>
+      </div>
+      <p className="mt-1.5 text-xs leading-relaxed text-[var(--t-2)]">{item.detail}</p>
+      <div className="mt-3 flex flex-col gap-1">
+        <span className="text-[10px] font-medium tracking-wide text-[var(--t-4)] uppercase">
+          Commande à exécuter
+        </span>
+        {/* block <code> so a long command wraps instead of overflowing the card
+            on mobile; the reference path sits underneath it. */}
+        <code className="block overflow-x-auto rounded-lg border border-[var(--b-subtle)] bg-[var(--bg-1)] px-3 py-2 font-mono text-[11px] leading-relaxed break-all text-[var(--t-1)]">
+          {item.command}
+        </code>
+      </div>
+      <p className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] text-[var(--t-3)]">
+        <span>
+          Réf :{' '}
+          <code className="rounded bg-[var(--bg-1)] px-1.5 py-0.5 font-mono text-[10px]">
+            {item.reference}
+          </code>
+        </span>
+        {item.sinceIso ? (
+          <span>
+            {sinceLabel} <span className="text-[var(--t-2)]">{formatTimestamp(item.sinceIso)}</span>
+          </span>
+        ) : null}
+      </p>
+    </li>
   );
 }
 

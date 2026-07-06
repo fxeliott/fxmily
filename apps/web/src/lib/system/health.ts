@@ -692,6 +692,135 @@ export async function getWorkerHealthReport(now: Date = new Date()): Promise<Wor
 }
 
 /**
+ * Tour 16 — HOST ACTIONS PENDING.
+ *
+ * The heartbeat board tells the operator WHICH signal is red; it does NOT tell
+ * them the exact host command to run to clear it. This surface closes that gap:
+ * from the (already computed) cron + worker reports it derives the small set of
+ * host-side actions that are ACTUALLY detectable from a heartbeat, each with the
+ * literal command to run and since when the signal has been open.
+ *
+ * SCOPE / HONESTY (brief) — we only emit an item when the server has a real
+ * signal for it. Two states are host-actionable and detectable here:
+ *
+ *   1. Autoheal watchdog heartbeat never_ran / red → the root `fxmily-sync-cron`
+ *      convergence never installed (or stripped) the hourly heartbeat on the
+ *      host. Remediation = re-run the root sync (ops/cron/README.md §bootstrap).
+ *   2. Worker watchdog heartbeat never_ran / red → the local-PC watchdog task
+ *      that repairs the 6 AI batches is not registered / not POSTing. Remediation
+ *      = re-run the worker installer (ops/worker/install-worker.ps1).
+ *
+ * The brief also asked about (a) an ANOMALOUS worker verification cadence and
+ * (b) an apex-down signal. On (a): the worker heartbeat model classifies
+ * red/amber/never_ran but does NOT expose a raw cadence number, so we surface
+ * the verification pipeline ONLY when its heartbeat is red/never_ran (the honest
+ * detectable state), not a fabricated "cadence anomaly". On (b): there is NO
+ * server-side apex signal in this codebase (the apex probe lives in
+ * cron-watch.yml, GitHub-side), so we deliberately DO NOT invent one here — the
+ * card documents that in its own copy rather than showing a hollow row.
+ *
+ * PURE — folds the two reports (no I/O). `now` only decides the "since" age.
+ */
+
+/** Severity of a pending host action. `blocked` = a real incident (red/never
+ *  ran); `pending` = a first run not due yet (calm, informational). */
+export type HostActionSeverity = 'blocked' | 'pending';
+
+export interface HostActionItem {
+  /** Stable key (the heartbeat action) for React lists + dedup. */
+  key: string;
+  /** Human label of the broken signal. */
+  label: string;
+  /** One-sentence explanation of what the missing heartbeat means. */
+  detail: string;
+  /** The literal host command to run (verbatim, copy-pastable). */
+  command: string;
+  /** Where the command is documented (repo-relative path). */
+  reference: string;
+  /** ISO instant since when the signal has been open (last run, or the expected
+   *  first-run deadline for a never_ran with an `expectedSince`), or null. */
+  sinceIso: string | null;
+  severity: HostActionSeverity;
+}
+
+/** Per-action remediation metadata for the host-actionable heartbeats. */
+const HOST_ACTION_REMEDIATION: Record<
+  string,
+  { detail: string; command: string; reference: string }
+> = {
+  'cron.autoheal.heartbeat': {
+    detail:
+      "Le watchdog autoheal de l'hôte n'envoie plus son heartbeat horaire : le cron racine fxmily-sync-cron n'a pas reconvergé l'hôte.",
+    command: 'sudo -u fxmily sudo /usr/local/bin/fxmily-sync-cron',
+    reference: 'ops/cron/README.md',
+  },
+  'worker.watchdog.heartbeat': {
+    detail:
+      'Le watchdog du worker IA (machine locale) ne tourne plus : les 6 batchs Claude ne sont plus auto-réparés.',
+    command: 'pwsh -File ops/worker/install-worker.ps1',
+    reference: 'ops/worker/README.md',
+  },
+  'verification.batch.pulled': {
+    detail:
+      'Le pipeline de vérification des preuves MT5 (machine locale) ne tourne plus : les captures restent en attente.',
+    command: 'pwsh -File ops/worker/install-worker.ps1',
+    reference: 'ops/worker/README.md',
+  },
+};
+
+/**
+ * Map a heartbeat entry to a host action WHEN it is host-actionable and in a
+ * detectable broken/pending state. Returns null otherwise (green/amber entries,
+ * or entries with no known host remediation). `red` and `never_ran` are
+ * `blocked` (a real gap); `pending` is informational (first run not due yet).
+ */
+function toHostAction(entry: HeartbeatHealthEntry): HostActionItem | null {
+  const remediation = HOST_ACTION_REMEDIATION[entry.action];
+  if (!remediation) return null;
+  if (entry.status !== 'red' && entry.status !== 'never_ran' && entry.status !== 'pending') {
+    return null;
+  }
+  const severity: HostActionSeverity = entry.status === 'pending' ? 'pending' : 'blocked';
+  // "Since" = the last run if it ran at all (red = ran then went stale), else
+  // the first-run deadline (never_ran/pending with an expectedSince), else null.
+  const sinceIso = entry.lastRanAt ?? entry.firstRunDeadline ?? null;
+  return {
+    key: entry.action,
+    label: entry.label,
+    detail: remediation.detail,
+    command: remediation.command,
+    reference: remediation.reference,
+    sinceIso,
+    severity,
+  };
+}
+
+export interface HostActionsReport {
+  /** Actionable host items, most-severe first (blocked before pending). */
+  items: HostActionItem[];
+}
+
+/**
+ * Fold the cron + worker reports into the list of pending host actions. PURE
+ * (both reports are passed in). Blocked items sort before pending ones so the
+ * operator reads the real incidents first.
+ */
+export function buildHostActionsReport(
+  cronReport: CronHealthReport,
+  workerReport: WorkerHealthReport,
+): HostActionsReport {
+  const items = [...cronReport.entries, ...workerReport.entries]
+    .map(toHostAction)
+    .filter((item): item is HostActionItem => item !== null)
+    .sort((a, b) => {
+      // blocked (0) before pending (1).
+      const rank = (s: HostActionSeverity) => (s === 'blocked' ? 0 : 1);
+      return rank(a.severity) - rank(b.severity);
+    });
+  return { items };
+}
+
+/**
  * Aggregate counts useful on the admin dashboard alongside cron health.
  *
  * `Promise.all` 5 parallel `count()` queries — each hits a `userId` /

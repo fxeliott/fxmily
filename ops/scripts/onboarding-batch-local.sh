@@ -304,3 +304,7 @@ echo "[onboarding-batch] Summary:"
 jq '.' "$PERSIST_RESP_FILE"
 echo "[onboarding-batch] ============================================"
 echo "[onboarding-batch] Finished: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Volet B — surface a rate/usage-limit halt to the worker as exit 75 (benign
+# cooldown) even though the persist above succeeded. 0 otherwise.
+exit "$(core_run_exit_code)"

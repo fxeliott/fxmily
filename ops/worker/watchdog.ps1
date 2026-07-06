@@ -100,6 +100,11 @@ $tasksOk = 0
 $repaired = 0
 $missingTasks = New-Object System.Collections.Generic.List[string]
 $anyRunning = $false
+# Logged-out and quota-cap are MACHINE-wide states (one account per box, one
+# shared cooldown stamp), so each label is raised at most once across all
+# pipelines instead of once per stale status.json.
+$authLoggedOutSeen = $false
+$quotaCappedSeen = $false
 
 # 1) Config sanity - closes the "worker.env absent -> every tick exits 0
 #    silently forever" hole (run-batch.sh treats no-env as a benign skip).
@@ -134,6 +139,16 @@ foreach ($name in $PipelineNames) {
     $missingTasks.Add($name)
     $errorLabels.Add("task_missing:$name")
     continue
+  }
+
+  # LogonType must be Interactive: S4U cannot read the Claude OAuth (proven
+  # 2026-07-02), so an S4U-registered task runs but every batch fails silently.
+  # Surface it (SIGNAL only - the operator re-installs; a re-register here could
+  # kill an in-flight batch and is already the repair path for MISSING tasks).
+  $logonType = $null
+  if ($null -ne $task.Principal) { $logonType = [string]$task.Principal.LogonType }
+  if ($logonType -and $logonType -ne 'Interactive') {
+    $errorLabels.Add("task_logon_type:$name`:$logonType")
   }
 
   if ($task.State -eq 'Running') { $anyRunning = $true }
@@ -178,6 +193,29 @@ foreach ($name in $PipelineNames) {
         }
       }
       if (-not $statusFresh) { $errorLabels.Add("status_stale:$name") }
+    }
+  }
+
+  # Multi-account signals from the batch's own status.json (run-batch.sh writes
+  # authOk + exitCode). authOk:false = the pre-flight found NO Claude account
+  # logged in (machine-wide -> label once). exitCode:75 = a benign usage/rate
+  # cap; the worker is in cooldown and self-resolves next quota window.
+  if (Test-Path $statusFile) {
+    $st = $null
+    try { $st = Get-Content $statusFile -Raw | ConvertFrom-Json } catch {}
+    if ($null -ne $st) {
+      if (($st.PSObject.Properties.Name -contains 'authOk') -and ($st.authOk -eq $false)) {
+        if (-not $authLoggedOutSeen) {
+          $errorLabels.Add('claude_auth:logged_out')
+          $authLoggedOutSeen = $true
+        }
+      }
+      if (($st.PSObject.Properties.Name -contains 'exitCode') -and ([int]$st.exitCode -eq 75)) {
+        if (-not $quotaCappedSeen) {
+          $errorLabels.Add('claude_quota:capped')
+          $quotaCappedSeen = $true
+        }
+      }
     }
   }
 

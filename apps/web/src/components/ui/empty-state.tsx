@@ -8,6 +8,15 @@ import { cn } from '@/lib/utils';
 export interface EmptyStateProps {
   /** Icon component from lucide-react. Default Target. */
   icon?: LucideIcon;
+  /**
+   * Optional custom illustration (e.g. a maison SVG from
+   * `components/illustrations/`). When provided, it REPLACES the top visual
+   * strate (the icon halo) entirely — the icon prop is then ignored. Keep it
+   * decorative (`aria-hidden`) and self-sizing; a `max-w` on the passed node
+   * bounds it. When absent, the icon halo renders unchanged (zero breaking
+   * change for the ~35 existing call-sites).
+   */
+  illustration?: ReactNode;
   /** Bold one-liner. Avoid blame ("Pas encore" > "Vous n'avez pas"). */
   headline: ReactNode;
   /** Lead paragraph (1-2 sentences, max ~36ch). */
@@ -53,6 +62,7 @@ export interface EmptyStateProps {
  */
 export function EmptyState({
   icon: Icon = Target,
+  illustration,
   headline,
   lead,
   guides,
@@ -71,13 +81,21 @@ export function EmptyState({
       data-slot="empty-state"
       className={cn('flex flex-col items-center px-6 py-10 text-center', className)}
     >
-      {/* Strate 1 : icon halo lime */}
-      <div className="relative mb-5">
-        <div aria-hidden className="absolute inset-0 rounded-full bg-[var(--acc-dim)] blur-2xl" />
-        <div className="relative grid h-14 w-14 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--bg-2)] text-[var(--acc)]">
-          <Icon className="h-[22px] w-[22px]" strokeWidth={1.75} />
+      {/* Strate 1 : illustration maison si fournie, sinon halo d'icône. La
+          custom illustration REMPLACE le halo (une seule strate visuelle en
+          tête), bornée en largeur pour rester premium et ne jamais dominer. */}
+      {illustration ? (
+        <div aria-hidden className="mb-5 w-full max-w-[220px]">
+          {illustration}
         </div>
-      </div>
+      ) : (
+        <div className="relative mb-5">
+          <div aria-hidden className="absolute inset-0 rounded-full bg-[var(--acc-dim)] blur-2xl" />
+          <div className="relative grid h-14 w-14 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--bg-2)] text-[var(--acc)]">
+            <Icon className="h-[22px] w-[22px]" strokeWidth={1.75} />
+          </div>
+        </div>
+      )}
 
       {/* Strate 2 : headline */}
       <Heading className="t-h2 text-[var(--t-1)]">{headline}</Heading>

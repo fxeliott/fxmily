@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { ProcessLoop } from '@/components/illustrations/process-loop';
 import { ABCDHero } from '@/components/reflect/abcd-hero';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
@@ -102,10 +103,16 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             <div className="relative grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8">
               {/* ---- Gauche : intro ---- */}
               <div className="flex flex-col gap-3">
+                {/* Tour 16 — accent maison : la boucle du process (Mark Douglas).
+                    Petit repère visuel du hero, aligné à gauche, masqué en mobile
+                    pour laisser respirer le titre. Décoratif (aria-hidden). */}
+                <div aria-hidden className="hidden sm:mb-1 sm:block">
+                  <ProcessLoop className="w-full max-w-[120px]" />
+                </div>
                 <p className="t-eyebrow-lg text-[var(--t-3)]">Module REFLECT</p>
                 <h1
                   id="reflect-hero-heading"
-                  className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                  className="f-display h-rise leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)]"
                   style={{
                     fontFeatureSettings: '"ss01" 1',
                     fontSize: 'clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)',

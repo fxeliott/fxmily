@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
+import { MirrorReflection } from '@/components/illustrations/mirror-reflection';
 import { MindsetDashboard } from '@/components/mindset/mindset-dashboard';
 import { MindsetTimeline } from '@/components/mindset/mindset-timeline';
 import { btnVariants } from '@/components/ui/btn';
@@ -66,17 +67,25 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
           </Link>
 
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex flex-col gap-1.5">
-              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-                <Brain className="h-3.5 w-3.5" strokeWidth={2} />
-                Mindset · Auto-évaluation
-              </span>
-              <h1
-                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-                style={{ fontFeatureSettings: '"ss01" 1' }}
-              >
-                Mon mindset hebdo
-              </h1>
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                  <Brain className="h-3.5 w-3.5" strokeWidth={2} />
+                  Mindset · Auto-évaluation
+                </span>
+                <h1
+                  className="f-display h-rise text-[28px] leading-[1.05] font-medium tracking-[-0.02em] text-[var(--t-1)] sm:text-[32px]"
+                  style={{ fontFeatureSettings: '"ss01" 1' }}
+                >
+                  Mon mindset hebdo
+                </h1>
+              </div>
+              {/* Tour 16 — accent maison : le déclaré / réel (miroir du mindset).
+                  Le wrapper porte le responsive (invisible sous lg pour ne pas
+                  serrer le titre mobile) ; le SVG reste w-full, borné en largeur. */}
+              <div aria-hidden className="hidden shrink-0 lg:block">
+                <MirrorReflection className="w-full max-w-[68px]" />
+              </div>
             </div>
             <Link href="/mindset/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
               <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} />

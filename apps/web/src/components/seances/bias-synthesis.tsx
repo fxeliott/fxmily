@@ -7,9 +7,15 @@ import type { SeanceAssetView } from '@/lib/seances/service';
  * hub's decorative SVG panel with a fully accessible table (AA, real <th scope>),
  * which carries the same information without colour-only encoding. Self-omits
  * below 2 assets (nothing to compare).
+ *
+ * The "Repère clé" column is ADAPTIVE: when no asset stated a numeric level
+ * (a structural-only séance — Règle n°1: never invent a price), the column is
+ * dropped entirely rather than rendered as a wall of "-" placeholders.
  */
 export function BiasSynthesis({ assets }: { assets: SeanceAssetView[] }) {
   if (assets.length < 2) return null;
+
+  const showLevels = assets.some((a) => a.levels.length > 0);
 
   return (
     <div className="rounded-card overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)]">
@@ -23,9 +29,11 @@ export function BiasSynthesis({ assets }: { assets: SeanceAssetView[] }) {
             <th scope="col" className="t-eyebrow px-3 py-2 text-[var(--t-3)]">
               Biais
             </th>
-            <th scope="col" className="t-eyebrow px-3 py-2 text-[var(--t-3)]">
-              Repère clé
-            </th>
+            {showLevels ? (
+              <th scope="col" className="t-eyebrow px-3 py-2 text-[var(--t-3)]">
+                Repère clé
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -40,9 +48,11 @@ export function BiasSynthesis({ assets }: { assets: SeanceAssetView[] }) {
               <td className="px-3 py-2.5 align-middle">
                 <BiasPill bias={a.bias} />
               </td>
-              <td className="px-3 py-2.5 align-middle font-mono text-[12px] text-[var(--t-2)] tabular-nums">
-                {a.levels[0]?.value ?? '-'}
-              </td>
+              {showLevels ? (
+                <td className="px-3 py-2.5 align-middle font-mono text-[12px] text-[var(--t-2)] tabular-nums">
+                  {a.levels[0]?.value ?? '-'}
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>

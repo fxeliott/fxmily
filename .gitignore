@@ -5,6 +5,7 @@ node_modules/
 # Builds & caches
 .next/
 .next-trash*/
+.next-frozen*/
 out/
 dist/
 build/
@@ -115,3 +116,5 @@ playwright/.cache/
 s9-shots/
 prompt fxmily/
 apps/web/.cisim-scripts/
+apps/web/.measure-*.mjs
+apps/web/warm.mjs

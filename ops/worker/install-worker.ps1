@@ -13,11 +13,13 @@
   Schedules are STAGGERED so the six never collide:
     onboarding    every 20 min   (time-sensitive — this is what kills the
                                    "IA silence 24H après profil rempli" bug)
-    verification  every 20 min   (Tour 13 — verification screens are analysed
+    verification  every 5 min    (Tour 15 — verification screens are analysed
                                    "sur le moment"; a pull with nothing pending
                                    short-circuits in verification-batch-local.sh
-                                   and never calls claude, so a 20-min tick
-                                   costs zero when the queue is empty)
+                                   and never calls claude, so a 5-min tick
+                                   costs zero when the queue is empty. Shortened
+                                   from 20 min so an uploaded MT5 proof is
+                                   analysed while the member is still waiting.)
     calendar      Mon     05:10
     weekly        Sun     05:40
     monthly       day 1   06:10
@@ -83,13 +85,18 @@ $RunBatchBash = ConvertTo-BashPath $RunBatch
 
 # --- The 6 pipelines + their triggers -----------------------------------------
 # Trigger objects are built per-task below (New-ScheduledTaskTrigger).
-# Tour 13 — `verification` moved from `daily 04:10` to a 20-min interval so
+# Tour 13 — `verification` moved from `daily 04:10` to a short interval so
 # uploaded MT5 proofs are analysed "sur le moment", not once a night. The empty
 # pull short-circuits (verification-batch-local.sh exits before any claude call
 # when nothing is pending), so an idle tick costs zero.
+# Tour 15 — interval shortened 20 -> 5 min so a proof is analysed while the
+# member is still on /verification waiting (the dominant latency was this
+# interval, not the ~2 s empty tick). MultipleInstances IgnoreNew + the global
+# file lock in run-batch.sh still guarantee at most one `claude --print` at a
+# time, so a shorter interval never parallelises.
 $Pipelines = @(
   @{ Name = 'onboarding'; Kind = 'interval' },
-  @{ Name = 'verification'; Kind = 'interval'; IntervalMinutes = 20 },
+  @{ Name = 'verification'; Kind = 'interval'; IntervalMinutes = 5 },
   @{ Name = 'calendar'; Kind = 'weekly'; At = '05:10'; Day = 'Monday' },
   @{ Name = 'weekly'; Kind = 'weekly'; At = '05:40'; Day = 'Sunday' },
   @{ Name = 'monthly'; Kind = 'monthly'; At = '06:10'; DayOfMonth = 1 },
@@ -121,7 +128,7 @@ Write-Host "  bash      : $BashPath"
 Write-Host "  script    : $RunBatchBash"
 Write-Host "  principal : $UserId (LogonType=$LogonType)"
 Write-Host "  onboarding  : every $OnboardingIntervalMinutes min"
-Write-Host "  verification: every 20 min (Tour 13 — analyse sur le moment)"
+Write-Host "  verification: every 5 min (Tour 15 — analyse sur le moment)"
 Write-Host ""
 
 foreach ($p in $Pipelines) {
@@ -137,8 +144,11 @@ foreach ($p in $Pipelines) {
     'interval' {
       # Per-pipeline cadence (verification carries its own IntervalMinutes),
       # falling back to the onboarding cadence. Onboarding starts at :01,
-      # verification at :11 — a ~10-min offset so the two interval tasks rarely
-      # contend for the run-batch.sh global lock at the exact same instant.
+      # verification at :11 — a start offset so the two interval tasks don't
+      # both fire on the very first tick. With verification at 5 min they still
+      # realign periodically; the run-batch.sh global lock + MultipleInstances
+      # IgnoreNew are what actually serialise them (the later tick skips clean),
+      # so a short interval never parallelises a `claude --print`.
       $intervalMin = if ($p.ContainsKey('IntervalMinutes')) { [int]$p.IntervalMinutes } else { $OnboardingIntervalMinutes }
       $startOffset = if ($p.Name -eq 'onboarding') { 1 } else { 11 }
       $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes($startOffset) `

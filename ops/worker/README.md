@@ -44,10 +44,13 @@ untouched:
 - pull is **idempotent** (already-analysed rows are filtered server-side), so a
   skipped or retried tick is always safe.
 
-Schedules are staggered (onboarding every 20 min; verification 04:10; calendar
-Mon 05:10; weekly Sun 05:40; monthly day-1 06:10) so the five effectively never
-collide. If one still does, the later tick skips cleanly and the next tick — or
-the server-side overdue-alert net — picks the work up.
+Schedules are staggered (onboarding every 20 min; verification every 5 min —
+tour 15, shortened from 20 min so an uploaded MT5 proof is analysed while the
+member is still waiting; calendar Mon 05:10; weekly Sun 05:40; monthly day-1
+06:10) so the pipelines effectively never collide. If two interval ticks still
+realign, the global lock + `MultipleInstances IgnoreNew` make the later tick
+skip cleanly, and the next tick — or the server-side overdue-alert net — picks
+the work up.
 
 ## Install
 

@@ -230,7 +230,10 @@ export async function POST(req: Request): Promise<Response> {
     readUrl = result.readUrl;
   } catch (err) {
     console.error('[uploads] storage.put failed', err);
-    return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
+    // `stage` + `code` are safe observability fields (no message/PII) so a
+    // storage failure can be told apart from a DB failure without server logs.
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : null;
+    return NextResponse.json({ error: 'storage_failed', stage: 'put', code }, { status: 500 });
   }
 
   // S3 — create the proof row in the same request (server-derived hash).
@@ -257,7 +260,8 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json({ error: 'duplicate_proof' }, { status: 409 });
     }
     console.error('[uploads] proof row create failed', err);
-    return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : null;
+    return NextResponse.json({ error: 'storage_failed', stage: 'persist', code }, { status: 500 });
   }
 
   await logAudit({

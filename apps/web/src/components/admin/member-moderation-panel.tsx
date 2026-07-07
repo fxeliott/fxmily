@@ -1,10 +1,11 @@
 'use client';
 
-import { History, Info, ShieldCheck, ShieldX } from 'lucide-react';
+import { History, ImageOff, Info, ShieldCheck, ShieldX } from 'lucide-react';
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 import {
   reinstateMemberAction,
+  removeMemberAvatarAction,
   suspendMemberAction,
   type MemberModerationActionState,
 } from '@/app/admin/members/[id]/moderation/actions';
@@ -40,6 +41,8 @@ interface MemberModerationPanelProps {
   role: 'member' | 'admin';
   /** True when the admin is viewing their own profile (cannot self-moderate). */
   isSelf: boolean;
+  /** True when the member has a profile photo — gates the takedown control. */
+  hasAvatar: boolean;
   history: SerializedModerationEvent[];
 }
 
@@ -51,6 +54,7 @@ export function MemberModerationPanel({
   status,
   role,
   isSelf,
+  hasAvatar,
   history,
 }: MemberModerationPanelProps) {
   // Latest suspension motif (for the suspended-state banner) — the newest
@@ -116,6 +120,14 @@ export function MemberModerationPanel({
           </p>
         </Card>
       )}
+
+      {/* Photo takedown — independent of the suspend state: an inappropriate
+          profile photo can be removed whether the member is active or suspended.
+          Shown only for a real member (not self, not an admin) who actually has
+          a photo; the member keeps their account and place on the board. */}
+      {role === 'member' && !isSelf && status !== 'deleted' && hasAvatar ? (
+        <AvatarTakedownForm memberId={memberId} memberName={memberName} onSuccess={setNotice} />
+      ) : null}
 
       {/* Moderation history */}
       <ModerationHistory history={history} />
@@ -382,6 +394,139 @@ function ReinstateForm({
   );
 }
 
+function AvatarTakedownForm({
+  memberId,
+  memberName,
+  onSuccess,
+}: {
+  memberId: string;
+  memberName: string;
+  onSuccess: (message: string) => void;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [reason, setReason] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [announce, setAnnounce] = useState('');
+
+  const runAction = async (
+    prev: MemberModerationActionState | null,
+    formData: FormData,
+  ): Promise<MemberModerationActionState> => {
+    const result = await removeMemberAvatarAction(memberId, prev, formData);
+    if (result.ok) {
+      setReason('');
+      setConfirming(false);
+      formRef.current?.reset();
+      // Lift the success message to the panel: `revalidatePath` re-renders the
+      // parent (hasAvatar → false), which unmounts this form.
+      onSuccess(result.message ?? 'Photo de profil retirée.');
+    }
+    return result;
+  };
+  const [state, formAction, isPending] = useActionState(runAction, null);
+
+  // Auto-cancel the confirmation step after 5s — cleanup on unmount.
+  useEffect(() => {
+    if (!confirming) return;
+    const id = setTimeout(() => setConfirming(false), 5000);
+    return () => clearTimeout(id);
+  }, [confirming]);
+
+  const remaining = MEMBER_MODERATION_REASON_MAX - reason.length;
+
+  return (
+    <Card className="p-0">
+      <header className="flex items-center gap-2 border-b border-[var(--b-default)] px-5 py-4">
+        <ImageOff className="h-4 w-4 text-[var(--warn)]" strokeWidth={1.75} aria-hidden />
+        <h2 className="t-h2 text-[15px]">Retirer la photo de {memberName}</h2>
+      </header>
+      <form ref={formRef} action={formAction} className="flex flex-col gap-3 p-5">
+        <p className="t-body text-[var(--t-2)]">
+          Retire la photo de profil du membre (si elle est inappropriée). Elle disparaît du{' '}
+          <strong className="text-[var(--t-1)]">classement</strong>, remplacée par ses initiales. Le
+          membre <strong className="text-[var(--t-1)]">garde son compte et son rang</strong> et peut
+          en réimporter une nouvelle.
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="avatar-reason" className="t-eyebrow-lg text-[var(--t-3)]">
+              Motif (optionnel)
+            </label>
+            <span
+              className={`t-cap tabular-nums ${
+                remaining < 0 ? 'text-[var(--bad)]' : 'text-[var(--t-4)]'
+              }`}
+            >
+              {remaining}
+            </span>
+          </div>
+          <textarea
+            id="avatar-reason"
+            name="reason"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={MEMBER_MODERATION_REASON_MAX + 256 /* server enforces the hard cap */}
+            placeholder="Ex. Photo non conforme. Visible uniquement par toi."
+            className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            aria-invalid={state?.fieldErrors?.reason ? 'true' : undefined}
+            aria-describedby={state?.fieldErrors?.reason ? 'avatar-reason-error' : undefined}
+          />
+          {state?.fieldErrors?.reason ? (
+            <p id="avatar-reason-error" role="alert" className="text-[11px] text-[var(--bad)]">
+              {state.fieldErrors.reason}
+            </p>
+          ) : null}
+        </div>
+
+        {state && !state.ok && state.error !== 'invalid_input' ? (
+          <p role="alert" className="text-[12px] text-[var(--bad)]">
+            {state.message ?? 'Échec du retrait de la photo. Réessaie.'}
+          </p>
+        ) : null}
+
+        <span role="status" aria-live="polite" className="sr-only">
+          {announce}
+        </span>
+
+        <div className="flex flex-wrap justify-end gap-2">
+          {!confirming ? (
+            <Btn
+              type="button"
+              kind="danger"
+              size="m"
+              onClick={() => {
+                setConfirming(true);
+                setAnnounce('Confirmation requise. Clique sur « Confirmer » dans les 5 secondes.');
+              }}
+            >
+              <ImageOff className="h-4 w-4" strokeWidth={1.75} />
+              Retirer la photo
+            </Btn>
+          ) : (
+            <>
+              <Btn
+                type="button"
+                kind="ghost"
+                size="m"
+                disabled={isPending}
+                onClick={() => setConfirming(false)}
+              >
+                Annuler
+              </Btn>
+              <Btn type="submit" kind="danger" size="m" loading={isPending}>
+                <ImageOff className="h-4 w-4" strokeWidth={1.75} />
+                Confirmer le retrait
+              </Btn>
+            </>
+          )}
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 function ModerationHistory({ history }: { history: SerializedModerationEvent[] }) {
   if (history.length === 0) {
     return (
@@ -412,6 +557,11 @@ function ModerationHistory({ history }: { history: SerializedModerationEvent[] }
                 <Pill tone="warn">
                   <ShieldX className="h-2.5 w-2.5" strokeWidth={2} />
                   Suspendu
+                </Pill>
+              ) : event.action === 'avatar_removed' ? (
+                <Pill tone="mute">
+                  <ImageOff className="h-2.5 w-2.5" strokeWidth={2} />
+                  Photo retirée
                 </Pill>
               ) : (
                 <Pill tone="ok">

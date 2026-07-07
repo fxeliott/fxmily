@@ -1,0 +1,169 @@
+import { Crown, Sparkles, TrendingUp } from 'lucide-react';
+
+import { MetricRing } from '@/components/dashboard/daily-completion-ring';
+import type { LeaderboardRowView, RankMovement } from '@/lib/leaderboard/service';
+
+import { Avatar } from '../ui/avatar';
+import { Card } from '../ui/card';
+import { Pill } from '../ui/pill';
+import { RankBreakdown } from './rank-breakdown';
+import { RankMovementChip } from './rank-movement-chip';
+
+/**
+ * MyRankCard — the viewer's OWN standing, given pride of place at the top of
+ * the board so every member lands first on "where do I sit, and what do I push
+ * to climb ?". Three shapes, one calm frame (SPEC §2, no FOMO):
+ *
+ *   - ranked      → rank chip "N sur M", score ring, the pillar breakdown, and
+ *                   a motivating next-step (climb to the podium, or hold it).
+ *   - in-podium   → same, with a "tu es sur le podium" reinforcement.
+ *   - not-yet     → insufficient data: a warm "presque là" instead of a rank,
+ *                   pointing at the daily check-in as the way in.
+ *
+ * The gap-to-podium is computed from the real 3rd-place score passed by the
+ * page, so the encouragement is honest ("il te manque N points"), never a
+ * fabricated target.
+ */
+
+interface MyRankCardProps {
+  me: LeaderboardRowView;
+  totalRanked: number;
+  /** Score of the current 3rd place, for the honest "gap to podium" line. */
+  thirdScore: number | null;
+  /** Rank delta since the viewer's previous ranked snapshot (movement chip). */
+  movement?: RankMovement | null;
+  /** True when this board is a fresh entry into the top 3 (celebration). */
+  enteredTop3?: boolean;
+}
+
+export function MyRankCard({
+  me,
+  totalRanked,
+  thirdScore,
+  movement = null,
+  enteredTop3 = false,
+}: MyRankCardProps): React.ReactElement {
+  const ranked = me.rank !== null && me.score !== null;
+  const onPodium = ranked && me.rank !== null && me.rank <= 3;
+  const gapToPodium =
+    ranked && !onPodium && thirdScore !== null && me.score !== null
+      ? Math.max(0, thirdScore - me.score)
+      : null;
+
+  return (
+    <Card primary glass edge={false} className="dash-hero relative overflow-hidden p-5 sm:p-6">
+      <div className="relative flex flex-col gap-5">
+        <div className="flex items-center gap-4">
+          <Avatar
+            url={me.avatarUrl}
+            initials={me.initials}
+            firstName={me.firstName}
+            size={64}
+            ring
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--acc-hi)]">
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              Ton classement
+            </span>
+            <p className="truncate text-[18px] font-semibold text-[var(--t-1)]">{me.firstName}</p>
+            {ranked ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={onPodium ? 'acc' : 'cy'} dot>
+                  {onPodium ? (
+                    <>
+                      <Crown className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                      Sur le podium
+                    </>
+                  ) : (
+                    <>
+                      {me.rank}
+                      {ordinalSuffix(me.rank!)} sur {totalRanked}
+                    </>
+                  )}
+                </Pill>
+                {movement ? <RankMovementChip movement={movement} /> : null}
+              </div>
+            ) : (
+              <Pill tone="warn" dot>
+                Presque au classement
+              </Pill>
+            )}
+          </div>
+          {ranked ? (
+            <div className="hidden shrink-0 sm:block">
+              <MetricRing
+                value={me.score ?? 0}
+                max={100}
+                suffix="/100"
+                ariaLabel={`Ton score de travail : ${me.score} sur 100.`}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Fresh top-3 entry celebration (in-app echo, migration-free). Shown
+            once the viewer newly reaches the podium, never re-fired while they
+            simply hold it. */}
+        {enteredTop3 ? (
+          <div
+            role="status"
+            className="rounded-control flex items-center gap-2.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 py-2.5"
+          >
+            <Sparkles
+              className="h-4 w-4 shrink-0 text-[var(--acc-hi)]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            <p className="text-[13px] leading-relaxed font-medium text-[var(--t-1)]">
+              Bravo, tu viens d&apos;entrer dans le top 3. Tiens ta place en restant fidèle à ton
+              process.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Motivation line, honest + calm. */}
+        {ranked ? (
+          <p className="inline-flex items-start gap-2 text-[13px] leading-relaxed text-[var(--t-2)]">
+            <TrendingUp
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--acc-hi)]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            {onPodium ? (
+              <span>
+                Tu es dans le top 3. Continue ton travail au quotidien pour tenir ta place.
+              </span>
+            ) : gapToPodium !== null ? (
+              <span>
+                Il te manque{' '}
+                <strong className="font-semibold text-[var(--t-1)]">
+                  {gapToPodium} point{gapToPodium > 1 ? 's' : ''}
+                </strong>{' '}
+                pour entrer dans le top 3. Chaque check-in rempli et chaque plan respecté te
+                rapproche.
+              </span>
+            ) : (
+              <span>Continue ton travail au quotidien pour grimper dans le classement.</span>
+            )}
+          </p>
+        ) : (
+          <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
+            Encore quelques jours de check-ins et ton nom apparaîtra au classement. Le classement
+            mesure ton travail et ta régularité, pas tes résultats de trading.
+          </p>
+        )}
+
+        <div className="border-t border-[var(--b-subtle)] pt-4">
+          <p className="t-eyebrow mb-3 text-[var(--t-3)]">Pourquoi ce classement</p>
+          <RankBreakdown breakdown={me.breakdown} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** French ordinal suffix: 1 → "re", everything else → "e". */
+function ordinalSuffix(rank: number): string {
+  return rank === 1 ? 're' : 'e';
+}

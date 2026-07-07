@@ -93,6 +93,7 @@ interface HeartbeatExpectation<A extends string = string> {
 type CronAction =
   | 'cron.checkin_reminders.scan'
   | 'cron.recompute_scores.scan'
+  | 'cron.recompute_leaderboard.scan'
   | 'cron.dispatch_douglas.scan'
   | 'cron.weekly_reports.scan'
   | 'cron.dispatch_notifications.scan'
@@ -143,6 +144,19 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.recompute_scores.scan',
     label: 'Behavioral score recompute',
     periodMs: DAY, // 02:00 UTC daily
+  },
+  {
+    // Leaderboard — nightly ranking recompute (crontab: 02:20 Paris, right AFTER
+    // recompute-scores 02:00 so every BehavioralScore the board reads is fresh).
+    // Emits `cron.recompute_leaderboard.scan` (api/cron/recompute-leaderboard).
+    // Monitored here so a silent failure of the ranking cron — the /classement
+    // board quietly freezing on a stale day, the "mis en avant sur chaque compte"
+    // rank slot going flat — surfaces red on /admin/system + cron-watch instead
+    // of hiding behind a green dashboard. Same anti-silent-drift discipline as
+    // every other wired cron. Daily period, TZ-agnostic (periodMs=DAY).
+    action: 'cron.recompute_leaderboard.scan',
+    label: 'Leaderboard recompute',
+    periodMs: DAY,
   },
   {
     action: 'cron.dispatch_douglas.scan',

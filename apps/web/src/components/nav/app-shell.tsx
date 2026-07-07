@@ -41,6 +41,11 @@ interface AppShellProps {
    * footer utilisateur, sidebar desktop + drawer mobile. Rendu côté serveur
    * (le client ne fait que le placer), null quand rien à épingler. */
   pill?: React.ReactNode;
+  /** Slot RSC optionnel (classement du membre : avatar + rang) épinglé juste
+   * au-dessus du footer, sous le `pill`. Rend le « leaderboard mis en avant sur
+   * chaque compte » + le visage du membre omniprésents dans le chrome. Null pour
+   * l'admin ou tant qu'aucun snapshot n'existe. */
+  rankSlot?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -56,7 +61,7 @@ interface AppShellProps {
  * `isPublic()` de auth.config.ts. Les décalages mobile (FAB, footer, cookie)
  * sont gérés en CSS via `[data-slot="app-bottom-nav"]` (globals.css).
  */
-export function AppShell({ session, signOutAction, pill, children }: AppShellProps) {
+export function AppShell({ session, signOutAction, pill, rankSlot, children }: AppShellProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -115,6 +120,7 @@ export function AppShell({ session, signOutAction, pill, children }: AppShellPro
           ))}
         </nav>
         {pill}
+        {rankSlot}
         <UserFooter session={session} signOutAction={signOutAction} />
       </aside>
 
@@ -202,6 +208,7 @@ export function AppShell({ session, signOutAction, pill, children }: AppShellPro
             ))}
           </nav>
           {pill}
+          {rankSlot}
           <UserFooter session={session} signOutAction={signOutAction} />
         </SheetContent>
       </Sheet>

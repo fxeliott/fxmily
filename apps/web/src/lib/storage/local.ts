@@ -5,10 +5,12 @@ import path from 'node:path';
 
 import {
   generateAnnotationKey,
+  generateAvatarKey,
   generateProofKey,
   generateTradeKey,
   generateTrainingAnnotationKey,
   generateTrainingKey,
+  parseAvatarKey,
   parseProofKey,
   parseStorageKey,
   parseTradeKey,
@@ -19,6 +21,7 @@ import {
   type UploadInput,
   StorageError,
   type AllowedImageMime,
+  isAvatarUploadKind,
   isProofUploadKind,
   isTradeUploadKind,
   isTrainingAnnotationUploadKind,
@@ -89,7 +92,10 @@ export class LocalStorageAdapter implements StorageAdapter {
           : isProofUploadKind(input.kind)
             ? // S3: MT5 proof — member-owned `proofs/{userId}/…` (SPEC §33.3).
               generateProofKey(input.pathOwner, mime)
-            : generateAnnotationKey(input.pathOwner, mime);
+            : isAvatarUploadKind(input.kind)
+              ? // Leaderboard/profile: avatar — member-owned `avatars/{userId}/…`.
+                generateAvatarKey(input.pathOwner, mime)
+              : generateAnnotationKey(input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic
@@ -178,6 +184,22 @@ export function trainingKeyBelongsTo(key: string, userId: string): boolean {
 export function proofKeyBelongsTo(key: string, userId: string): boolean {
   try {
     return parseProofKey(key).userId === userId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Leaderboard/profile — owner check for **avatar** keys only. Carbon mirror of
+ * `keyBelongsTo`: returns true iff `key` is shaped `avatars/{userId}/...` AND
+ * the userId matches the session. Used by the WRITE/DELETE path (a member may
+ * only replace/remove their OWN avatar). The READ path is deliberately
+ * cross-member (any authenticated active member sees the leaderboard faces) and
+ * is gated in the route, NOT here.
+ */
+export function avatarKeyBelongsTo(key: string, userId: string): boolean {
+  try {
+    return parseAvatarKey(key).userId === userId;
   } catch {
     return false;
   }

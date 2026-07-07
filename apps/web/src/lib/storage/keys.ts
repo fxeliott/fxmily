@@ -37,6 +37,11 @@ const KEY_REGEX_TRAINING_ANNOTATION =
 // fileKey` convention `proofs/{userId}/{nanoid}.{ext}`). Capturing variant;
 // the userId segment is the uploading member (member-owned, mirror trades/).
 const KEY_REGEX_PROOF = /^proofs\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+// Leaderboard/profile — member avatar (photo de profil). Capturing variant;
+// the userId segment is the owning member (member-owned, mirror trades/proofs).
+// Disjoint from every other prefix. Unlike other member-owned keys, an avatar
+// is READ cross-member (leaderboard) — the read policy lives in the route.
+const KEY_REGEX_AVATAR = /^avatars\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
 /**
  * Single-source-of-truth pattern for annotation keys, exported for the Zod
@@ -70,6 +75,13 @@ export const TRAINING_ANNOTATION_KEY_PATTERN =
  * `ANNOTATION_KEY_PATTERN` with the `proofs/` prefix.
  */
 export const PROOF_KEY_PATTERN = /^proofs\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
+
+/**
+ * Leaderboard/profile — single-source-of-truth pattern for member avatar keys,
+ * exported for the Zod schema in the avatar upload route. Mirror of
+ * `ANNOTATION_KEY_PATTERN` with the `avatars/` prefix.
+ */
+export const AVATAR_KEY_PATTERN = /^avatars\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
 
 const MIME_TO_EXT: Record<AllowedImageMime, 'jpg' | 'png' | 'webp'> = {
   'image/jpeg': 'jpg',
@@ -159,6 +171,22 @@ export function generateProofKey(userId: string, mime: AllowedImageMime): string
   return `proofs/${userId}/${id}.${MIME_TO_EXT[mime]}`;
 }
 
+/**
+ * Leaderboard/profile — member avatar key generator. Carbon mirror of
+ * `generateProofKey`: the path component is the owning member's id (the avatar
+ * documents THE MEMBER, ownership resolves without a DB lookup). The `avatars/`
+ * prefix never overlaps any journal/training/proof surface. The stored ext is
+ * always `webp` in practice (`normalizeAvatarImage` re-encodes), but the
+ * generator honours the validated MIME for symmetry with its siblings.
+ */
+export function generateAvatarKey(userId: string, mime: AllowedImageMime): string {
+  if (!CUID_REGEX.test(userId)) {
+    throw new StorageError('userId is not safe for storage key', 'invalid_key');
+  }
+  const id = nanoid(32);
+  return `avatars/${userId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
 export interface ParsedTradeKey {
   kind: 'trade';
   userId: string;
@@ -194,12 +222,20 @@ export interface ParsedProofKey {
   ext: 'jpg' | 'png' | 'webp';
 }
 
+export interface ParsedAvatarKey {
+  kind: 'avatar';
+  userId: string;
+  filename: string;
+  ext: 'jpg' | 'png' | 'webp';
+}
+
 export type ParsedStorageKey =
   | ParsedTradeKey
   | ParsedAnnotationKey
   | ParsedTrainingKey
   | ParsedTrainingAnnotationKey
-  | ParsedProofKey;
+  | ParsedProofKey
+  | ParsedAvatarKey;
 
 export function parseTradeKey(key: string): ParsedTradeKey {
   const match = KEY_REGEX_TRADE.exec(key);
@@ -287,6 +323,25 @@ export function parseProofKey(key: string): ParsedProofKey {
 }
 
 /**
+ * Leaderboard/profile — parse a member avatar key. Mirror of `parseProofKey`
+ * for the `avatars/` prefix. Throws `StorageError('invalid_key')` on mismatch.
+ * The captured `userId` is the owning member (used by the write BOLA check; the
+ * READ is cross-member and gated by the route on "authenticated active member").
+ */
+export function parseAvatarKey(key: string): ParsedAvatarKey {
+  const match = KEY_REGEX_AVATAR.exec(key);
+  if (!match) {
+    throw new StorageError(`malformed avatar key: ${key.slice(0, 80)}`, 'invalid_key');
+  }
+  return {
+    kind: 'avatar',
+    userId: match[1] as string,
+    filename: match[2] as string,
+    ext: match[3] as 'jpg' | 'png' | 'webp',
+  };
+}
+
+/**
  * Unified parser used by route handlers that accept any prefix. Returns a
  * discriminated union so the caller can dispatch on `parsed.kind`.
  */
@@ -294,6 +349,7 @@ export function parseStorageKey(key: string): ParsedStorageKey {
   if (key.startsWith('trades/')) return parseTradeKey(key);
   if (key.startsWith('annotations/')) return parseAnnotationKey(key);
   if (key.startsWith('proofs/')) return parseProofKey(key);
+  if (key.startsWith('avatars/')) return parseAvatarKey(key);
   // `training_annotations/` is checked BEFORE `training/` (more specific
   // prefix first — defensive; the two are disjoint anyway since
   // `'training_annotations/'.startsWith('training/')` is false: char 8 is

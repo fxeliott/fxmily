@@ -41,6 +41,9 @@ export interface MemberDetail extends MemberSummary {
    * in the member's local-day frame without a second `findUnique` round-trip.
    */
   timezone: string;
+  /** True when the member has a profile photo — drives the admin photo-takedown
+   *  control in the moderation tab (only shown when there is a photo to remove). */
+  hasAvatar: boolean;
 }
 
 export interface ListMembersForAdminOptions {
@@ -305,6 +308,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       joinedAt: true,
       lastSeenAt: true,
       timezone: true,
+      avatarKey: true,
     },
   });
   if (!row || row.status === 'deleted') throw new MemberNotFoundError();
@@ -340,5 +344,6 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
     displayName: fullName.length > 0 ? fullName : row.email,
     lastTradeAt: lastTrade?.enteredAt.toISOString() ?? null,
     timezone: row.timezone,
+    hasAvatar: row.avatarKey !== null,
   };
 }

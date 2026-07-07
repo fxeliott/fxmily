@@ -70,6 +70,10 @@ MAILTO=""
 # J6 — behavioral score recompute : nightly 02:00 UTC.
 0 2 * * *                    fxmily   /usr/local/bin/fxmily-cron recompute-scores
 
+# Leaderboard — nightly ranking recompute : 02:20, AFTER recompute-scores (needs
+# fresh BehavioralScore) and BEFORE the 02:30 pg backup. Anchored yesterday-local.
+20 2 * * *                   fxmily   /usr/local/bin/fxmily-cron recompute-leaderboard
+
 # J7 — Mark Douglas temporal dispatch : every 6 hours.
 0 0,6,12,18 * * *            fxmily   /usr/local/bin/fxmily-cron dispatch-douglas
 

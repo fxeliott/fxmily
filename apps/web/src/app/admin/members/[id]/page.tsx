@@ -590,6 +590,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           status={detail.status}
           role={detail.role}
           isSelf={session.user.id === memberId}
+          hasAvatar={detail.hasAvatar}
           history={moderationHistory}
         />
       ) : null}

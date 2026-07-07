@@ -47,6 +47,8 @@ const trackingScheduleFindMany = vi.fn();
 const mentalMicroObjectiveFindMany = vi.fn();
 // Tour 14 — member-declared off days.
 const memberOffDayFindMany = vi.fn();
+// Leaderboard — nightly ranking snapshots.
+const leaderboardSnapshotFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -90,6 +92,7 @@ vi.mock('@/lib/db', () => ({
     trackingSchedule: { findMany: trackingScheduleFindMany },
     mentalMicroObjective: { findMany: mentalMicroObjectiveFindMany },
     memberOffDay: { findMany: memberOffDayFindMany },
+    leaderboardSnapshot: { findMany: leaderboardSnapshotFindMany },
   },
 }));
 
@@ -140,6 +143,7 @@ const ALL_FIND_MANY = [
   trackingScheduleFindMany,
   mentalMicroObjectiveFindMany,
   memberOffDayFindMany,
+  leaderboardSnapshotFindMany,
 ];
 
 beforeEach(() => {
@@ -162,6 +166,8 @@ const SAFE_USER = {
   firstName: 'Eliot',
   lastName: 'Pena',
   image: null,
+  avatarKey: null,
+  leaderboardOptOut: false,
   role: 'member',
   status: 'active',
   timezone: 'Europe/Paris',
@@ -220,6 +226,7 @@ const EMPTY_SNAPSHOT = {
   trackingSchedules: [],
   mentalMicroObjectives: [],
   offDays: [],
+  leaderboardSnapshots: [],
 } satisfies Parameters<typeof summariseExport>[0];
 
 describe('buildUserDataExport', () => {
@@ -263,6 +270,18 @@ describe('buildUserDataExport', () => {
     userFindUnique.mockResolvedValueOnce({ ...SAFE_USER, weekendsOff: false });
     const snap = await buildUserDataExport('u1');
     expect(snap.user?.weekendsOff).toBe(false);
+  });
+
+  it('selects the leaderboard scalar fields (avatarKey + board visibility)', async () => {
+    // Two member-owned scalars a relation guard can't catch: the avatar storage
+    // key (opaque ref to the member's own upload) + the board opt-out choice.
+    // art.20 portability must surface both, like `weekendsOff`.
+    await buildUserDataExport('u1');
+    expect(userFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ avatarKey: true, leaderboardOptOut: true }),
+      }),
+    );
   });
 
   it('selects safe push subscription fields only (no p256dhKey/authKey)', async () => {
@@ -337,6 +356,8 @@ describe('buildUserDataExport', () => {
     expect(mentalMicroObjectiveFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
     // Tour 14 — member-declared off days (member-owned, `userId`-keyed).
     expect(memberOffDayFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    // Leaderboard — nightly ranking snapshots (member-owned, `userId`-keyed).
+    expect(leaderboardSnapshotFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
   });
 
   it('exports the behavioural / psychological surface added in Session 21', async () => {
@@ -737,6 +758,7 @@ describe('summariseExport — defensive shape handling', () => {
       'trackingScheduleCount',
       'mentalMicroObjectiveCount',
       'offDayCount',
+      'leaderboardSnapshotCount',
     ]);
   });
 });

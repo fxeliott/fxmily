@@ -87,7 +87,37 @@ RUN pnpm --filter @fxmily/web prisma:generate
 
 RUN pnpm --filter @fxmily/web build
 
-# ---- Stage 3 : minimal runtime ---------------------------------------------
+# ---- Stage 3 : sharp native binary (clean, self-contained install) ---------
+# `sharp` (MT5-proof normalisation) loads its prebuilt binary via a DYNAMIC
+# `require('@img/sharp-<platform>')` that Next's `output: standalone` file
+# tracer cannot follow, so `@img/sharp-linux-x64` (+ libvips) never land in the
+# traced `node_modules` → `import sharp` throws at MODULE LOAD → /api/uploads
+# 500s for every request (incl. GET). We canNOT `npm install` inside the
+# standalone tree (its pruned `node_modules` is not a valid npm arborist tree →
+# "Cannot read properties of null (reading 'edgesOut')"). So install sharp in an
+# ISOLATED clean dir here.
+#
+# sharp@0.35's runtime closure is NOT just `sharp` + `@img/*` — it also pulls
+# `@emnapi`, `detect-libc`, `semver`, `tslib` (verified in a throwaway container:
+# a clean install's node_modules top-level = @emnapi, @img, detect-libc, semver,
+# sharp, tslib). The standalone tracer that missed the dynamic `@img` require
+# ALSO missed those, so we cannot assume they survive in the runner's tree. To be
+# bulletproof we NEST sharp's entire flat closure UNDER `sharp/node_modules/`,
+# making the single `sharp` dir 100 % self-contained (Node resolves its deps from
+# its own nested `node_modules` first → shadows nothing in the app tree, depends
+# on nothing external). The final `require('./node_modules/sharp')` PROVES the
+# nested layout loads at build time. Keep the version in lock-step with
+# apps/web/package.json (`sharp`).
+FROM node:22-bookworm-slim AS sharp
+WORKDIR /opt/sharp
+RUN npm init -y >/dev/null \
+ && npm install --no-audit --no-fund --os=linux --cpu=x64 sharp@0.35.3 \
+ && test -d node_modules/@img \
+ && mkdir -p node_modules/sharp/node_modules \
+ && cd node_modules && for d in $(ls | grep -v '^sharp$'); do cp -r "$d" sharp/node_modules/; done \
+ && cd /opt/sharp && node -e "require('./node_modules/sharp'); console.log('[docker] sharp self-contained OK')"
+
+# ---- Stage 4 : minimal runtime ---------------------------------------------
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
@@ -121,26 +151,19 @@ COPY --chown=fxmily:fxmily --from=builder /repo/apps/web/.next/static /app/apps/
 COPY --chown=fxmily:fxmily --from=builder /repo/apps/web/src/generated/prisma /app/apps/web/src/generated/prisma
 
 # --- sharp native binary (MT5-proof image normalisation) --------------------
-# sharp ≥0.33 loads its prebuilt binary through a DYNAMIC
-# `require('@img/sharp-<platform>')`. Next's standalone file tracer only follows
-# STATIC imports, so it copies sharp's JS but NOT the `@img/sharp-linux-x64`
-# (+ `@img/sharp-libvips-linux-x64`) binary packages. The result: `import sharp`
-# (lib/uploads/normalize-image.ts) throws "Could not load the sharp module" at
-# MODULE LOAD, so every request to /api/uploads — the only sharp consumer —
-# returns a bare 500 (incl. GET), i.e. proof uploads are impossible. Installing
-# the exact, platform-pinned sharp into the standalone root restores the runtime
-# require. Keep the version in lock-step with apps/web/package.json (`sharp`).
-# `--no-save`/`--no-package-lock` keep it out of any manifest; `--os`/`--cpu`
-# fetch only the linux/x64 prebuilt (no source compile, no toolchain needed).
-# Installed into the app dir (`/app/apps/web`) — the FIRST `node_modules` Node
-# resolves from `apps/web/server.js`, so this complete copy shadows any partial,
-# binary-less `sharp` the tracer may have left higher up the tree.
-RUN cd /app/apps/web \
- && npm install --no-save --no-package-lock --no-audit --no-fund \
-      --os=linux --cpu=x64 sharp@0.35.3 \
- && test -d /app/apps/web/node_modules/@img \
- && node -e "require('/app/apps/web/node_modules/sharp'); console.log('[docker] sharp native binary OK')" \
- && chown -R fxmily:fxmily /app/apps/web/node_modules/sharp /app/apps/web/node_modules/@img
+# Copied from the isolated `sharp` stage (see above for the root cause). ONE
+# self-contained `sharp` dir carrying its full closure nested under
+# `sharp/node_modules/` (@img binary + @emnapi + detect-libc + semver + tslib).
+# It lands in the app's own `node_modules` — the FIRST tree Node resolves from
+# `apps/web/server.js` — so it shadows any partial `sharp` the standalone tracer
+# left higher up AND needs nothing from the traced tree. Without it `import sharp`
+# throws at module load and every /api/uploads request 500s (incl. GET).
+COPY --chown=fxmily:fxmily --from=sharp /opt/sharp/node_modules/sharp /app/apps/web/node_modules/sharp
+# Prove sharp loads in the FINAL image layout — exercises the real Node
+# resolution of the self-contained copy (deps resolved from its OWN nested
+# node_modules, nothing external). If anything is missing, the BUILD fails here
+# instead of the route 500ing in prod.
+RUN node -e "require('/app/apps/web/node_modules/sharp'); console.log('[docker] runner sharp resolves OK')"
 
 USER fxmily
 EXPOSE 3000

@@ -86,6 +86,28 @@ function pillar(score: number | null | undefined, weight: number): SubScore | nu
   });
 }
 
+/**
+ * Full-precision composite recomputed from an already-built parts set — the key
+ * the leaderboard RANKS on (finer than the rounded, displayed `score`) and the
+ * "score exact" surfaced in the breakdown. It is `aggregateDimension` over the
+ * four renormalized pillars, i.e. the SAME value `computeLeaderboardScore`
+ * rounds into `score`, so the two can never disagree. Returns `null` when no
+ * pillar is filled (an unranked member has no finer standing to compare), and
+ * guards NaN/Infinity at the source so it is ALWAYS a finite number or null —
+ * never an unsafe `Array.sort` key. PURE, no I/O.
+ *
+ * Kept OUT of the persisted `ScoreResult` on purpose: `precise` is a transient
+ * ranking/display value, never written to the `LeaderboardSnapshot.components`
+ * JSON (which stays the rounded `score` + parts), so a raw read of that column
+ * can never expose a finer-than-displayed score.
+ */
+export function preciseScoreFromParts(parts: LeaderboardParts): number | null {
+  const active = [parts.assiduity, parts.discipline, parts.regularity, parts.work];
+  if (active.every((p) => p === null)) return null;
+  const raw = aggregateDimension(active);
+  return Number.isFinite(raw) ? raw : null;
+}
+
 export function computeLeaderboardScore(
   input: LeaderboardScoreInput,
 ): ScoreResult<LeaderboardParts> {
@@ -143,6 +165,9 @@ export function computeLeaderboardScore(
     };
   }
 
+  // The persisted score is the rounded composite; the finer full-precision value
+  // (the RANK sort key) is recomputed on demand from `parts` via
+  // `preciseScoreFromParts` so it never enters the persisted ScoreResult.
   const score = aggregateDimension(partsForAggregate);
   return {
     score: roundScore(score),

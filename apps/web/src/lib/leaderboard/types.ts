@@ -49,6 +49,15 @@ export interface LeaderboardParts {
 export type LeaderboardScore = ScoreResult<LeaderboardParts>;
 
 /**
+ * The full-precision composite (`precise`) — same value as `score` BEFORE the
+ * integer rounding — is the leaderboard's primary RANK sort key. It is NOT a
+ * field of `LeaderboardScore`: it is recomputed on demand from the persisted
+ * `parts` by `preciseScoreFromParts`, so it is never written to the snapshot
+ * `components` JSON and can never leak a finer-than-displayed number. See
+ * `builder.ts` (`preciseScoreFromParts`) and `ranking.ts` (`RankableEntry.precise`).
+ */
+
+/**
  * Pure input to `computeLeaderboardScore`. Every pillar is a 0–100 score (or
  * `null` when its surface is insufficient) already produced by the tested
  * behavioral/coverage code — the builder only weights and renormalizes them, it

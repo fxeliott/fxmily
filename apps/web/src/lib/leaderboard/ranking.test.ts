@@ -27,6 +27,50 @@ describe('rankEntries', () => {
     expect(out.map((e) => e.userId)).toEqual(['b', 'a']);
   });
 
+  it('ranks by the PRECISE composite BEFORE streak: same displayed score, higher precise wins "au détail près"', () => {
+    // Both members display "84", but a's true composite (84.4) beats b's (83.6).
+    // Without precise, b's much longer streak would wrongly put it first; precise
+    // orders them by their real finer standing, exactly what "au détail près" means.
+    const out = rankEntries([
+      { userId: 'a', score: 84, precise: 84.4, streak: 1, joinedAt: d('2026-01-01') },
+      { userId: 'b', score: 84, precise: 83.6, streak: 9, joinedAt: d('2026-01-01') },
+    ]);
+    expect(out.map((e) => [e.userId, e.rank])).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ]);
+  });
+
+  it('falls back to streak only when the precise composites are exactly equal', () => {
+    const out = rankEntries([
+      { userId: 'a', score: 84, precise: 84.2, streak: 3, joinedAt: d('2026-01-01') },
+      { userId: 'b', score: 84, precise: 84.2, streak: 9, joinedAt: d('2026-01-01') },
+    ]);
+    expect(out.map((e) => e.userId)).toEqual(['b', 'a']);
+  });
+
+  it('without precise, falls back to the rounded score (legacy callers unchanged)', () => {
+    const out = rankEntries([
+      { userId: 'a', score: 70, streak: 5, joinedAt: d('2026-01-01') },
+      { userId: 'b', score: 90, streak: 5, joinedAt: d('2026-01-01') },
+    ]);
+    expect(out.map((e) => e.userId)).toEqual(['b', 'a']);
+  });
+
+  it('a non-finite precise (NaN) never corrupts the sort: falls back to the rounded score', () => {
+    // Defense-in-depth: `??` would NOT catch NaN and a NaN comparator return
+    // silently scrambles Array.sort. The finite-guarded key ignores the NaN and
+    // ranks b (score 90) above a (score 70), the honest rounded-score order.
+    const out = rankEntries([
+      { userId: 'a', score: 70, precise: Number.NaN, streak: 5, joinedAt: d('2026-01-01') },
+      { userId: 'b', score: 90, precise: Number.NaN, streak: 5, joinedAt: d('2026-01-01') },
+    ]);
+    expect(out.map((e) => [e.userId, e.rank])).toEqual([
+      ['b', 1],
+      ['a', 2],
+    ]);
+  });
+
   it('breaks score+streak ties by earlier joinedAt', () => {
     const out = rankEntries([
       { userId: 'a', score: 80, streak: 5, joinedAt: d('2026-02-01') },

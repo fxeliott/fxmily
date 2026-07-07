@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 
+import { preciseScoreFromParts } from '@/lib/leaderboard/builder';
 import type { LeaderboardParts, LeaderboardScore } from '@/lib/leaderboard/types';
 import type { SubScore } from '@/lib/scoring/types';
 
@@ -106,12 +107,39 @@ function PillarRow({
   );
 }
 
+/**
+ * French decimal: 84.3 → "84,3". One decimal is enough to make the tie-break
+ * legible without pretending to spurious precision.
+ */
+function formatExact(value: number): string {
+  return value.toFixed(1).replace('.', ',');
+}
+
 export function RankBreakdown({ breakdown }: { breakdown: LeaderboardScore }): React.ReactElement {
+  // "Score exact" (au détail près) — the full-precision composite the ranking
+  // actually sorts on, so a member sees why they sit ahead of someone showing the
+  // same rounded score. Only for a RANKED member (status 'ok'): an unranked member
+  // has partial pillars but no standing to compare, so we never surface it there.
+  const exact =
+    breakdown.status === 'ok' && breakdown.score !== null
+      ? preciseScoreFromParts(breakdown.parts)
+      : null;
+
   return (
-    <ul className="flex flex-col gap-3.5">
-      {PILLARS.map((meta) => (
-        <PillarRow key={meta.key} meta={meta} part={breakdown.parts[meta.key]} />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3.5">
+      <ul className="flex flex-col gap-3.5">
+        {PILLARS.map((meta) => (
+          <PillarRow key={meta.key} meta={meta} part={breakdown.parts[meta.key]} />
+        ))}
+      </ul>
+      {exact !== null ? (
+        <p className="flex items-baseline justify-between gap-2 border-t border-[var(--b-subtle)] pt-3 text-[11px] leading-relaxed text-[var(--t-3)]">
+          <span>Score exact, utilisé pour départager les ex æquo</span>
+          <span className="shrink-0 font-medium text-[var(--t-2)] tabular-nums">
+            {formatExact(exact)} / 100
+          </span>
+        </p>
+      ) : null}
+    </div>
   );
 }

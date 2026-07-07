@@ -9,9 +9,20 @@ import type { LeaderboardScore } from './types';
 
 export interface RankableEntry {
   userId: string;
-  /** Composite score 0–100, or null when the member is insufficient_data. */
+  /** Rounded composite score 0–100 (display/persistence), or null when the
+   * member is insufficient_data. Determines ranked vs unranked; the ORDER of
+   * ranked members is driven by `precise` (below) when present. */
   score: number | null;
-  /** Tie-break #2 — raw streak (higher first). */
+  /**
+   * Full-precision composite (pre-rounding) — the PRIMARY sort key, so two
+   * members whose displayed integer `score` collides (e.g. 84.4 vs 83.6, both
+   * shown "84") are still ranked "au détail près" by their true finer standing
+   * instead of falling straight to the coarse streak tie-break. Optional: when
+   * omitted the sort falls back to `score` (identical to the pre-precision
+   * behavior — keeps callers that don't carry it working unchanged).
+   */
+  precise?: number | null;
+  /** Tie-break #2 (after the precise composite) — raw streak (higher first). */
   streak: number;
   /** Tie-break #3 — join day (earlier first). */
   joinedAt: Date;
@@ -19,8 +30,11 @@ export interface RankableEntry {
 
 /**
  * Assign a deterministic dense rank to every entry. Ranked members (score !=
- * null) are ordered by score desc → streak desc → joinedAt asc → userId asc
- * (the order documented on `LeaderboardSnapshot.rank`). Insufficient-data members
+ * null) are ordered by precise-composite desc → streak desc → joinedAt asc →
+ * userId asc (the order documented on `LeaderboardSnapshot.rank`). The precise
+ * composite is the full-precision score before rounding, so members who tie on
+ * the DISPLAYED integer are separated by their real finer standing; `score` is
+ * used as the fallback key when `precise` is absent. Insufficient-data members
  * keep `rank = null` (unranked, "qualification en cours"). PURE — no I/O, stable
  * (a total order via the userId final key means the result never depends on the
  * input array order).
@@ -31,9 +45,19 @@ export function rankEntries<T extends RankableEntry>(
   const ranked = entries.filter((e) => e.score !== null);
   const unranked = entries.filter((e) => e.score === null);
 
+  // Sort key: prefer the full-precision composite (finer than the rounded
+  // `score`), falling back to `score` when a caller does not carry `precise`.
+  // Both branches are `Number.isFinite`-guarded: a NaN/Infinity would corrupt
+  // `Array.sort` SILENTLY (comparator returns NaN → undefined order), so an
+  // unexpected non-finite key collapses to 0 rather than poisoning the ranking.
+  // `??` alone does NOT catch NaN, hence the explicit finite checks.
+  const sortScore = (e: RankableEntry): number => {
+    if (e.precise != null && Number.isFinite(e.precise)) return e.precise;
+    return e.score != null && Number.isFinite(e.score) ? e.score : 0;
+  };
   ranked.sort(
     (a, b) =>
-      (b.score as number) - (a.score as number) ||
+      sortScore(b) - sortScore(a) ||
       b.streak - a.streak ||
       a.joinedAt.getTime() - b.joinedAt.getTime() ||
       (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),

@@ -156,8 +156,9 @@ function MethodologyNote(): React.ReactElement {
           </span>
         </p>
         <p>
-          Le classement se recalcule chaque nuit. À égalité de score, la plus longue série de
-          check-ins passe devant, puis l&apos;ancienneté dans la communauté.
+          Le classement se recalcule chaque nuit. Deux membres qui affichent le même score arrondi
+          sont d&apos;abord départagés par leur score exact (au détail près, avant arrondi), puis
+          par la plus longue série de check-ins, et enfin par l&apos;ancienneté dans la communauté.
         </p>
       </div>
     </details>

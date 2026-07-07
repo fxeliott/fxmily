@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeLeaderboardScore,
   LEADERBOARD_MIN_ACTIVE_DAYS,
+  preciseScoreFromParts,
   WEIGHT_ASSIDUITY,
   WEIGHT_DISCIPLINE,
   WEIGHT_REGULARITY,
@@ -47,6 +48,29 @@ describe('computeLeaderboardScore', () => {
     expect(r.parts.work).toBeNull();
     expect(r.score).toBe(81);
     expect(r.status).toBe('ok');
+  });
+
+  it('preciseScoreFromParts returns the full-precision composite unrounded (the finer rank key)', () => {
+    // Same 69/85*100 = 81.176… case: the displayed score rounds to 81 but the
+    // rank sort key keeps the finer float so two "81" members can be separated.
+    const r = computeLeaderboardScore({ ...base, trackingCoverage: null });
+    expect(r.score).toBe(81);
+    const precise = preciseScoreFromParts(r.parts);
+    expect(precise).toBeCloseTo(81.176, 2);
+    expect(precise).not.toBe(r.score);
+  });
+
+  it('the precise composite always rounds back to the displayed score (they never disagree)', () => {
+    const r = computeLeaderboardScore(base);
+    expect(Math.round(preciseScoreFromParts(r.parts) as number)).toBe(r.score);
+  });
+
+  it('preciseScoreFromParts is null when every pillar is null (unranked member has no finer standing)', () => {
+    // activeDays 0 / below-threshold still fill the pillars from the same base
+    // input, so the null case is exercised via an all-null pillar set directly.
+    expect(
+      preciseScoreFromParts({ assiduity: null, discipline: null, regularity: null, work: null }),
+    ).toBeNull();
   });
 
   it('a member scoring 0 everywhere is NOT the same as a member with no data', () => {

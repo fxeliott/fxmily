@@ -15,7 +15,7 @@ import { selectStorage } from '@/lib/storage';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 
-import { computeLeaderboardScore, LEADERBOARD_WINDOW_DAYS } from './builder';
+import { computeLeaderboardScore, LEADERBOARD_WINDOW_DAYS, preciseScoreFromParts } from './builder';
 import {
   computeRankMovement,
   countActivePillars,
@@ -167,6 +167,11 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
         return {
           userId: u.id,
           score: result.score,
+          // Full-precision composite → the primary rank sort key, so members
+          // whose rounded scores collide are still ordered "au détail près".
+          // Recomputed from `parts` (never persisted): `result` stays a clean
+          // `ScoreResult`, so the `components` JSON keeps only the rounded score.
+          precise: result.score !== null ? preciseScoreFromParts(result.parts) : null,
           streak,
           joinedAt: u.joinedAt,
           result,

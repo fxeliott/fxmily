@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
 
 import { preciseScoreFromParts } from '@/lib/leaderboard/builder';
-import type { LeaderboardParts, LeaderboardScore } from '@/lib/leaderboard/types';
+import type { LeaderboardScore } from '@/lib/leaderboard/types';
 import type { SubScore } from '@/lib/scoring/types';
+
+import { PILLARS, type PillarMeta } from './pillar-meta';
 
 /**
  * RankBreakdown — the transparent "pourquoi ce rang ?" panel.
@@ -17,41 +19,6 @@ import type { SubScore } from '@/lib/scoring/types';
  * "pas encore mesuré", never a fabricated zero, mirroring the renormalization
  * the builder applies (ADDITION PURE).
  */
-
-interface PillarMeta {
-  key: keyof LeaderboardParts;
-  label: string;
-  hint: string;
-  /** Non-text accent (bar fill / dot) along the neutral data-viz spectrum. */
-  accent: string;
-}
-
-const PILLARS: PillarMeta[] = [
-  {
-    key: 'assiduity',
-    label: 'Assiduité',
-    hint: 'Ta présence et tes connexions au quotidien',
-    accent: 'var(--dv-1)',
-  },
-  {
-    key: 'discipline',
-    label: 'Discipline',
-    hint: 'Le respect de ton plan et de ton process',
-    accent: 'var(--dv-2)',
-  },
-  {
-    key: 'regularity',
-    label: 'Régularité',
-    hint: 'Ton rythme tenu dans la durée, absences justifiées comprises',
-    accent: 'var(--dv-3)',
-  },
-  {
-    key: 'work',
-    label: 'Travail de suivi',
-    hint: 'La profondeur de ton suivi personnel',
-    accent: 'var(--acc-hi)',
-  },
-];
 
 function PillarRow({
   meta,

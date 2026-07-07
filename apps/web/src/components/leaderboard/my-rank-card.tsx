@@ -1,11 +1,13 @@
-import { Crown, Sparkles, TrendingUp } from 'lucide-react';
+import { Compass, Crown, Sparkles, TrendingUp } from 'lucide-react';
 
 import { MetricRing } from '@/components/dashboard/daily-completion-ring';
+import { isLowScore, weakestPillar } from '@/lib/leaderboard/insights';
 import type { LeaderboardRowView, RankMovement } from '@/lib/leaderboard/service';
 
 import { Avatar } from '../ui/avatar';
 import { Card } from '../ui/card';
 import { Pill } from '../ui/pill';
+import { PILLAR_META_BY_KEY } from './pillar-meta';
 import { RankBreakdown } from './rank-breakdown';
 import { RankMovementChip } from './rank-movement-chip';
 
@@ -49,6 +51,19 @@ export function MyRankCard({
     ranked && !onPodium && thirdScore !== null && me.score !== null
       ? Math.max(0, thirdScore - me.score)
       : null;
+
+  // Personalized signals (read-time, migration-free — same `breakdown` the card
+  // already holds). `weakest` = the lever with the most room to climb, so the
+  // motivation is "adapté pour chaque membre". `lowScore` = a genuinely low
+  // composite → a calm, actionable alert (ambre `--warn`, never P&L-red): it
+  // shows a member who is not doing the work WITHOUT shaming them (SPEC §31.2).
+  const weakestKey = ranked ? weakestPillar(me.breakdown.parts) : null;
+  const weakest = weakestKey ? PILLAR_META_BY_KEY[weakestKey] : null;
+  // Never alert a podium member: rank 1-3 with a low composite is possible
+  // (a small board where even the leader is early), and pairing "sur le podium"
+  // with "ton score est bas" would be self-contradictory. The podium members
+  // get the celebratory reinforcement instead; the alert is for everyone else.
+  const lowScore = isLowScore(me.score, me.status) && !onPodium;
 
   return (
     <Card primary glass edge={false} className="dash-hero relative overflow-hidden p-5 sm:p-6">
@@ -122,8 +137,40 @@ export function MyRankCard({
           </div>
         ) : null}
 
-        {/* Motivation line, honest + calm. */}
-        {ranked ? (
+        {/* Low-score alert (in-app echo, migration-free). A calm, actionable
+            nudge for a member genuinely not doing the work — ambre `--warn`,
+            NEVER red `--bad` (which is reserved for P&L). It shows "if they're
+            working" without ever shaming, and points at the one lever to restart
+            with. Gated `!onPodium` (see `lowScore` above): a podium member is
+            reinforced, never alerted, so the two messages can't contradict. */}
+        {lowScore ? (
+          <div
+            role="status"
+            className="rounded-control flex items-start gap-2.5 border border-[var(--warn-edge)] bg-[var(--warn-dim)] px-3 py-2.5"
+          >
+            <Compass
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            <p className="text-[13px] leading-relaxed text-[var(--t-1)]">
+              Ton score de travail est bas en ce moment. Rien de grave, ça se rattrape vite.
+              {weakest ? (
+                <>
+                  {' '}
+                  Commence par <strong className="font-semibold">{weakest.label}</strong> :{' '}
+                  {weakest.push}
+                </>
+              ) : (
+                ' Un check-in aujourd’hui et tu repars.'
+              )}
+            </p>
+          </div>
+        ) : null}
+
+        {/* Motivation line, honest + calm. Skipped for a low-score member — the
+            warn block above already carries their personalized next step. */}
+        {ranked && !lowScore ? (
           <p className="inline-flex items-start gap-2 text-[13px] leading-relaxed text-[var(--t-2)]">
             <TrendingUp
               className="mt-0.5 h-4 w-4 shrink-0 text-[var(--acc-hi)]"
@@ -134,25 +181,37 @@ export function MyRankCard({
               <span>
                 Tu es dans le top 3. Continue ton travail au quotidien pour tenir ta place.
               </span>
-            ) : gapToPodium !== null ? (
-              <span>
-                Il te manque{' '}
-                <strong className="font-semibold text-[var(--t-1)]">
-                  {gapToPodium} point{gapToPodium > 1 ? 's' : ''}
-                </strong>{' '}
-                pour entrer dans le top 3. Chaque check-in rempli et chaque plan respecté te
-                rapproche.
-              </span>
             ) : (
-              <span>Continue ton travail au quotidien pour grimper dans le classement.</span>
+              <span>
+                {gapToPodium !== null ? (
+                  <>
+                    Il te manque{' '}
+                    <strong className="font-semibold text-[var(--t-1)]">
+                      {gapToPodium} point{gapToPodium > 1 ? 's' : ''}
+                    </strong>{' '}
+                    pour entrer dans le top 3.
+                  </>
+                ) : (
+                  'Continue ton travail au quotidien pour grimper dans le classement.'
+                )}
+                {weakest ? (
+                  <>
+                    {' '}
+                    Ton meilleur levier en ce moment :{' '}
+                    <strong className="font-semibold text-[var(--t-1)]">
+                      {weakest.label}
+                    </strong>, {weakest.push}
+                  </>
+                ) : null}
+              </span>
             )}
           </p>
-        ) : (
+        ) : !ranked ? (
           <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
             Encore quelques jours de check-ins et ton nom apparaîtra au classement. Le classement
             mesure ton travail et ta régularité, pas tes résultats de trading.
           </p>
-        )}
+        ) : null}
 
         <div className="border-t border-[var(--b-subtle)] pt-4">
           <p className="t-eyebrow mb-3 text-[var(--t-3)]">Pourquoi ce classement</p>

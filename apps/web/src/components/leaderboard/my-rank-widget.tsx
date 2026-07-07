@@ -3,8 +3,11 @@ import Link from 'next/link';
 
 import { MetricRing } from '@/components/dashboard/daily-completion-ring';
 import { HoverLift } from '@/components/ui/hover-lift';
+import { Pill } from '@/components/ui/pill';
+import { isLowScore, weakestPillar } from '@/lib/leaderboard/insights';
 import { getMyLeaderboardRank } from '@/lib/leaderboard/service';
 
+import { PILLAR_META_BY_KEY } from './pillar-meta';
 import { RankMovementChip } from './rank-movement-chip';
 
 /**
@@ -28,6 +31,16 @@ export async function LeaderboardRankWidget({
   const ranked = mine !== null && mine.rank !== null && mine.score !== null;
   const onPodium = ranked && mine.rank !== null && mine.rank <= 3;
 
+  // Personalized dashboard signals (read-time, no extra query — `breakdown` is
+  // already on the React.cache-shared read). `weakest` names the lever to push;
+  // `lowScore` surfaces a calm ambre "Score bas" flag so a member not doing the
+  // work sees it on the dashboard, never shamed (SPEC §31.2, mirrors the card).
+  // Gated `!onPodium` (mirrors MyRankCard): a top-3 member is never flagged low,
+  // so the "Score bas" pill can't sit next to the "Tu es dans le top 3" headline.
+  const lowScore = mine !== null && isLowScore(mine.score, mine.status) && !onPodium;
+  const weakestKey = ranked && mine?.breakdown ? weakestPillar(mine.breakdown.parts) : null;
+  const weakest = weakestKey ? PILLAR_META_BY_KEY[weakestKey] : null;
+
   const headline = !ranked
     ? 'Bientôt au classement'
     : onPodium
@@ -38,7 +51,13 @@ export async function LeaderboardRankWidget({
     ? 'Encore quelques jours de check-ins et ton nom apparaît. Le classement mesure ton travail, pas tes gains.'
     : onPodium
       ? 'Continue ton travail au quotidien pour tenir ta place sur le podium.'
-      : 'Ton classement sur le travail et la régularité. Grimpe en restant fidèle à ton process.';
+      : lowScore
+        ? weakest
+          ? `Ton score est bas en ce moment. Commence par ${weakest.label}.`
+          : 'Ton score est bas en ce moment. Un check-in aujourd’hui te relance.'
+        : weakest
+          ? `Ton meilleur levier pour grimper : ${weakest.label}.`
+          : 'Ton classement sur le travail et la régularité. Grimpe en restant fidèle à ton process.';
 
   return (
     <HoverLift className="block h-full">
@@ -58,6 +77,11 @@ export async function LeaderboardRankWidget({
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[15px] font-semibold text-[var(--t-1)]">{headline}</p>
               {ranked ? <RankMovementChip movement={mine.movement} /> : null}
+              {lowScore ? (
+                <Pill tone="warn" dot>
+                  Score bas
+                </Pill>
+              ) : null}
             </div>
             <p className="text-[12px] leading-relaxed text-[var(--t-3)]">{description}</p>
           </div>

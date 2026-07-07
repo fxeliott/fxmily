@@ -63,15 +63,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('completeOnboardingAction — happy path lands on the profiling interview', () => {
+describe('completeOnboardingAction — happy path lands on the profile-photo step', () => {
   // THE contract: after creating the account, sign the member in and send them
-  // to /onboarding/interview (NOT /dashboard). signIn throws NEXT_REDIRECT to
-  // navigate; the action must let that bubble. A revert to /dashboard — the bug
-  // the 4th pass fixed — would fail this assertion.
-  it('calls signIn with redirectTo "/onboarding/interview" and lets the redirect bubble', async () => {
+  // to /onboarding/photo (NOT /dashboard). Photo is the first calm, skippable
+  // onboarding gesture (the leaderboard bond) and continues to the profiling
+  // interview. signIn throws NEXT_REDIRECT to navigate; the action must let that
+  // bubble. A revert to /dashboard — the bug the 4th pass fixed — would fail it.
+  it('calls signIn with redirectTo "/onboarding/photo" and lets the redirect bubble', async () => {
     completeOnboardingMock.mockResolvedValueOnce({ ok: true, email: 'jean@example.com' });
     const redirectErr = Object.assign(new Error('NEXT_REDIRECT'), {
-      digest: 'NEXT_REDIRECT;replace;/onboarding/interview',
+      digest: 'NEXT_REDIRECT;replace;/onboarding/photo',
     });
     signInMock.mockRejectedValueOnce(redirectErr);
 
@@ -81,7 +82,7 @@ describe('completeOnboardingAction — happy path lands on the profiling intervi
     expect(signInMock).toHaveBeenCalledWith('credentials', {
       email: 'jean@example.com',
       password: 'whatever12345',
-      redirectTo: '/onboarding/interview',
+      redirectTo: '/onboarding/photo',
     });
     // The NEXT_REDIRECT bubbled — the catch fallback must NOT have fired.
     expect(redirectMock).not.toHaveBeenCalled();

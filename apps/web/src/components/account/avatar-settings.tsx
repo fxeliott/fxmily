@@ -1,22 +1,29 @@
 'use client';
 
 import { Camera, Check, Loader2, Trash2 } from 'lucide-react';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Avatar } from '@/components/ui/avatar';
 
+import { AvatarCropEditor } from './avatar-crop-editor';
+
 /**
  * `<AvatarSettings>` — member profile-photo control (`/account/photo` +
- * onboarding). Uploads to `POST /api/account/avatar` (multipart) and removes via
- * `DELETE`; the server sniffs, normalizes to a square WebP and persists
- * `user.avatarKey`, which the leaderboard reads live. Optimistic preview via an
- * object URL, honest inline error mapping, `router.refresh()` after a mutation
- * so the server-rendered face updates. Reduced-motion-safe (spinner is the only
- * motion, `motion-reduce:animate-none`).
+ * onboarding). The member picks ANY image, frames it (position + zoom) in the
+ * `<AvatarCropEditor>`, which exports a clean 512² WebP blob; that blob is
+ * uploaded to `POST /api/account/avatar` (multipart) and removed via `DELETE`.
+ * The server re-sniffs + re-normalizes as a defense-in-depth gate and persists
+ * `user.avatarKey`, which the leaderboard reads live. Routing every upload
+ * through the canvas editor is ALSO the "tout type de fichier" solution — any
+ * format the browser renders becomes a canonical WebP before it leaves the
+ * device. Optimistic preview, honest inline error mapping, `router.refresh()`
+ * after a mutation so the server-rendered face updates. Reduced-motion-safe.
  */
 
-const MAX_BYTES = 8 * 1024 * 1024;
+/** Generous raw-input ceiling — the editor re-encodes to a tiny WebP, so this
+ *  only guards against a browser-choking decode of an absurdly large file. */
+const INPUT_MAX_BYTES = 40 * 1024 * 1024;
 
 interface AvatarSettingsProps {
   initialUrl: string | null;
@@ -41,6 +48,14 @@ export function AvatarSettings({
   // normalized to WebP server-side — with no spinner and a still-enabled button,
   // allowing a stale-overwriting double-submit. `inFlight` closes both.
   const [inFlight, setInFlight] = useState(false);
+  // Object URL of the image currently framed in the crop/zoom editor (null = the
+  // normal controls are shown). Every upload goes through the editor. We own the
+  // blob's whole lifetime here — created in `openEditor`, revoked in
+  // `closeEditor` — never in render or a passive effect (React discourages
+  // createObjectURL during render, and a revoke effect would fire on Strict
+  // Mode's simulated unmount and kill the live blob).
+  const [editing, setEditing] = useState<string | null>(null);
+  const editingUrlRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -52,13 +67,53 @@ export function AvatarSettings({
     setSaved(false);
   }
 
+  /** Revoke the framed image's object URL (if any) and close the editor. */
+  function closeEditor(): void {
+    if (editingUrlRef.current) {
+      URL.revokeObjectURL(editingUrlRef.current);
+      editingUrlRef.current = null;
+    }
+    setEditing(null);
+  }
+
+  /** Open the crop/zoom editor for a freshly picked file (after a sanity cap). */
+  function openEditor(file: File): void {
+    reset();
+    if (file.size > INPUT_MAX_BYTES) {
+      setError('Fichier trop lourd (40 Mo maximum). Choisis une image plus légère.');
+      return;
+    }
+    if (editingUrlRef.current) URL.revokeObjectURL(editingUrlRef.current);
+    const nextUrl = URL.createObjectURL(file);
+    editingUrlRef.current = nextUrl;
+    setEditing(nextUrl);
+  }
+
+  /** The editor produced a framed WebP blob — upload it. */
+  function onCropConfirm(blob: Blob): void {
+    closeEditor();
+    const framed = new File([blob], 'avatar.webp', { type: blob.type || 'image/webp' });
+    void upload(framed);
+  }
+
+  /** The browser could not decode the picked file (e.g. HEIC on desktop Chrome). */
+  function onCropDecodeError(): void {
+    closeEditor();
+    setError(
+      'Ce fichier n’a pas pu être affiché. Sur iPhone, exporte la photo en JPEG (Réglages > Appareil photo > Le plus compatible), ou choisis un JPG, PNG ou WebP.',
+    );
+  }
+
+  // Safety net: revoke a still-open framed URL if the component unmounts mid-edit.
+  useEffect(() => {
+    return () => {
+      if (editingUrlRef.current) URL.revokeObjectURL(editingUrlRef.current);
+    };
+  }, []);
+
   async function upload(file: File): Promise<void> {
     if (inFlight) return; // re-entry guard: no concurrent stale-overwriting upload
     reset();
-    if (file.size > MAX_BYTES) {
-      setError('Photo trop lourde (8 Mo maximum). Choisis une image plus légère.');
-      return;
-    }
     // Optimistic local preview while the request is in flight.
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
@@ -71,7 +126,7 @@ export function AvatarSettings({
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ApiError;
         setPreview(null);
-        setError(data.message ?? "L'envoi a échoué, réessaie avec une autre image.");
+        setError(data.message ?? 'L’envoi a échoué, réessaie avec une autre image.');
         return;
       }
       const data = (await res.json()) as { readUrl: string };
@@ -122,7 +177,7 @@ export function AvatarSettings({
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={busy}
+              disabled={busy || editing !== null}
               className="rounded-control inline-flex h-10 items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3.5 text-[13px] font-medium text-[var(--acc-hi)] transition hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] disabled:opacity-60"
             >
               {busy ? (
@@ -139,7 +194,7 @@ export function AvatarSettings({
               <button
                 type="button"
                 onClick={() => void remove()}
-                disabled={busy}
+                disabled={busy || editing !== null}
                 className="rounded-control inline-flex h-10 items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-3.5 text-[13px] font-medium text-[var(--t-2)] transition hover:border-[var(--b-danger)] hover:text-[var(--bad)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -148,20 +203,32 @@ export function AvatarSettings({
             ) : null}
           </div>
           <p className="text-[11px] text-[var(--t-4)]">
-            JPG, PNG, WebP, GIF ou AVIF. 8 Mo maximum.
+            Tout type d&apos;image (photo iPhone comprise). Tu la cadres avant l&apos;envoi.
           </p>
         </div>
       </div>
 
+      {editing ? (
+        <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+          <AvatarCropEditor
+            previewUrl={editing}
+            busy={busy}
+            onCancel={closeEditor}
+            onConfirm={onCropConfirm}
+            onDecodeError={onCropDecodeError}
+          />
+        </div>
+      ) : null}
+
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+        accept="image/*"
         className="sr-only"
         aria-label="Choisir une photo de profil"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) void upload(file);
+          if (file) openEditor(file);
           // Reset so re-picking the same file fires onChange again.
           e.target.value = '';
         }}

@@ -107,6 +107,8 @@ export type VerificationBatchResultEntry =
       readonly proofId: string;
       readonly userId: string;
       readonly error: string;
+      /** Tour 18 — factual note of the non-MT5 screen the model saw. */
+      readonly observed?: string | undefined;
     };
 
 /**
@@ -410,7 +412,15 @@ export async function persistVisionResults(
       await logAudit({
         action: 'verification.batch.skipped',
         userId: entry.userId,
-        metadata: { ranAt, proofId: entry.proofId, reason: entry.error.slice(0, 200) },
+        metadata: {
+          ranAt,
+          proofId: entry.proofId,
+          reason: entry.error.slice(0, 200),
+          // Tour 18 — "dis ce que tu vois" : record the model's factual note of
+          // the non-MT5 screen it saw, so a member's "ça ne marche pas" resolves
+          // to a legible "l'IA a vu un graphique TradingView, pas un historique".
+          ...(entry.observed ? { observed: entry.observed.slice(0, 300) } : {}),
+        },
       });
       continue;
     }
@@ -528,6 +538,12 @@ export async function persistVisionResults(
           positionsDeduplicated: result.positionsDeduplicated,
           detectedAccountCount: result.detectedAccountCount,
           confidence: output.confidence,
+          // Tour 18 — "le voir et le dire" : the model's own statement of the
+          // screen it read (MT5 desktop/mobile + account + row count). Persisted
+          // to the audit as the human-legible proof the vision actually looked.
+          ...(output.screenObservation
+            ? { screenObservation: output.screenObservation.slice(0, 300) }
+            : {}),
           claudeModelVersion: model,
           mocked: model.startsWith('mock:'),
         },

@@ -143,6 +143,15 @@ export const verificationVisionOutputSchema = z
     positions: z.array(visionPositionSchema).max(VISION_MAX_POSITIONS_PER_PROOF),
     /** Global reading confidence 0-1 (drives `BrokerAccount.confidence`). */
     confidence: z.number().min(0).max(1),
+    /**
+     * Tour 18 — "le voir et le dire" : a short factual sentence in which the
+     * model states WHAT screen it actually looked at (MT5 desktop/mobile, the
+     * account, how many closed rows). Optional so a clean extraction never fails
+     * for a missing note, but the prompt mandates it — it doubles as a vision
+     * sanity signal (a coherent observation matching the extracted data is
+     * evidence the model truly read the image, not hallucinated the schema).
+     */
+    screenObservation: z.string().max(300).optional(),
   })
   .strict();
 
@@ -173,6 +182,14 @@ export const verificationBatchResultEntrySchema = z.union([
       proofId: proofIdWireSchema,
       userId: wireUserIdSchema,
       error: z.string().min(1).max(200),
+      /**
+       * Tour 18 — "dis ce que tu vois" on the non-MT5 refusal path: the model's
+       * factual note of the screen it actually saw (e.g. "Graphique TradingView,
+       * pas un historique de positions"). Optional + kept OUT of the `error`
+       * slug so the exact `not_mt5_history` terminal-verdict match is unaffected;
+       * surfaced in the `verification.batch.skipped` audit for observability.
+       */
+      observed: z.string().max(300).optional(),
     })
     .strict(),
 ]);

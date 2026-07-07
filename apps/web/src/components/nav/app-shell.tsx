@@ -16,6 +16,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { isPublic } from '@/lib/auth/public-paths';
 import { cn } from '@/lib/utils';
 
 import { BOTTOM_NAV, isNavItemActive, NAV_GROUPS, type NavItem } from './nav-items';
@@ -52,8 +53,9 @@ interface AppShellProps {
  * (desktop ≥lg) + bottom tab bar (mobile, pattern PWA) + drawer plein menu.
  *
  * Monté UNE fois dans le root layout. Se retire de lui-même (rend seulement
- * `children`) sur les routes publiques ou hors session — la détection mirroite
- * `isPublic()` de auth.config.ts. Les décalages mobile (FAB, footer, cookie)
+ * `children`) sur les routes publiques ou hors session — même source de vérité
+ * que le gate d'auth (`@/lib/auth/public-paths`), zéro divergence possible.
+ * Les décalages mobile (FAB, footer, cookie)
  * sont gérés en CSS via `[data-slot="app-bottom-nav"]` (globals.css).
  */
 export function AppShell({ session, signOutAction, pill, children }: AppShellProps) {
@@ -67,7 +69,7 @@ export function AppShell({ session, signOutAction, pill, children }: AppShellPro
   // section) with the same active affordance as the tabs.
   const onDeepRoute = !BOTTOM_NAV.some((item) => isNavItemActive(pathname, item.href));
 
-  if (!session || isPublicPath(pathname)) {
+  if (!session || isPublic(pathname)) {
     // Surfaces publiques (splash / login / onboarding / legal) : aucun chrome,
     // mais le toggle de thème reste accessible via un bouton flottant discret.
     return (
@@ -234,12 +236,6 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
       </kbd>
     </button>
   );
-}
-
-/** Routes publiques (mirroir de isPublic() — auth.config.ts) : pas de chrome. */
-function isPublicPath(p: string): boolean {
-  if (p === '/' || p === '/login' || p === '/rejoindre' || p === '/forgot-password') return true;
-  return p.startsWith('/onboarding') || p.startsWith('/reset-password') || p.startsWith('/legal');
 }
 
 function Brand() {

@@ -639,6 +639,68 @@ describe('getCronHealthReport', () => {
   });
 
   /**
+   * Tour 18 — the weekly-report member digest counts Resend rejections into a
+   * numeric `metadata.emailsFailed` (its own bucket, distinct from `errors` =
+   * generation exceptions, and from `emailsSkipped` = the no-API-key dev
+   * fallback). A week-cadence cron that generated fine but failed to deliver
+   * every member's digest was left GREEN — the exact class the fold closes.
+   */
+  it('escalates the weekly-report digest to amber when member emails failed to send (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    // weekly_reports period = 1 week → 12h old = green by age…
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_reports.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    // …but 3 member digests were rejected by Resend (generation itself was clean).
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_reports.scan',
+        metadata: { generated: 8, errors: 0, emailsDelivered: 5, emailsFailed: 3 },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.weekly_reports.scan');
+
+    expect(scan?.status).toBe('amber');
+    expect(scan?.errorCount).toBe(3);
+  });
+
+  /**
+   * Tour 18 — the fold is additive across sources (`memberErrors +
+   * emailDeliveryFailed + weeklyDigestFailures + pushDeliveryFailures`). When a
+   * single run reports more than one flavour of failure — the weekly digest can
+   * emit BOTH generation `errors` and delivery `emailsFailed` — the effective
+   * error count must be their sum, not just one addend. This pins the one new
+   * arithmetic behaviour the other tests exercise only one term at a time.
+   */
+  it('sums co-occurring generation and delivery failures into the error count (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_reports.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    // 2 members threw during generation AND 3 digests were rejected by Resend.
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_reports.scan',
+        metadata: { generated: 3, errors: 2, emailsDelivered: 3, emailsFailed: 3 },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.weekly_reports.scan');
+
+    expect(scan?.status).toBe('amber');
+    expect(scan?.errorCount).toBe(5);
+  });
+
+  /**
    * Why this matters : the report's entries.length is fixed (one per known cron
    * action). Adding a new cron must require an explicit update to
    * `EXPECTATIONS` — drift between code + crontab is a high-risk class of bug.

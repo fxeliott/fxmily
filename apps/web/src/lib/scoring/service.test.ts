@@ -99,4 +99,20 @@ describe('getBehavioralScoreHistory', () => {
     findManyMock.mockResolvedValueOnce([]);
     expect(await getBehavioralScoreHistory('user_1')).toEqual([]);
   });
+
+  it('anchors the cutoff on the civil-day grid (UTC-midnight), not a raw wall-clock offset', async () => {
+    // TIME-1 (RC#8) regression guard: `BehavioralScore.date` is a `@db.Date`
+    // civil pin (UTC-midnight of the local day). The `gte` cutoff must land on
+    // the same grid so the window edge never drifts by the current time-of-day.
+    // The pre-fix bug used `new Date(Date.now() - sinceDays * DAY)`, which
+    // carried the wall-clock hours/minutes and shifted the boundary 1-2h off.
+    findManyMock.mockResolvedValueOnce([]);
+    await getBehavioralScoreHistory('user_1', { sinceDays: 30 });
+    const cutoff = (findManyMock.mock.calls[0]?.[0] as { where: { date: { gte: Date } } }).where
+      .date.gte;
+    expect(cutoff.getUTCHours()).toBe(0);
+    expect(cutoff.getUTCMinutes()).toBe(0);
+    expect(cutoff.getUTCSeconds()).toBe(0);
+    expect(cutoff.getUTCMilliseconds()).toBe(0);
+  });
 });

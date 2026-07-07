@@ -23,7 +23,13 @@ import type { CaptureContextValue, TrackingInstrument, TrackingQuestion } from '
 /** Hard cap on `occurrenceKey` / `instrumentKey` lengths (anti-abuse). */
 const KEY_MAX = 64;
 
-const captureContextSchema: z.ZodType<CaptureContextValue> = z.enum(['hot', 'cold', 'scheduled']);
+// Exported so the Prisma↔Zod enum-parity guard (src/lib/schemas/enum-parity.test.ts)
+// can assert this literal set never drifts from `enum CaptureContext` in schema.prisma.
+export const captureContextSchema: z.ZodType<CaptureContextValue> = z.enum([
+  'hot',
+  'cold',
+  'scheduled',
+]);
 
 /** Per-question value schema, derived from the question kind. */
 function questionValueSchema(q: TrackingQuestion): z.ZodTypeAny {

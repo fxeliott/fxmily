@@ -669,7 +669,17 @@ export interface BehavioralScoreTrendPoint {
 // options-object signature and resolves the default before delegating.
 const getBehavioralScoreHistoryCached = cache(
   async (userId: string, sinceDays: number): Promise<BehavioralScoreTrendPoint[]> => {
-    const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    // TIME-1 (RC#8) parity: `BehavioralScore.date` is a `@db.Date` civil pin
+    // (UTC-midnight of the member's local day). Anchor the cutoff on the same
+    // civil grid — today's local date shifted back `sinceDays`, then pinned to
+    // its UTC-midnight instant via `parseLocalDate` — instead of subtracting raw
+    // UTC millis from `Date.now()` (which carries the wall-clock time-of-day and
+    // drifts the window edge 1-2h off depending on DST, the exact anti-pattern
+    // the scoring window above already fixes). V1 default tz is Europe/Paris;
+    // this day-granularity projection is tz-agnostic below the calendar day.
+    const cutoff = parseLocalDate(
+      shiftLocalDate(localDateOf(new Date(), 'Europe/Paris'), -sinceDays),
+    );
     const rows = await db.behavioralScore.findMany({
       where: { userId, date: { gte: cutoff } },
       orderBy: { date: 'asc' },

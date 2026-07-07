@@ -174,7 +174,17 @@ RUN set -e; \
     SHARP_DIR="$(find /app/node_modules/.pnpm -maxdepth 1 -type d -name 'sharp@0.35.3*' | head -1)/node_modules/sharp"; \
     node -e "require('${SHARP_DIR}'); console.log('[docker] pnpm-store sharp resolves OK (dlopen incl. libvips)')"
 
-USER fxmily
+# Production entrypoint — self-heals the uploads volume ownership as root, then
+# drops to the unprivileged `fxmily` user via setpriv (see the script for the
+# root cause: a stale root-owned `fxmily-uploads` volume makes uid 1001 EACCES on
+# the first write → /api/uploads `storage_failed`). We deliberately do NOT set
+# `USER fxmily` on the image: the container starts as root ONLY to chown the
+# mount, and the server process still runs as uid 1001 (setpriv drop). The
+# HEALTHCHECK below runs the command directly (not via ENTRYPOINT), so it stays a
+# harmless localhost fetch.
+COPY --chmod=0755 ops/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 EXPOSE 3000
 
 # Healthcheck — `/api/health` must respond 200. Tied into Caddy's
@@ -182,5 +192,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# `node server.js` is what `next/standalone` ships at the package root.
+# `node server.js` is what `next/standalone` ships at the package root — passed
+# to the entrypoint as "$@" and exec'd as the `fxmily` user.
 CMD ["node", "apps/web/server.js"]

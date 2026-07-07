@@ -81,13 +81,34 @@ async function gatherMember(
     getLatestBehavioralScore(userId),
     getLatestConstancyScore(userId),
     // Coverage must never sink a member — a failure degrades to "no work pillar".
-    getTrackingCoverage(userId, now, LEADERBOARD_WINDOW_DAYS).catch(() => null),
+    // But it must not be SILENT: unlike the two reads above (uncaught → surfaced
+    // by the outer Promise.allSettled as a `gather_failed` error), a swallowed
+    // failure here still counts the member as a success, so `errors` stays 0 and
+    // the nightly heartbeat looks green while the member was ranked on a
+    // renormalized 3-pillar score. Report it so the degradation is visible to
+    // Sentry/the operator; keep returning null (fairness: never sinks a member).
+    getTrackingCoverage(userId, now, LEADERBOARD_WINDOW_DAYS).catch((e) => {
+      reportWarning('leaderboard.recompute', 'coverage_degraded', {
+        userId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return null;
+    }),
     // Decision A — member-DECLARED off-days in the window (the auditable
     // justification that relaxes the fairness gate). A failure degrades to 0
-    // (gate NOT relaxed = conservative), so it can never crash the nightly run.
+    // (gate NOT relaxed = conservative), so it can never crash the nightly run —
+    // but, same as coverage above, report it so the silent degradation (a
+    // legitimately-absent member wrongly demoted to insufficient_data) is not
+    // invisible behind an `errors: 0` heartbeat.
     db.memberOffDay
       .count({ where: { userId, date: { gte: windowStartUtc, lte: windowEndUtc } } })
-      .catch(() => 0),
+      .catch((e) => {
+        reportWarning('leaderboard.recompute', 'offday_count_degraded', {
+          userId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return 0;
+      }),
   ]);
 
   const engagementScore = behavioral?.engagementScore ?? null;
@@ -324,13 +345,19 @@ function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
   };
 }
 
-async function latestBoardDate(): Promise<Date | null> {
+// `React.cache`-wrapped like its two consumers (getLeaderboardBoard +
+// getMyLeaderboardRank): on /classement a viewer with a row calls BOTH in the
+// same request, so without this the identical zero-arg findFirst would run
+// twice. The cache is request-scoped (the latest board date is stable within a
+// render — the nightly cron never inserts mid-request), so the two consumers
+// now share a single query.
+const latestBoardDate = cache(async (): Promise<Date | null> => {
   const latest = await db.leaderboardSnapshot.findFirst({
     orderBy: { date: 'desc' },
     select: { date: true },
   });
   return latest?.date ?? null;
-}
+});
 
 /**
  * Full board for the `/classement` page. Ranked rows in rank order; opted-out

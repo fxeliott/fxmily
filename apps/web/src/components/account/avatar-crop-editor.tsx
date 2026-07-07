@@ -67,6 +67,11 @@ export function AvatarCropEditor({
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [exporting, setExporting] = useState(false);
+  // Screen-reader feedback for the arrow-key pan: `role="group"` + a static label
+  // announces the control once, but a blind user gets NO signal that a nudge
+  // moved the frame (or hit a clamp edge), since the pan is a visual-only inline
+  // style. This polite live region announces each keyboard nudge's result.
+  const [announce, setAnnounce] = useState('');
   const imgRef = useRef<HTMLImageElement | null>(null);
   const drag = useRef<{ id: number; x: number; y: number } | null>(null);
 
@@ -81,6 +86,7 @@ export function AvatarCropEditor({
     setNatural(null);
     setZoom(MIN_ZOOM);
     setPan({ x: 0, y: 0 });
+    setAnnounce('');
   }
 
   // Cover-fit scale at zoom 1: the smaller image dimension fills the square, so
@@ -132,12 +138,32 @@ export function AvatarCropEditor({
   function onKeyDown(e: React.KeyboardEvent): void {
     if (busy || exporting) return;
     const step = KEY_NUDGE_PX;
-    if (e.key === 'ArrowLeft') setPan((p) => clamp(p.x + step, p.y));
-    else if (e.key === 'ArrowRight') setPan((p) => clamp(p.x - step, p.y));
-    else if (e.key === 'ArrowUp') setPan((p) => clamp(p.x, p.y + step));
-    else if (e.key === 'ArrowDown') setPan((p) => clamp(p.x, p.y - step));
-    else return;
+    let label: string;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') {
+      label = 'Vers la gauche';
+      dx = step;
+    } else if (e.key === 'ArrowRight') {
+      label = 'Vers la droite';
+      dx = -step;
+    } else if (e.key === 'ArrowUp') {
+      label = 'Vers le haut';
+      dy = step;
+    } else if (e.key === 'ArrowDown') {
+      label = 'Vers le bas';
+      dy = -step;
+    } else return;
     e.preventDefault();
+    // Functional updater keeps the visual pan robust to key auto-repeat.
+    setPan((p) => clamp(p.x + dx, p.y + dy));
+    // Announce the result to screen readers: the nudge direction, or "Bord
+    // atteint" when the frame is already against the clamp edge in that
+    // direction. Derived from the render-time pan (exact for a single keypress;
+    // rapid auto-repeat may lag one step, which the AT coalesces anyway).
+    const at = clamp(pan.x + dx, pan.y + dy);
+    const moved = at.x !== pan.x || at.y !== pan.y;
+    setAnnounce(moved ? label : 'Bord atteint');
   }
 
   function handleConfirm(): void {
@@ -182,7 +208,9 @@ export function AvatarCropEditor({
         {/* The framing viewport — circle mask (display only), drag/keys to move. */}
         <div
           role="group"
+          aria-roledescription="zone de cadrage"
           aria-label="Cadrer la photo : fais glisser ou utilise les flèches pour déplacer, le curseur pour zoomer"
+          aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
           tabIndex={0}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -235,6 +263,11 @@ export function AvatarCropEditor({
           <Move className="h-3.5 w-3.5" aria-hidden="true" />
           Glisse pour déplacer, zoome avec le curseur
         </p>
+        {/* Polite live region — announces each arrow-key nudge for SR users,
+            since the pan itself is a visual-only inline style. */}
+        <span aria-live="polite" aria-atomic="true" className="sr-only">
+          {announce}
+        </span>
       </div>
 
       {/* Zoom slider — native, keyboard-operable, labelled. */}

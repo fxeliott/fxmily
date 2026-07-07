@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Library,
   LineChart,
+  ListChecks,
   type LucideIcon,
   Network,
   ScanSearch,
@@ -22,6 +23,7 @@ import {
   Sparkles,
   Target,
   UserCircle,
+  UserPlus,
   Users,
   Waves,
 } from 'lucide-react';
@@ -111,7 +113,9 @@ export const NAV_GROUPS: NavGroup[] = [
     admin: true,
     items: [
       { href: '/admin/members', label: 'Membres', icon: Users, admin: true },
+      { href: '/admin/a-traiter', label: 'À traiter', icon: ListChecks, admin: true },
       { href: '/admin/access-requests', label: 'Demandes', icon: Inbox, admin: true },
+      { href: '/admin/invite', label: 'Inviter', icon: UserPlus, admin: true },
       { href: '/admin/cards', label: 'Fiches Douglas', icon: Library, admin: true },
       { href: '/admin/reunions', label: 'Réunions', icon: CalendarRange, admin: true },
       { href: '/admin/seances', label: 'Séances', icon: Clapperboard, admin: true },

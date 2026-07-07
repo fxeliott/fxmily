@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isNavItemActive } from './nav-items';
+import { isNavItemActive, NAV_GROUPS } from './nav-items';
 
 /**
  * F7 Layer 2 — `/checkin/history` is a nav sibling of `/checkin`, so the active
@@ -38,5 +38,37 @@ describe('isNavItemActive', () => {
   it('keeps a parent active on a detail sub-route with no deeper nav item', () => {
     // /admin/members/[id] is not itself a nav item → /admin/members stays lit.
     expect(isNavItemActive('/admin/members/abc123', '/admin/members')).toBe(true);
+  });
+});
+
+/**
+ * 2026-07-07 audit — /admin/a-traiter (triage queue) and /admin/invite (member
+ * invitation) are real, shipped admin surfaces that were reachable ONLY via the
+ * /admin hub, never from the sidebar/drawer/⌘K. Guard against that class of
+ * wayfinding drift: every admin operating surface must live in the Admin group.
+ */
+describe('NAV_GROUPS admin coverage', () => {
+  it('exposes every admin operating surface in the Admin group (no orphan surfaces)', () => {
+    const adminGroup = NAV_GROUPS.find((g) => g.admin);
+    const hrefs = adminGroup?.items.map((i) => i.href) ?? [];
+    for (const href of [
+      '/admin/members',
+      '/admin/a-traiter',
+      '/admin/access-requests',
+      '/admin/invite',
+      '/admin/cards',
+      '/admin/reunions',
+      '/admin/seances',
+      '/admin/reports',
+      '/admin/health',
+      '/admin/system',
+    ]) {
+      expect(hrefs).toContain(href);
+    }
+  });
+
+  it('marks every Admin group item admin-only (never leaks to members)', () => {
+    const adminGroup = NAV_GROUPS.find((g) => g.admin);
+    expect(adminGroup?.items.every((i) => i.admin === true)).toBe(true);
   });
 });

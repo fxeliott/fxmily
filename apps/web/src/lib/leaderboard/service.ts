@@ -19,6 +19,7 @@ import { computeLeaderboardScore, LEADERBOARD_WINDOW_DAYS, preciseScoreFromParts
 import {
   computeRankMovement,
   countActivePillars,
+  podiumThresholdScore,
   rankEntries,
   type RankableEntry,
   type RankDirection,
@@ -265,11 +266,13 @@ export interface LeaderboardBoardView {
   me: LeaderboardRowView | null;
   /** Total members with a real rank on this date (the "sur N" denominator). */
   totalRanked: number;
-  /** Score of the TRUE rank-3 member — read from the pre-filter set so it stays
-   * honest even when the real rank-3 member is opted-out (hidden). A bare score
-   * is a non-identifying threshold (like `totalRanked`), and it powers the exact
-   * "il te manque N points pour entrer dans le top 3" gap line. null when fewer
-   * than three members are ranked. */
+  /** Score of the TRUE `rank === 3` member — read from the pre-filter set (which
+   * keeps opted-out members) so it stays honest even when the real rank-3 member
+   * is opted-out (hidden). A bare score is a non-identifying threshold (like
+   * `totalRanked`), and it powers the exact "il te manque N points pour entrer
+   * dans le top 3" gap line. null when no member currently holds rank 3 — fewer
+   * than three ranked members, or the rank-3 holder suspended/deleted since the
+   * nightly recompute (see `podiumThresholdScore`). */
   thirdScore: number | null;
 }
 
@@ -372,17 +375,15 @@ export const getLeaderboardBoard = cache(
       .filter((m) => m.row.rank !== null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
       .map((m) => m.row);
     const totalRanked = raw.filter((r) => r.rank !== null).length;
-    // Podium threshold = the score of the 3rd RANKED member by ORDINAL position,
-    // not a literal `rank === 3` lookup. When the rank-3 holder is dropped at read
-    // time (suspended/deleted between the nightly recompute and this read), the
-    // active ranks become e.g. [1, 2, 4, 5…] and a `rank === 3` find returns
-    // nothing → it would blank the "il te manque N points pour entrer dans le top
-    // 3" line for rank-4+ viewers even though 3+ members are still ranked. `mapped`
-    // is already rank-asc (query orderBy) and keeps opted-out members (only hidden
-    // from `rows`), so index 2 of the ranked subset is the honest competitive 3rd
-    // place. Null when fewer than 3 ranked members exist (no podium threshold yet).
-    const rankedByRank = mapped.filter((m) => m.row.rank !== null);
-    const thirdScore = rankedByRank[2]?.row.score ?? null;
+    // Podium threshold = the score of the member holding TRUE `rank === 3`, keyed
+    // on the real rank (never a positional index) so it stays COHERENT with the
+    // podium split (`splitBoardByRank`, also rank<=3). `mapped` keeps opted-out
+    // members (only hidden from `rows`), so the line stays honest when the rank-3
+    // holder is merely hidden; it goes null only in the transient suspend/delete
+    // gap (ranks e.g. [1, 2, 4…]), where the threshold is genuinely undefined and
+    // the card suppresses the gap line rather than pointing it at an off-podium
+    // member's score. See `podiumThresholdScore` for the full gap analysis.
+    const thirdScore = podiumThresholdScore(mapped.map((m) => m.row));
 
     return {
       date: date.toISOString().slice(0, 10) as LocalDateString,

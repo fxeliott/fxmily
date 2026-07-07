@@ -160,12 +160,18 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     // are BRAND NEW on this branch, so on a rolling redeploy every OTHER cron keeps
     // its historical audit rows (green/amber) while this one has ZERO rows until its
     // first 02:20 Paris run. Without `expectedSince` that lone gap reads `never_ran`,
-    // which forces report.overall → never_ran → /api/cron/health returns 503 →
-    // cron-watch.yml emails a FALSE hourly cron-outage alert for up to ~24h until the
-    // first run lands (this action is not in the watcher's self-heal map, so it can't
-    // clear itself). With it, the entry is a calm `pending` ("premier run à venir")
-    // until `expectedSince + tolerance` (72h), then flips to a genuine `never_ran`
-    // only if the cron truly never fired.
+    // which forces report.overall → never_ran → /api/cron/health returns 503. With
+    // it, the entry is a calm `pending` ("premier run à venir") until
+    // `expectedSince + tolerance` (72h), then flips to a genuine `never_ran` only if
+    // the cron truly never fired.
+    //
+    // Belt-and-suspenders: this action is ALSO in cron-watch.yml's self-heal map
+    // (it is pure computation + an idempotent snapshot upsert — no member-facing
+    // send). So even if a real 503 fired (merge slipped past the 72h grace, or the
+    // host crontab was never synced), the watcher re-fires the recompute route,
+    // which writes a fresh heartbeat and clears the red — no false hourly outage
+    // email. `expectedSince` keeps the nominal deploy clean; the self-heal map is
+    // the durability net that makes the exact date non-load-bearing.
     action: 'cron.recompute_leaderboard.scan',
     label: 'Leaderboard recompute',
     periodMs: DAY,

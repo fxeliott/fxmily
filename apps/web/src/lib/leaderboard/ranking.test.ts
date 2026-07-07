@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeRankMovement, countActivePillars, rankEntries, splitBoardByRank } from './ranking';
+import {
+  computeRankMovement,
+  countActivePillars,
+  podiumThresholdScore,
+  rankEntries,
+  splitBoardByRank,
+} from './ranking';
 import type { LeaderboardScore } from './types';
 
 const d = (iso: string) => new Date(iso);
@@ -231,5 +237,47 @@ describe('splitBoardByRank', () => {
 
   it('handles an empty board', () => {
     expect(splitBoardByRank([])).toEqual({ podium: [], rest: [] });
+  });
+});
+
+describe('podiumThresholdScore', () => {
+  const row = (rank: number | null, score: number | null) => ({ userId: `u${rank}`, rank, score });
+
+  it('returns the score of the member holding TRUE rank 3 (nominal contiguous board)', () => {
+    expect(podiumThresholdScore([row(1, 90), row(2, 80), row(3, 70), row(4, 60), row(5, 50)])).toBe(
+      70,
+    );
+  });
+
+  it('stays honest when the rank-3 member is OPTED-OUT: the row is retained, so the threshold holds', () => {
+    // Opt-out members are kept in the input (only hidden from the visible `rows`),
+    // so the rank-3 holder's score still powers the gap line for everyone below.
+    expect(podiumThresholdScore([row(1, 90), row(2, 80), row(3, 70), row(4, 60)])).toBe(70);
+  });
+
+  it('goes null in the suspend/delete gap where rank 3 is dropped (ranks [1,2,4,5])', () => {
+    // The rank-3 holder was suspended/deleted between the nightly recompute and
+    // this read → no visible rank 3 → null → the card suppresses the gap line
+    // (generic fallback) instead of mislabelling the rank-4 score as "3rd place".
+    expect(podiumThresholdScore([row(1, 90), row(2, 80), row(4, 60), row(5, 50)])).toBeNull();
+  });
+
+  it('reads rank 3 by real rank, NOT position: a dropped rank-2 (ranks [1,3,4]) still returns rank 3', () => {
+    // The exact bug a positional `rows[2]` had: with rank-2 gone the array is
+    // [1, 3, 4] and index 2 is the rank-4 member, but rank 3 IS present at index 1.
+    // Keying on the real rank returns rank-3's score (70), never rank-4's (60).
+    expect(podiumThresholdScore([row(1, 90), row(3, 70), row(4, 60)])).toBe(70);
+  });
+
+  it('returns null when fewer than three members are ranked (no podium threshold yet)', () => {
+    expect(podiumThresholdScore([row(1, 90), row(2, 80)])).toBeNull();
+  });
+
+  it('ignores null-rank (insufficient_data) rows when locating rank 3', () => {
+    expect(podiumThresholdScore([row(1, 90), row(2, 80), row(3, 70), row(null, null)])).toBe(70);
+  });
+
+  it('handles an empty board', () => {
+    expect(podiumThresholdScore([])).toBeNull();
   });
 });

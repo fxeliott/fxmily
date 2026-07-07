@@ -95,6 +95,35 @@ export function splitBoardByRank<T extends { rank: number | null }>(
   return { podium, rest };
 }
 
+/**
+ * The podium ENTRY THRESHOLD — the score of the member holding TRUE `rank === 3`,
+ * or null when no such member is currently visible. It powers the "il te manque N
+ * points pour entrer dans le top 3" gap line for off-podium members.
+ *
+ * Keyed on the REAL rank, never a positional `rows[2]`, for the SAME reason
+ * {@link splitBoardByRank} keys on rank: the read layer drops suspended/deleted
+ * members at read time and hides opted-out ones, so the rank-ordered array can
+ * have GAPS (ranks [1, 2, 4, …] when the rank-3 holder is gone, or [1, 3, 4, …]
+ * when rank-2 is gone). A positional `rows[2]` would then read the WRONG member's
+ * score — the rank-4 member in the first gap, and even mislabel it as "3rd place"
+ * in the second gap where the real rank-3 member is present at index 1 — pointing
+ * the gap line at a score that is not the podium threshold (and, when the reader
+ * IS that member, at their own score → a nonsensical "il te manque 0 point").
+ *
+ * Opted-out members are RETAINED in the input here (they hold a real rank and a
+ * real threshold score), so the line stays honest when the rank-3 holder is
+ * merely hidden. It goes null only in the transient suspend/delete gap, where the
+ * exact threshold is genuinely undefined until the next nightly recompute
+ * re-ranks the now-active set contiguously — and the consumer suppresses the line
+ * (generic fallback) on null. Coherent-by-construction with `splitBoardByRank`:
+ * both surfaces read the same real rank. PURE — no I/O, unit-tested.
+ */
+export function podiumThresholdScore<T extends { rank: number | null; score: number | null }>(
+  rows: readonly T[],
+): number | null {
+  return rows.find((r) => r.rank === 3)?.score ?? null;
+}
+
 // =============================================================================
 // Rank movement — pure derivation from the snapshot log (no I/O)
 // =============================================================================

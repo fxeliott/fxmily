@@ -413,8 +413,16 @@ describe('getCronHealthReport', () => {
     // which is in the FUTURE relative to this May-dated `now`, so its absence is
     // `pending` ("premier run à venir"), not `never_ran` — by design (same
     // pattern as the worker member_profile_monthly pipeline). Tour 15 — the
-    // daily admin brief carries `expectedSince` (2026-07-06) too. Assert the split.
-    const PENDING_BY_DESIGN = ['cron.autoheal.heartbeat', 'cron.admin_daily_brief.scan'];
+    // daily admin brief carries `expectedSince` (2026-07-06) too. Leaderboard —
+    // the nightly ranking recompute carries `expectedSince` (2026-07-08) as well:
+    // its crontab line + audit action are brand new, so a rolling redeploy would
+    // otherwise read the lone missing row as `never_ran` and 503 the health route.
+    // Assert the split.
+    const PENDING_BY_DESIGN = [
+      'cron.autoheal.heartbeat',
+      'cron.admin_daily_brief.scan',
+      'cron.recompute_leaderboard.scan',
+    ];
     const dated = report.entries.filter((e) => !PENDING_BY_DESIGN.includes(e.action));
     expect(dated.every((e) => e.status === 'never_ran')).toBe(true);
     expect(report.entries.every((e) => e.lastRanAt === null)).toBe(true);
@@ -753,6 +761,119 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.admin_daily_brief.scan');
     // Leaderboard — nightly ranking recompute heartbeat (02:20 Paris).
     expect(report.entries.map((e) => e.action)).toContain('cron.recompute_leaderboard.scan');
+  });
+
+  /**
+   * Leaderboard (regression) — the exact false 503 the missing `expectedSince`
+   * caused. On a ROLLING redeploy of this branch, every pre-existing cron keeps
+   * its historical audit rows (green/amber) while the BRAND-NEW
+   * `cron.recompute_leaderboard.scan` has none until its first 02:20 Paris run.
+   * Before the fix, that lone missing row read `never_ran`, forcing
+   * `overall → never_ran`, which makes /api/cron/health return 503 and
+   * cron-watch.yml email a false hourly outage alert for ~24h. With
+   * `expectedSince` (2026-07-08 + 72h tolerance) the entry is a calm `pending`
+   * inside its window and the board stays green. This pins the fix at the
+   * BEHAVIOUR level (not merely "the entry exists" — see the drift-guard above).
+   */
+  it("keeps the board green on redeploy: the brand-new leaderboard cron reads 'pending', not never_ran", async () => {
+    // `now` is May 2026 → BEFORE the leaderboard `expectedSince` (2026-07-08), so
+    // its still-missing first row is `pending`, not `never_ran`. Every OTHER cron
+    // has a fresh row (green by age) — the real rolling-redeploy state where only
+    // the brand-new action lacks history. The leaderboard row is deliberately ABSENT.
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date(now.getTime() - 5 * MIN) },
+      },
+      {
+        action: 'cron.recompute_scores.scan',
+        _max: { createdAt: new Date(now.getTime() - 10 * HOUR) },
+      },
+      // NO cron.recompute_leaderboard.scan row — brand-new action, first run not due yet.
+      {
+        action: 'cron.dispatch_douglas.scan',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+      {
+        action: 'cron.weekly_reports.scan',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'cron.dispatch_notifications.scan',
+        _max: { createdAt: new Date(now.getTime() - 60_000) },
+      },
+      {
+        action: 'cron.purge_deleted.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.purge_push_subscriptions.scan',
+        _max: { createdAt: new Date(now.getTime() - DAY) },
+      },
+      {
+        action: 'cron.purge_audit_log.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.calendar_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.monthly_debrief_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.weekly_report_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.onboarding_profile_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.verification_scan.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.verification_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      { action: 'meeting.generated', _max: { createdAt: new Date(now.getTime() - 12 * HOUR) } },
+      {
+        action: 'cron.mindset_check_reminders.scan',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'cron.purge_access_requests.scan',
+        _max: { createdAt: new Date(now.getTime() - DAY) },
+      },
+      { action: 'cron.health.scan', _max: { createdAt: new Date(now.getTime() - 30 * MIN) } },
+      {
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
+      },
+      {
+        action: 'cron.admin_daily_brief.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const leaderboard = report.entries.find((e) => e.action === 'cron.recompute_leaderboard.scan');
+
+    // The brand-new cron with no row yet is a calm `pending`, NOT `never_ran`.
+    expect(leaderboard?.status).toBe('pending');
+    expect(leaderboard?.lastRanAt).toBeNull();
+    expect(leaderboard?.firstRunDeadline).not.toBeNull();
+    // Every OTHER entry is green.
+    expect(
+      report.entries
+        .filter((e) => e.action !== 'cron.recompute_leaderboard.scan')
+        .every((e) => e.status === 'green'),
+    ).toBe(true);
+    // The board stays green → /api/cron/health returns 200, NOT the false 503.
+    expect(report.overall).toBe('green');
   });
 
   /**

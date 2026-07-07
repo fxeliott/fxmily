@@ -154,9 +154,22 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     // rank slot going flat — surfaces red on /admin/system + cron-watch instead
     // of hiding behind a green dashboard. Same anti-silent-drift discipline as
     // every other wired cron. Daily period, TZ-agnostic (periodMs=DAY).
+    //
+    // `expectedSince` is REQUIRED here (mirrors admin_daily_brief / autoheal): the
+    // `20 2 * * *` crontab line AND this `cron.recompute_leaderboard.scan` action
+    // are BRAND NEW on this branch, so on a rolling redeploy every OTHER cron keeps
+    // its historical audit rows (green/amber) while this one has ZERO rows until its
+    // first 02:20 Paris run. Without `expectedSince` that lone gap reads `never_ran`,
+    // which forces report.overall → never_ran → /api/cron/health returns 503 →
+    // cron-watch.yml emails a FALSE hourly cron-outage alert for up to ~24h until the
+    // first run lands (this action is not in the watcher's self-heal map, so it can't
+    // clear itself). With it, the entry is a calm `pending` ("premier run à venir")
+    // until `expectedSince + tolerance` (72h), then flips to a genuine `never_ran`
+    // only if the cron truly never fired.
     action: 'cron.recompute_leaderboard.scan',
     label: 'Leaderboard recompute',
     periodMs: DAY,
+    expectedSince: '2026-07-08T00:00:00Z',
   },
   {
     action: 'cron.dispatch_douglas.scan',

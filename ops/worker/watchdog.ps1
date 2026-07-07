@@ -51,6 +51,14 @@ $TaskPath = '\Fxmily\'
 $TaskPrefix = 'Fxmily-worker-'
 $PipelineNames = @('onboarding', 'verification', 'calendar', 'weekly', 'monthly', 'profile')
 $MaxRepairStreak = 3
+# Tour 17 — auth/quota are MACHINE-WIDE LIVE states. Only honor an authOk:false /
+# exitCode:75 signal from a status.json fresher than this many minutes: a monthly
+# pipeline's status.json can sit for weeks carrying a STALE authOk:false from a
+# past logged-out window, which must NOT redden today's board. A frequently
+# scheduled pipeline (onboarding 20 min / verification 5 min) refreshes well
+# within this window while the PC is on, so a FRESH authOk:false is a real,
+# current outage (the account-switch "IA muette" scenario).
+$AuthSignalMaxAgeMin = 90
 
 $WorkerDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogDir = Join-Path $WorkerDir 'logs'
@@ -99,6 +107,11 @@ $errorLabels = New-Object System.Collections.Generic.List[string]
 $tasksOk = 0
 $repaired = 0
 $missingTasks = New-Object System.Collections.Generic.List[string]
+# Tour 17 — tasks registered with a non-Interactive LogonType (e.g. S4U after a
+# Windows update / reboot silently re-registered them): they look green but every
+# `claude --print` fails (S4U cannot read the Claude OAuth). Auto-repaired via the
+# SAME re-register path as missing tasks (guarded by anyRunning + repairStreak).
+$logonMismatchTasks = New-Object System.Collections.Generic.List[string]
 $anyRunning = $false
 # Logged-out and quota-cap are MACHINE-wide states (one account per box, one
 # shared cooldown stamp), so each label is raised at most once across all
@@ -143,12 +156,17 @@ foreach ($name in $PipelineNames) {
 
   # LogonType must be Interactive: S4U cannot read the Claude OAuth (proven
   # 2026-07-02), so an S4U-registered task runs but every batch fails silently.
-  # Surface it (SIGNAL only - the operator re-installs; a re-register here could
-  # kill an in-flight batch and is already the repair path for MISSING tasks).
+  # Tour 17 — AUTO-REPAIRED now (was SIGNAL-only): a wrong LogonType is fixed by
+  # the SAME re-register path as a missing task (install-worker.ps1 -Force
+  # overwrites the Principal with Interactive). It reuses the identical guards —
+  # skipped while any batch Runs and after MaxRepairStreak failed attempts — so it
+  # is exactly as safe as the missing-task repair. The label is still emitted so
+  # the board records that a repair happened this tick.
   $logonType = $null
   if ($null -ne $task.Principal) { $logonType = [string]$task.Principal.LogonType }
   if ($logonType -and $logonType -ne 'Interactive') {
     $errorLabels.Add("task_logon_type:$name`:$logonType")
+    $logonMismatchTasks.Add($name)
   }
 
   if ($task.State -eq 'Running') { $anyRunning = $true }
@@ -200,20 +218,37 @@ foreach ($name in $PipelineNames) {
   # authOk + exitCode). authOk:false = the pre-flight found NO Claude account
   # logged in (machine-wide -> label once). exitCode:75 = a benign usage/rate
   # cap; the worker is in cooldown and self-resolves next quota window.
+  # Tour 17 — FRESHNESS-GATED: auth/quota are live machine-wide states, so a
+  # STALE status.json (a monthly pipeline that ran weeks ago while logged out)
+  # must not pin the board red/amber forever. Honor the signal only when the
+  # status.json's finishedAt (fallback: file mtime) is within $AuthSignalMaxAgeMin.
   if (Test-Path $statusFile) {
     $st = $null
     try { $st = Get-Content $statusFile -Raw | ConvertFrom-Json } catch {}
     if ($null -ne $st) {
-      if (($st.PSObject.Properties.Name -contains 'authOk') -and ($st.authOk -eq $false)) {
-        if (-not $authLoggedOutSeen) {
-          $errorLabels.Add('claude_auth:logged_out')
-          $authLoggedOutSeen = $true
-        }
+      $stAgeMin = [double]::PositiveInfinity
+      $stInstant = $null
+      if (($st.PSObject.Properties.Name -contains 'finishedAt') -and $st.finishedAt) {
+        try { $stInstant = [DateTime]::Parse([string]$st.finishedAt).ToUniversalTime() } catch {}
       }
-      if (($st.PSObject.Properties.Name -contains 'exitCode') -and ([int]$st.exitCode -eq 75)) {
-        if (-not $quotaCappedSeen) {
-          $errorLabels.Add('claude_quota:capped')
-          $quotaCappedSeen = $true
+      if ($null -eq $stInstant) {
+        try { $stInstant = (Get-Item $statusFile).LastWriteTimeUtc } catch {}
+      }
+      if ($null -ne $stInstant) {
+        $stAgeMin = ((Get-Date).ToUniversalTime() - $stInstant).TotalMinutes
+      }
+      if ($stAgeMin -le $AuthSignalMaxAgeMin) {
+        if (($st.PSObject.Properties.Name -contains 'authOk') -and ($st.authOk -eq $false)) {
+          if (-not $authLoggedOutSeen) {
+            $errorLabels.Add('claude_auth:logged_out')
+            $authLoggedOutSeen = $true
+          }
+        }
+        if (($st.PSObject.Properties.Name -contains 'exitCode') -and ([int]$st.exitCode -eq 75)) {
+          if (-not $quotaCappedSeen) {
+            $errorLabels.Add('claude_quota:capped')
+            $quotaCappedSeen = $true
+          }
         }
       }
     }
@@ -252,9 +287,19 @@ if (Test-Path $StateFile) {
   } catch {}
 }
 
-if ($missingTasks.Count -gt 0) {
+# Tour 17 — re-register when tasks are MISSING or carry a wrong (S4U) LogonType.
+# install-worker.ps1 re-registers each task with `Register-ScheduledTask -Force`,
+# overwriting its Principal with Interactive, so one pass restores a missing task
+# AND corrects an S4U registration.
+$needsReregister = ($missingTasks.Count -gt 0) -or ($logonMismatchTasks.Count -gt 0)
+if ($needsReregister) {
+  $repairReasons = New-Object System.Collections.Generic.List[string]
+  if ($missingTasks.Count -gt 0) { $repairReasons.Add("missing: $($missingTasks -join ', ')") }
+  if ($logonMismatchTasks.Count -gt 0) { $repairReasons.Add("logon-type: $($logonMismatchTasks -join ', ')") }
+  $repairSummary = $repairReasons -join '; '
+
   if ($anyRunning) {
-    Write-Log "SKIP repair - $($missingTasks.Count) task(s) missing but a pipeline is Running (re-register could kill it). Next tick will retry."
+    Write-Log "SKIP repair - re-register needed ($repairSummary) but a pipeline is Running (re-register could kill it). Next tick will retry."
     $errorLabels.Add('repair_deferred:running')
   } elseif ($state.repairStreak -ge $MaxRepairStreak) {
     Write-Log "SKIP repair - $($state.repairStreak) consecutive repairs did not restore health; stopping the loop (operator needed)."
@@ -262,11 +307,14 @@ if ($missingTasks.Count -gt 0) {
   } else {
     $installer = Join-Path $WorkerDir 'install-worker.ps1'
     if (Test-Path $installer) {
-      Write-Log "REPAIR re-registering pipelines (missing: $($missingTasks -join ', ')) via install-worker.ps1 -SkipWatchdog -LogonType Interactive."
+      Write-Log "REPAIR re-registering pipelines ($repairSummary) via install-worker.ps1 -SkipWatchdog -LogonType Interactive."
       try {
-        # Interactive is NON-NEGOTIABLE: S4U cannot read the Claude OAuth.
+        # Interactive is NON-NEGOTIABLE: S4U cannot read the Claude OAuth. The
+        # installer re-registers each task with `Register-ScheduledTask -Force`,
+        # overwriting the Principal, so this both restores a MISSING task and
+        # corrects a wrong (S4U) LogonType in the same pass.
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -SkipWatchdog -LogonType Interactive | Out-Null
-        $repaired += $missingTasks.Count
+        $repaired += ($missingTasks.Count + $logonMismatchTasks.Count)
         $state.repairStreak = [int]$state.repairStreak + 1
         $state.lastRepairAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         Write-Log "REPAIR done (streak $($state.repairStreak)/$MaxRepairStreak)."
@@ -280,7 +328,8 @@ if ($missingTasks.Count -gt 0) {
     }
   }
 } else {
-  # All 6 registered -> whatever streak existed, health is restored.
+  # All 6 registered with the correct LogonType -> whatever streak existed,
+  # health is restored.
   $state.repairStreak = 0
 }
 

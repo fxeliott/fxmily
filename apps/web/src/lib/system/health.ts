@@ -76,6 +76,18 @@ interface HeartbeatExpectation<A extends string = string> {
    * "Jamais exécuté" for a month and drags the masthead to "Pas démarré".
    */
   expectedSince?: string;
+  /**
+   * Tour 17 — labels that, when present in the latest heartbeat's
+   * `metadata.errorLabels`, force this entry to `red` regardless of age — a
+   * SEMANTIC escalation beyond the numeric `errors` count (which only ever
+   * lifts green → amber). Used for machine-wide CRITICAL states the age check
+   * cannot see: `claude_auth:logged_out` means NO Claude account is logged in on
+   * the worker PC, so every AI batch is silently mute even though the watchdog
+   * itself heartbeats on time (green by age, amber by count — both understate a
+   * TOTAL generation outage). This is the "il change parfois de compte Claude"
+   * incident: surfaced loud (red) instead of hidden behind a calm amber.
+   */
+  criticalLabels?: readonly string[];
 }
 
 type CronAction =
@@ -333,6 +345,15 @@ export interface HeartbeatHealthEntry<A extends string = string> {
    */
   errorCount: number;
   /**
+   * Tour 17 — bounded machine-readable labels from the latest run's
+   * `metadata.errorLabels` (e.g. `claude_auth:logged_out`, `claude_quota:capped`,
+   * `task_missing:calendar`). Empty when the run carried none. Drives the
+   * `criticalLabels` red escalation + label-derived host actions — the SEMANTIC
+   * detail the numeric `errorCount` erases (auth lost vs a short token both count
+   * as "1 error" otherwise).
+   */
+  errorLabels: string[];
+  /**
    * True for window-bounded schedules — the UI hides the age/tolerance bar
    * (meaningless between windows) and shows the window note instead.
    */
@@ -362,6 +383,25 @@ export interface CronHealthReport {
  * of audit log volume — Postgres uses the `(action, created_at desc)`
  * index naturally.
  */
+/**
+ * Tour 17 — a machine-wide critical label (`claude_auth:logged_out`) is only
+ * trustworthy while the heartbeat carrying it is RECENT. The watchdog re-emits
+ * the label on EVERY tick a fresh `status.json` still shows the outage (the
+ * benign auth-skip rewrites `status.json` every 5-20 min even with no account),
+ * so a genuine ongoing outage keeps the heartbeat < ~1 tick old and stays red.
+ * Past 3 periods (90 min for the 30-min watchdog, mirroring the watchdog's own
+ * `$AuthSignalMaxAgeMin` production gate) the PC is asleep or the watchdog is
+ * dead: the AGE-based status is the honest signal (amber "PC off overnight",
+ * red "task truly gone"), and a STALE label must not (a) pin the board red after
+ * the account was fixed but the PC slept before re-signalling, nor (b) supersede
+ * the "re-register the watchdog" action when the watchdog itself has died after
+ * its last breath reported a logout. Semantics: red-by-label = the worker is
+ * ALIVE and CURRENTLY unable to generate, not merely off.
+ */
+function criticalLabelLive(ageMs: number | null, periodMs: number): boolean {
+  return ageMs !== null && ageMs <= 3 * periodMs;
+}
+
 async function buildHeartbeatReport<A extends string>(
   expectations: readonly HeartbeatExpectation<A>[],
   now: Date,
@@ -384,6 +424,11 @@ async function buildHeartbeatReport<A extends string>(
   // actually broken. Bounded OR over the (action, createdAt) maxima, each
   // served by the (action, created_at) index; skipped when no rows exist.
   const errorsByAction = new Map<string, number>();
+  // Tour 17 — the bounded label list alongside the numeric count. `errors: 1`
+  // could be a short token OR a logged-out Claude account (AI fully mute); only
+  // the LABELS distinguish them, and only the labels can drive a red escalation
+  // + an actionable host command. Read them in the same pass, at zero extra I/O.
+  const errorLabelsByAction = new Map<string, string[]>();
   if (lastRanByAction.size > 0) {
     const latestRows = await db.auditLog.findMany({
       where: {
@@ -395,10 +440,17 @@ async function buildHeartbeatReport<A extends string>(
       select: { action: true, metadata: true },
     });
     for (const row of latestRows) {
-      const meta = row.metadata as { errors?: unknown } | null;
+      const meta = row.metadata as { errors?: unknown; errorLabels?: unknown } | null;
       const errors = meta && typeof meta.errors === 'number' && meta.errors > 0 ? meta.errors : 0;
       // If two rows share the exact max timestamp, keep the larger error count.
       errorsByAction.set(row.action, Math.max(errorsByAction.get(row.action) ?? 0, errors));
+      // Union the string labels across any rows sharing the max timestamp; drop
+      // non-strings defensively (metadata is `Json` — never trust its shape).
+      if (meta && Array.isArray(meta.errorLabels)) {
+        const labels = meta.errorLabels.filter((l): l is string => typeof l === 'string');
+        const prev = errorLabelsByAction.get(row.action) ?? [];
+        errorLabelsByAction.set(row.action, [...prev, ...labels]);
+      }
     }
   }
 
@@ -441,6 +493,21 @@ async function buildHeartbeatReport<A extends string>(
       status = 'amber';
     }
 
+    // Tour 17 — a machine-wide CRITICAL label forces red regardless of age /
+    // count. `claude_auth:logged_out` = no Claude account is logged in on the
+    // worker PC → EVERY AI batch is mute, yet the watchdog heartbeats on time
+    // (green age) and its single label reads as one "error" (amber). Neither
+    // conveys "generation is fully down". This is the account-switch outage,
+    // surfaced red so the operator acts instead of trusting a calm amber.
+    const errorLabels = errorLabelsByAction.get(expectation.action) ?? [];
+    if (
+      expectation.criticalLabels &&
+      criticalLabelLive(ageMs, expectation.periodMs) &&
+      errorLabels.some((label) => expectation.criticalLabels!.includes(label))
+    ) {
+      status = 'red';
+    }
+
     return {
       action: expectation.action,
       label: expectation.label,
@@ -450,6 +517,7 @@ async function buildHeartbeatReport<A extends string>(
       toleranceMs,
       status,
       errorCount,
+      errorLabels,
       windowed: Boolean(expectation.windowedScheduleParis),
       firstRunDeadline: status === 'pending' ? firstRunDeadline : null,
     };
@@ -675,6 +743,12 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     periodMs: 30 * MIN,
     toleranceMultiplier: 48, // 24h
     expectedSince: '2026-07-04T12:00:00Z',
+    // Tour 17 — the watchdog aggregates the machine-wide auth state of the
+    // worker PC into this heartbeat. `claude_auth:logged_out` (nobody logged in
+    // to `claude`, e.g. after Eliott switched Claude accounts and did not
+    // re-login) means the 6 AI batches generate NOTHING while this heartbeat
+    // stays green by age — the exact "IA muette" report. Escalate it to red.
+    criticalLabels: ['claude_auth:logged_out'],
   },
 ] as const;
 
@@ -769,6 +843,45 @@ const HOST_ACTION_REMEDIATION: Record<
 };
 
 /**
+ * Tour 17 — per-LABEL remediation for machine-wide worker states the watchdog
+ * reports INSIDE `metadata.errorLabels`, independent of any entry's age status.
+ * These are the "changement de compte Claude" surfaces: the AI stops generating
+ * not because a scheduled task died (the heartbeat is green by age) but because
+ * the Claude account it runs on is logged out or rate-capped. Invisible to the
+ * age/count classification, fixable in one command — so they get a first-class
+ * host action derived straight from the label.
+ */
+const LABEL_HOST_ACTIONS: Record<
+  string,
+  {
+    label: string;
+    detail: string;
+    command: string;
+    reference: string;
+    severity: HostActionSeverity;
+  }
+> = {
+  'claude_auth:logged_out': {
+    label: 'Worker · aucun compte Claude connecté',
+    detail:
+      "Aucun compte Claude n'est connecté sur le PC worker : les batchs IA (profils, digests, calendriers, vérifications) ne génèrent plus rien. Reconnecte n'importe lequel de tes comptes, la génération reprend au tick suivant sans rien perdre (les membres en attente sont repris automatiquement).",
+    command: 'claude login',
+    reference: 'ops/worker/README.md',
+    // A logged-out account = the AI is fully mute = a real incident to fix now.
+    severity: 'blocked',
+  },
+  'claude_quota:capped': {
+    label: 'Worker · quota Claude atteint',
+    detail:
+      'Le compte Claude du worker a atteint son quota : les batchs sont en pause et reprennent seuls à la prochaine fenêtre. Pour relancer tout de suite, connecte un autre compte (rotation).',
+    command: 'claude login',
+    reference: 'ops/worker/README.md',
+    // Benign + self-resolving (cooldown then next quota window) → informational.
+    severity: 'pending',
+  },
+};
+
+/**
  * Map a heartbeat entry to a host action WHEN it is host-actionable and in a
  * detectable broken/pending state. Returns null otherwise (green/amber entries,
  * or entries with no known host remediation). `red` and `never_ran` are
@@ -809,14 +922,56 @@ export function buildHostActionsReport(
   cronReport: CronHealthReport,
   workerReport: WorkerHealthReport,
 ): HostActionsReport {
-  const items = [...cronReport.entries, ...workerReport.entries]
+  const allEntries = [...cronReport.entries, ...workerReport.entries];
+
+  // Tour 17 — label-derived actions come first: a machine-wide critical label
+  // (auth lost / quota capped) is MORE specific than the entry's age status. A
+  // heartbeat that is green by age can still carry one; and when a critical
+  // LABEL turned the entry red, the entry's own status action ("re-register the
+  // watchdog") would be WRONG — the watchdog is alive (it is the very thing
+  // reporting the label), only the Claude account is out. So a label action
+  // SUPERSEDES its entry's status action. One action per distinct label, deduped
+  // (the same machine-wide state can be raised on several pipelines' status.json).
+  const labelItems: HostActionItem[] = [];
+  const seenLabels = new Set<string>();
+  const supersededActions = new Set<string>();
+  for (const entry of allEntries) {
+    // A STALE label (heartbeat older than 3 periods) is not a live machine-wide
+    // state: the watchdog is likely asleep or dead, so its age status ("re-
+    // register the watchdog" when red) is the honest action — do NOT let an old
+    // `claude_auth:logged_out` supersede it nor raise a `claude login` for an
+    // account outage that may already be resolved. Mirrors the escalation gate.
+    if (!criticalLabelLive(entry.ageMs, entry.periodMs)) continue;
+    for (const label of entry.errorLabels ?? []) {
+      const remediation = LABEL_HOST_ACTIONS[label];
+      if (!remediation) continue;
+      supersededActions.add(entry.action);
+      if (seenLabels.has(label)) continue;
+      seenLabels.add(label);
+      labelItems.push({
+        key: `label:${label}`,
+        label: remediation.label,
+        detail: remediation.detail,
+        command: remediation.command,
+        reference: remediation.reference,
+        sinceIso: entry.lastRanAt ?? null,
+        severity: remediation.severity,
+      });
+    }
+  }
+
+  // Status-derived actions (dead cron / dead worker task, by age status), minus
+  // entries whose more-specific label action already covers them.
+  const statusItems = allEntries
+    .filter((entry) => !supersededActions.has(entry.action))
     .map(toHostAction)
-    .filter((item): item is HostActionItem => item !== null)
-    .sort((a, b) => {
-      // blocked (0) before pending (1).
-      const rank = (s: HostActionSeverity) => (s === 'blocked' ? 0 : 1);
-      return rank(a.severity) - rank(b.severity);
-    });
+    .filter((item): item is HostActionItem => item !== null);
+
+  const items = [...statusItems, ...labelItems].sort((a, b) => {
+    // blocked (0) before pending (1).
+    const rank = (s: HostActionSeverity) => (s === 'blocked' ? 0 : 1);
+    return rank(a.severity) - rank(b.severity);
+  });
   return { items };
 }
 

@@ -56,6 +56,7 @@ function entry(overrides: { action: string; status: string } & Partial<Record<st
     ageMs: null,
     toleranceMs: 2 * HOUR,
     errorCount: 0,
+    errorLabels: [],
     windowed: false,
     firstRunDeadline: null,
     ...overrides,
@@ -832,6 +833,166 @@ describe('getWorkerHealthReport', () => {
     expect(verification?.status).toBe('amber');
     expect(verification?.errorCount).toBe(3);
   });
+
+  /**
+   * Tour 17 — the account-switch outage. The watchdog aggregates the worker PC's
+   * machine-wide Claude auth state into its heartbeat's `errorLabels`. When
+   * nobody is logged in (`claude_auth:logged_out`, e.g. after Eliott switched
+   * Claude accounts on the terminal and did not re-login), EVERY AI batch is
+   * mute even though the watchdog itself POSTs on time (green by age; its single
+   * label reads as one "error" → amber). The critical label forces the entry —
+   * and the board — RED so the operator acts, instead of trusting a calm amber.
+   */
+  it('forces the worker watchdog RED when its latest heartbeat reports a logged-out Claude account', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'monthly_debrief.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'member_profile_monthly.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      // Watchdog itself heartbeats on time → green by age.
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    // ...but it reports that no Claude account is logged in on the worker PC.
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['claude_auth:logged_out'] },
+      },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    expect(watchdog?.status).toBe('red');
+    expect(watchdog?.errorLabels).toContain('claude_auth:logged_out');
+    expect(report.overall).toBe('red');
+  });
+
+  /**
+   * Tour 17 — a rate/usage cap (`claude_quota:capped`) is BENIGN and self-
+   * resolving (cooldown → next quota window), so it must NOT go red: it stays
+   * amber via the numeric errorCount escalation (it is deliberately NOT in the
+   * entry's `criticalLabels`). Pins the auth/quota split.
+   */
+  it('keeps the worker watchdog amber (not red) when only the Claude quota is capped', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'monthly_debrief.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'member_profile_monthly.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['claude_quota:capped'] },
+      },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    expect(watchdog?.status).toBe('amber');
+    expect(watchdog?.errorLabels).toEqual(['claude_quota:capped']);
+  });
+
+  /**
+   * Tour 17 (adversarial review finding 3) — a STALE logout label must not pin
+   * the board red. Scenario: the watchdog reported a logout, Eliott re-logged,
+   * then the PC slept before the next tick could re-signal. The last heartbeat
+   * (with the label) ages past the 90-min freshness window → the critical-label
+   * escalation no longer fires → the entry falls back to its honest AGE status
+   * (amber "PC off overnight"), instead of a lingering false red. A genuine
+   * ongoing outage keeps the heartbeat fresh (the watchdog re-emits it every
+   * tick a batch still finds no account), so this only relaxes the already-
+   * resolved / PC-asleep case.
+   */
+  it('does not force the worker watchdog RED when the logged-out label is STALE (PC asleep)', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'monthly_debrief.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'member_profile_monthly.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      // Last heartbeat is 3h old (> 90-min freshness window) and carries the label.
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['claude_auth:logged_out'] },
+      },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    // 3h age → amber by age; the STALE label does NOT escalate it to red.
+    expect(watchdog?.status).toBe('amber');
+    expect(report.overall).not.toBe('red');
+  });
 });
 
 describe('getSystemSnapshot', () => {
@@ -1232,5 +1393,103 @@ describe('buildHostActionsReport', () => {
       workerReport([]),
     );
     expect(report.items.map((i) => i.severity)).toEqual(['blocked', 'pending']);
+  });
+
+  /**
+   * Tour 17 — a logged-out Claude account surfaces as a BLOCKED `claude login`
+   * action derived straight from the watchdog heartbeat's label. It SUPERSEDES
+   * the entry's generic status action: the watchdog is alive (it is the very
+   * thing reporting the label), so "re-register the watchdog" would be wrong —
+   * only the account is out.
+   */
+  it('surfaces a logged-out Claude account as a BLOCKED claude-login action, superseding the status action', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN, // fresh heartbeat: the label is a LIVE machine-wide state
+          errorLabels: ['claude_auth:logged_out'],
+        }),
+      ]),
+    );
+    // Exactly one item: the label action, not also the generic re-register one.
+    expect(report.items).toHaveLength(1);
+    const item = report.items[0]!;
+    expect(item.key).toBe('label:claude_auth:logged_out');
+    expect(item.severity).toBe('blocked');
+    expect(item.command).toBe('claude login');
+    expect(item.sinceIso).toBe('2026-07-10T11:40:00Z'); // allow-absolute-date opaque-fixture
+  });
+
+  /** A capped Claude quota is benign/self-resolving → informational (pending). */
+  it('surfaces a capped Claude quota as an informational (pending) claude-login action', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'amber',
+          ageMs: 20 * MIN, // fresh heartbeat
+          errorLabels: ['claude_quota:capped'],
+        }),
+      ]),
+    );
+    const item = report.items.find((i) => i.key === 'label:claude_quota:capped');
+    expect(item?.severity).toBe('pending');
+    expect(item?.command).toBe('claude login');
+  });
+
+  /** The same machine-wide label raised on several entries yields ONE action. */
+  it('deduplicates a machine-wide label reported by several entries into one action', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          ageMs: 20 * MIN, // fresh
+          errorLabels: ['claude_auth:logged_out'],
+        }),
+        entry({
+          action: 'onboarding.batch.pulled',
+          status: 'amber',
+          ageMs: 20 * MIN, // fresh
+          errorLabels: ['claude_auth:logged_out'],
+        }),
+      ]),
+    );
+    const authItems = report.items.filter((i) => i.key === 'label:claude_auth:logged_out');
+    expect(authItems).toHaveLength(1);
+  });
+
+  /**
+   * Tour 17 (adversarial review finding 2) — freshness gate on the CONSUMPTION
+   * side. If the watchdog dies AFTER its last heartbeat reported a logout, that
+   * label persists in the latest audit row while the entry goes red BY AGE. A
+   * stale label must NOT supersede the honest age action: `claude login` would
+   * not revive a dead watchdog task — `re-register the watchdog` is the right
+   * fix. So a stale (> 3 periods old) label is ignored and the status action wins.
+   */
+  it('ignores a STALE logged-out label so the dead-watchdog re-register action wins', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-09T10:00:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 25 * HOUR, // STALE: past 3 × periodMs (3h) → label not live
+          errorLabels: ['claude_auth:logged_out'],
+        }),
+      ]),
+    );
+    // No label action; the age-based status action (re-register) surfaces instead.
+    expect(report.items.some((i) => i.key === 'label:claude_auth:logged_out')).toBe(false);
+    const statusItem = report.items.find((i) => i.key === 'worker.watchdog.heartbeat');
+    expect(statusItem?.command).toBe('pwsh -File ops/worker/install-worker.ps1');
+    expect(statusItem?.severity).toBe('blocked');
   });
 });

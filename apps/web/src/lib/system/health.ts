@@ -338,10 +338,13 @@ export interface HeartbeatHealthEntry<A extends string = string> {
   toleranceMs: number;
   status: CronStatus;
   /**
-   * Errors reported by the most recent run (read from its heartbeat
-   * `metadata.errors`; 0 when the run tracks no per-item errors). A FRESH row
-   * with errorCount > 0 means the run FIRED but failed for some/all members —
-   * invisible to the age-only check, which just sees "it ran".
+   * Problems reported by the most recent run, folded into one count: per-member
+   * AI errors (`metadata.errors`) PLUS delivery failures the run recorded under
+   * its own keys — a failed alert email (`metadata.emailOutcome === 'failed'`)
+   * or permanently-failed Web-Push sends (`metadata.failed`, Tour 18). 0 when the
+   * run tracks none. A FRESH row with errorCount > 0 means the run FIRED but
+   * something failed (some/all members, or the alert email/push) — invisible to
+   * the age-only check, which just sees "it ran".
    */
   errorCount: number;
   /**
@@ -440,8 +443,31 @@ async function buildHeartbeatReport<A extends string>(
       select: { action: true, metadata: true },
     });
     for (const row of latestRows) {
-      const meta = row.metadata as { errors?: unknown; errorLabels?: unknown } | null;
-      const errors = meta && typeof meta.errors === 'number' && meta.errors > 0 ? meta.errors : 0;
+      const meta = row.metadata as
+        | { errors?: unknown; errorLabels?: unknown; emailOutcome?: unknown; failed?: unknown }
+        | null;
+      // Per-member AI errors the run already reports (e.g. verification-scan sums
+      // per-member failures into `metadata.errors`).
+      const memberErrors =
+        meta && typeof meta.errors === 'number' && meta.errors > 0 ? meta.errors : 0;
+      // Tour 18 — DELIVERY failures the board was blind to. The 6 email-nudge
+      // crons (5 overdue nets + the admin daily brief) record a failed send as
+      // `emailOutcome: 'failed'` (NOT an `errors` count), and the Web-Push
+      // dispatcher records permanently-failed sends as a numeric `metadata.failed`
+      // (a bucket distinct from `expired`/410-Gone stale endpoints, so it carries
+      // no routine churn). Neither fed the green -> amber escalation, so a Resend
+      // outage, a missing or bad recipient, or every queued push failing left the
+      // board GREEN with the only trace a Sentry warning — exactly the "fails
+      // without saying so" gap this errors/labels machinery exists to close. Fold
+      // both into the run's effective error count so a fresh heartbeat carrying a
+      // delivery failure escalates to amber (a degradation to surface, self-
+      // clearing on the next clean run). Never red: delivery loss is recoverable,
+      // unlike a logged-out Claude account. `sent` / `skipped` / `not_attempted`
+      // stay green — only a genuine `failed` counts.
+      const emailDeliveryFailed = meta && meta.emailOutcome === 'failed' ? 1 : 0;
+      const pushDeliveryFailures =
+        meta && typeof meta.failed === 'number' && meta.failed > 0 ? meta.failed : 0;
+      const errors = memberErrors + emailDeliveryFailed + pushDeliveryFailures;
       // If two rows share the exact max timestamp, keep the larger error count.
       errorsByAction.set(row.action, Math.max(errorsByAction.get(row.action) ?? 0, errors));
       // Union the string labels across any rows sharing the max timestamp; drop

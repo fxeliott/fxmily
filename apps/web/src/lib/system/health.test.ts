@@ -523,6 +523,122 @@ describe('getCronHealthReport', () => {
   });
 
   /**
+   * Tour 18 — the board was BLIND to delivery failures. The 6 email-nudge crons
+   * record a failed alert send as `emailOutcome: 'failed'` (not an `errors`
+   * count), so a Resend outage / missing-or-bad recipient left the cron
+   * green-by-age with overdue members and nobody alerted — the "fails without
+   * saying so" gap. Folding `emailOutcome: 'failed'` into the error count now
+   * escalates it to amber.
+   */
+  it('escalates a green-by-age email-nudge cron to amber when its alert email failed (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    // weekly-report overdue net ran 12h ago → green on age (period = 1 day)…
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_report_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    // …but the alert email to the admin failed to send.
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.weekly_report_overdue.scan',
+        metadata: { overdueCount: 3, emailOutcome: 'failed' },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.weekly_report_overdue.scan');
+
+    expect(scan?.status).toBe('amber');
+    expect(scan?.errorCount).toBe(1);
+  });
+
+  /**
+   * Tour 18 — a benign email outcome (`sent` / `skipped` / `not_attempted`) must
+   * NOT escalate: only a genuine `failed` counts, so a normal run stays green and
+   * the board is not flooded with false amber.
+   */
+  it('leaves an email-nudge cron green when the alert email was not a failure (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.calendar_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.calendar_overdue.scan',
+        metadata: { overdueCount: 0, emailOutcome: 'not_attempted' },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.calendar_overdue.scan');
+
+    expect(scan?.status).toBe('green');
+    expect(scan?.errorCount).toBe(0);
+  });
+
+  /**
+   * Tour 18 — the Web-Push dispatcher records permanently-failed sends in a
+   * numeric `metadata.failed`, a bucket DISTINCT from `expired` (410-Gone stale
+   * endpoints, routine churn). A fresh dispatch that genuinely failed to reach
+   * members escalates green-by-age → amber.
+   */
+  it('escalates the push dispatcher to amber when a fresh run reported failed sends (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    // dispatch-notifications period = 2min → 60s old = green by age…
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.dispatch_notifications.scan',
+        _max: { createdAt: new Date(now.getTime() - 60_000) },
+      },
+    ]);
+    // …but 3 pushes permanently failed to send (expired stale endpoints excluded).
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.dispatch_notifications.scan',
+        metadata: { sent: 10, expired: 2, failed: 3 },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const dispatcher = report.entries.find((e) => e.action === 'cron.dispatch_notifications.scan');
+
+    expect(dispatcher?.status).toBe('amber');
+    expect(dispatcher?.errorCount).toBe(3);
+  });
+
+  /**
+   * Tour 18 — a dispatcher run with only `expired` (410-Gone stale endpoints) and
+   * `failed: 0` must stay green: expired endpoints are routine churn purged by
+   * their own cron, not a delivery failure.
+   */
+  it('leaves the push dispatcher green when only stale endpoints expired, none failed (Tour 18)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.dispatch_notifications.scan',
+        _max: { createdAt: new Date(now.getTime() - 60_000) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'cron.dispatch_notifications.scan',
+        metadata: { sent: 10, expired: 4, failed: 0 },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const dispatcher = report.entries.find((e) => e.action === 'cron.dispatch_notifications.scan');
+
+    expect(dispatcher?.status).toBe('green');
+    expect(dispatcher?.errorCount).toBe(0);
+  });
+
+  /**
    * Why this matters : the report's entries.length is fixed (one per known cron
    * action). Adding a new cron must require an explicit update to
    * `EXPECTATIONS` — drift between code + crontab is a high-risk class of bug.

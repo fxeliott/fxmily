@@ -14,6 +14,8 @@
                   - disabled task  -> Enable-ScheduledTask (surgical)
                   - missing task   -> re-register the 6 via install-worker.ps1
                                       -SkipWatchdog -LogonType Interactive
+                  - wrong LogonType (e.g. S4U) -> re-register the 6 the same
+                                      way (tour 17; was SIGNAL-only before)
                 REPAIR IS SKIPPED while any pipeline task is Running (a
                 re-register could kill an in-flight claude batch) and after
                 3 consecutive repair attempts that did not restore health

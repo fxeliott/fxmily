@@ -21,7 +21,7 @@ Fxmily est un **outil de suivi comportemental** — pas un outil d'analyse de ma
 
 Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service réglementé AMF — c'est un outil interne de la formation Fxmily d'Eliot, à destination de ses membres exclusivement.
 
-**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 complet + V2.x mid-flight (**J0 → J10 + V1.2 §21 training mode + V1.3 §23 training debrief + V1.4 §25 monthly debrief IA + V1.5 + V1.5.1 + V1.5.2 + V1.5 §27 mindset QCM + V1.6 + V1.7/V1.7.1/V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V1.10 sec + V1.11 batch + V1.12 P1-P8 hardening + V2.0 HabitLog backend + V2.1.0→V2.1.6 TRACK frontend + DS-v2 + V2.2 correlation 5-kinds + T5 track-record public split-out + V2.3 pre-trade circuit breaker ADR-003 + V2.3.1/.2 polish + V2.3 ext #2 analytics + V2.3 ext #4 correlation per-reason TIER 0 différenciateur + V2.4 Phase A.1 onboarding interview backend + V2.4 Phase A.2 batch local Claude pipeline analyzer ADR-004 + V2.4 Phase B wizard frontend membre + V2.4 Phase C admin tab profile pseudonymisé § 18 closure**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1618/1618** verts. 0 CVE / 0 Dependabot alert.
+**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 complet + V2.x mid-flight (**J0 → J10 + V1.2 §21 training mode + V1.3 §23 training debrief + V1.4 §25 monthly debrief IA + V1.5 + V1.5.1 + V1.5.2 + V1.5 §27 mindset QCM + V1.6 + V1.7/V1.7.1/V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V1.10 sec + V1.11 batch + V1.12 P1-P8 hardening + V2.0 HabitLog backend + V2.1.0→V2.1.6 TRACK frontend + DS-v2 + V2.2 correlation 5-kinds + T5 track-record public split-out + V2.3 pre-trade circuit breaker ADR-003 + V2.3.1/.2 polish + V2.3 ext #2 analytics + V2.3 ext #4 correlation per-reason TIER 0 différenciateur + V2.4 Phase A.1 onboarding interview backend + V2.4 Phase A.2 batch local Claude pipeline analyzer ADR-004 + V2.4 Phase B wizard frontend membre + V2.4 Phase C admin tab profile pseudonymisé § 18 closure**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **5396/5396** verts (365 fichiers, CI main 2026-07-07). 0 CVE / 0 Dependabot alert.
 
 ---
 
@@ -33,7 +33,7 @@ Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service r�
 - **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
 - **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Claude en local** (`claude --print` batch Max, $0 API marginal — rapports IA hebdo/mensuel + analyse onboarding, Opus 4.8 §8)
 - **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
-- **Vitest 4** (**1618/1618** verts post V2.4 Phase C) + **React Testing Library** + **Playwright** (20 specs `apps/web/tests/e2e/` auth-gate + 5 happy-path J5/J6/V1.5/V2.3/V2.4) — wired J1+
+- **Vitest 4** (**5396/5396** verts, 365 fichiers — CI main 2026-07-07) + **React Testing Library** + **Playwright** (**62 specs** `apps/web/tests/e2e/`, 4 shards CI : auth-gate + happy-paths + parcours membre/admin) — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
 
 ## Structure du monorepo

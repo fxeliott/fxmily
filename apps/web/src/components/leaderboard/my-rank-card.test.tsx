@@ -81,3 +81,29 @@ describe('MyRankCard — low-score alert vs podium', () => {
     expect(screen.getByText(PODIUM_LINE)).toBeTruthy();
   });
 });
+
+describe('MyRankCard — honest gap to the podium', () => {
+  // Members are ranked on the FULL-PRECISION composite, but the card shows the
+  // ROUNDED score. So an off-podium member can share the rounded score of the
+  // 3rd place (84.2 and 84.4 both display 84), or lose the podium on a tie-break.
+  it('never shows "il te manque 0 point" when the rounded gap is zero (off-podium)', () => {
+    // rank 4, score 60 == thirdScore 60: strictly behind on precision, tied on
+    // the displayed integer, and well above the low-score threshold.
+    const { container } = render(
+      <MyRankCard me={row({ rank: 4, score: 60 })} totalRanked={10} thirdScore={60} />,
+    );
+
+    expect(container.textContent).not.toMatch(/te manque\s*0\s*point/i);
+    // Falls through to the truthful generic encouragement instead.
+    expect(container.textContent).toMatch(/pour grimper dans le classement/i);
+  });
+
+  it('shows the honest positive gap when the member is genuinely behind', () => {
+    const { container } = render(
+      <MyRankCard me={row({ rank: 4, score: 60 })} totalRanked={10} thirdScore={70} />,
+    );
+
+    expect(container.textContent).toMatch(/te manque\s*10\s*points/i);
+    expect(container.textContent).toMatch(/pour entrer dans le top 3/i);
+  });
+});

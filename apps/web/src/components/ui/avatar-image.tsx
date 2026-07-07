@@ -22,6 +22,18 @@ export interface AvatarImageProps {
  */
 export function AvatarImage({ url, firstName, size }: AvatarImageProps): React.ReactElement | null {
   const [failed, setFailed] = useState(false);
+  // Reset the error latch when a NEW url arrives (the officially-supported
+  // "adjust state while rendering on a prop change" pattern, same as
+  // avatar-crop-editor.tsx). Without it `failed` is a one-way latch: once an old
+  // url 404s and trips `setFailed(true)`, this SAME persistent instance (the
+  // parent Avatar renders it with no `key`) would keep hiding the image, so a
+  // freshly uploaded valid photo — or a corrected url after router.refresh() —
+  // would stay masked behind the initials until a full page reload.
+  const [prevUrl, setPrevUrl] = useState(url);
+  if (prevUrl !== url) {
+    setPrevUrl(url);
+    setFailed(false);
+  }
   if (failed) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- storage-agnostic src (local API path or absolute object-store URL); photo is already a normalized 512px square WebP.

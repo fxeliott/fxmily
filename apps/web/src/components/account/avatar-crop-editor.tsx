@@ -200,6 +200,16 @@ export function AvatarCropEditor({
             draggable={false}
             onLoad={(e) => {
               const el = e.currentTarget;
+              // A file the browser "loads" but decodes to zero intrinsic size
+              // (an SVG with no width/height, a corrupt raster) fires onLoad, NOT
+              // onError. Left unguarded it makes baseScale Infinity → NaN crop
+              // coords → `ctx.drawImage` is a silent spec no-op → we would export
+              // a BLANK 512² WebP and cheerfully report "Photo enregistrée". Treat
+              // it as undecodable so the caller shows the actionable message.
+              if (el.naturalWidth === 0 || el.naturalHeight === 0) {
+                onDecodeError();
+                return;
+              }
               setNatural({ w: el.naturalWidth, h: el.naturalHeight });
             }}
             onError={onDecodeError}

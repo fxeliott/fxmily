@@ -47,10 +47,16 @@ export function MyRankCard({
 }: MyRankCardProps): React.ReactElement {
   const ranked = me.rank !== null && me.score !== null;
   const onPodium = ranked && me.rank !== null && me.rank <= 3;
-  const gapToPodium =
-    ranked && !onPodium && thirdScore !== null && me.score !== null
-      ? Math.max(0, thirdScore - me.score)
-      : null;
+  // Honest gap to the podium, in DISPLAYED (rounded) points. Ranking is decided
+  // on the full-precision composite, so a rank-4 member can share the rounded
+  // score of rank-3 (84.2 and 84.4 both show 84) or lose the podium purely on a
+  // tie-break. Only surface the gap when it is STRICTLY positive: a rounded gap
+  // of 0 (or a negative clamped away) must NOT render "il te manque 0 point pour
+  // entrer dans le top 3" (self-contradictory for an off-podium member) — it
+  // falls through to the generic "continue pour grimper" line instead.
+  const rawGap =
+    ranked && !onPodium && thirdScore !== null && me.score !== null ? thirdScore - me.score : null;
+  const gapToPodium = rawGap !== null && rawGap > 0 ? rawGap : null;
 
   // Personalized signals (read-time, migration-free — same `breakdown` the card
   // already holds). `weakest` = the lever with the most room to climb, so the

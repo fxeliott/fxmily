@@ -120,6 +120,28 @@ COPY --chown=fxmily:fxmily --from=builder /repo/apps/web/.next/static /app/apps/
 # client (some Prisma 7 fixtures need the engine binary near the JS).
 COPY --chown=fxmily:fxmily --from=builder /repo/apps/web/src/generated/prisma /app/apps/web/src/generated/prisma
 
+# --- sharp native binary (MT5-proof image normalisation) --------------------
+# sharp ≥0.33 loads its prebuilt binary through a DYNAMIC
+# `require('@img/sharp-<platform>')`. Next's standalone file tracer only follows
+# STATIC imports, so it copies sharp's JS but NOT the `@img/sharp-linux-x64`
+# (+ `@img/sharp-libvips-linux-x64`) binary packages. The result: `import sharp`
+# (lib/uploads/normalize-image.ts) throws "Could not load the sharp module" at
+# MODULE LOAD, so every request to /api/uploads — the only sharp consumer —
+# returns a bare 500 (incl. GET), i.e. proof uploads are impossible. Installing
+# the exact, platform-pinned sharp into the standalone root restores the runtime
+# require. Keep the version in lock-step with apps/web/package.json (`sharp`).
+# `--no-save`/`--no-package-lock` keep it out of any manifest; `--os`/`--cpu`
+# fetch only the linux/x64 prebuilt (no source compile, no toolchain needed).
+# Installed into the app dir (`/app/apps/web`) — the FIRST `node_modules` Node
+# resolves from `apps/web/server.js`, so this complete copy shadows any partial,
+# binary-less `sharp` the tracer may have left higher up the tree.
+RUN cd /app/apps/web \
+ && npm install --no-save --no-package-lock --no-audit --no-fund \
+      --os=linux --cpu=x64 sharp@0.35.3 \
+ && test -d /app/apps/web/node_modules/@img \
+ && node -e "require('/app/apps/web/node_modules/sharp'); console.log('[docker] sharp native binary OK')" \
+ && chown -R fxmily:fxmily /app/apps/web/node_modules/sharp /app/apps/web/node_modules/@img
+
 USER fxmily
 EXPOSE 3000
 

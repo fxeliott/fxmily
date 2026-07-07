@@ -97,10 +97,18 @@ services:
     # `process.env.UPLOADS_DIR` FIRST (apps/web/src/lib/storage/local.ts:44), and
     # web.env historically set `UPLOADS_DIR=/opt/fxmily/.uploads` — a path that,
     # WITHOUT this second mount, lived in the container's ephemeral overlay layer
-    # (wiped on every deploy). Mounting the same volume on both paths makes the
-    # proofs persistent whether UPLOADS_DIR is set, unset, or points at either
-    # location. Removing UPLOADS_DIR from web.env is the clean fix (operator
-    # action); this additive mount is the belt to that suspenders.
+    # (wiped on every deploy).
+    #
+    # ⚠ CAVEAT (2026-07-08, runtime-proven): this file is NOT synced to the host
+    # by deploy.yml (only ops/cron + ops/scripts are scp'd), so the second mount
+    # below may be ABSENT on prod. The entrypoint (ops/docker/docker-entrypoint.sh)
+    # is the layer that actually guarantees durability: it pins an unset/blank
+    # UPLOADS_DIR to `/app/.uploads` and symlink-routes any unmounted UPLOADS_DIR
+    # into the volume. An UNSET UPLOADS_DIR without that entrypoint default would
+    # land at `<cwd>/.uploads` = `/app/apps/web/.uploads` (Next standalone chdirs
+    # to apps/web) — outside BOTH mounts = silent data-loss. Removing UPLOADS_DIR
+    # from web.env (operator action) is therefore safe ONLY once an image with the
+    # entrypoint default is deployed.
     volumes:
       - fxmily-uploads:/app/.uploads
       - fxmily-uploads:/opt/fxmily/.uploads

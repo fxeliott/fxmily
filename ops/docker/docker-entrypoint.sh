@@ -41,9 +41,39 @@ set -e
 mkdir -p /app/.uploads
 chown -R fxmily:fxmily /app/.uploads 2>/dev/null || true
 
-# 2. UPLOADS_DIR override routing (see fact #2 above).
+# 2. UPLOADS_DIR routing — normalise BEFORE using (adversarial-review fixes):
+#
+#    a. ABSENT/blank (P1): the app's fallback is `<cwd>/.uploads`, and the Next
+#       standalone server does `process.chdir(__dirname)` so cwd is
+#       `/app/apps/web`, NOT `/app` — the fallback would land at
+#       `/app/apps/web/.uploads`, OUTSIDE both volume mounts: writes succeed
+#       (uid 1001 owns /app) but live in the ephemeral overlay and are wiped on
+#       the next deploy. Silent data-loss. So an unset/blank UPLOADS_DIR is
+#       pinned to the persistent volume here (env survives `exec setpriv`).
+#    b. TRAILING SLASH (P2): `ln -sfn target "$UD/"` is rejected by symlink(2)
+#       (ENOENT) when the path does not exist yet — with `set -e` that would
+#       crash-loop the container. Strip trailing slashes first (also restores
+#       the `/app/.uploads/` == canonical skip).
+#    c. RELATIVE PATH (P2): the shell would resolve it against /app while
+#       Node's `path.resolve` resolves against /app/apps/web — two different
+#       places, symlink useless, writes silently ephemeral. Force absolute or
+#       fall back to the canonical volume.
 UD="${UPLOADS_DIR:-}"
-if [ -n "$UD" ] && [ "$UD" != "/app/.uploads" ]; then
+while [ "${UD%/}" != "$UD" ]; do UD="${UD%/}"; done
+case "$UD" in
+  /*) ;; # absolute — keep
+  '')
+    echo '[entrypoint] UPLOADS_DIR unset/blank -> pinning to /app/.uploads (persistent volume)'
+    UD='/app/.uploads'
+    ;;
+  *)
+    echo "[entrypoint] UPLOADS_DIR is not absolute ('$UD') -> falling back to /app/.uploads" >&2
+    UD='/app/.uploads'
+    ;;
+esac
+export UPLOADS_DIR="$UD"
+
+if [ "$UD" != "/app/.uploads" ]; then
   if [ -d "$UD" ] && [ ! -L "$UD" ]; then
     # Already a real directory (a proper mount of the volume once the host
     # compose is fixed, or a stray ephemeral dir) — just make it writable.

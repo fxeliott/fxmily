@@ -88,6 +88,17 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,
+  // `sharp` (MT5-proof normalisation, `lib/uploads/normalize-image.ts`) is a
+  // native module: since 0.33 it loads its platform binary via a DYNAMIC
+  // `require('@img/sharp-<platform>')` that the webpack/NFT static analysis
+  // cannot follow. Declaring it external stops Next from trying to bundle it
+  // and forces a plain Node `require` at runtime, resolved from `node_modules`.
+  // Paired with the Dockerfile.prod runner step that installs the linux/x64
+  // binary INTO the standalone output — the static file tracer misses the
+  // dynamic `@img/*` require, so without that step `import sharp` throws at
+  // module load and every /api/uploads request 500s (incl. GET, since the
+  // whole route module fails to evaluate). See ops/docker/Dockerfile.prod.
+  serverExternalPackages: ['sharp'],
   // V2.3 post-ship perf hardening — explicit per-package tree-shaking for
   // `lucide-react`. 111+ files across the codebase do `import { X, Y, Z }
   // from 'lucide-react'`. While Next 16 + modern bundlers tree-shake named

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import path from 'node:path';
 
 import { NextResponse } from 'next/server';
 
@@ -231,28 +230,14 @@ export async function POST(req: Request): Promise<Response> {
     readUrl = result.readUrl;
   } catch (err) {
     console.error('[uploads] storage.put failed', err);
-    // TEMP DIAGNOSTIC (revert after root-cause) — surface the EXACT denied path,
-    // syscall, resolved upload root and effective uid so we can tell WHERE the
-    // write is being refused (auth-gated, demo-only debugging).
-    const e = err as NodeJS.ErrnoException;
-    const uploadsDirEnv = process.env.UPLOADS_DIR ?? null;
-    const resolvedRoot =
-      uploadsDirEnv && uploadsDirEnv.trim().length > 0
-        ? path.resolve(uploadsDirEnv)
-        : path.resolve(process.cwd(), '.uploads');
-    return NextResponse.json(
-      {
-        error: 'storage_failed',
-        stage: 'put',
-        code: e?.code ?? null,
-        syscall: e?.syscall ?? null,
-        path: e?.path ?? null,
-        resolvedRoot,
-        uploadsDirEnv,
-        uid: typeof process.getuid === 'function' ? process.getuid() : null,
-      },
-      { status: 500 },
-    );
+    // `stage` + `code` are safe observability fields (no message/PII, no server
+    // paths) so a storage failure can be told apart from a DB failure without
+    // server logs. The richer diagnostic (syscall/path/root/uid) that once
+    // lived here was a TEMP root-causing aid — it leaked server topology to
+    // any authenticated member and must NOT come back in the response body;
+    // the console.error above already carries the full error server-side.
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : null;
+    return NextResponse.json({ error: 'storage_failed', stage: 'put', code }, { status: 500 });
   }
 
   // S3 — create the proof row in the same request (server-derived hash).

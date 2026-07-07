@@ -1,32 +1,61 @@
 #!/bin/sh
 # Fxmily production entrypoint.
 #
-# Self-heals the uploads volume ownership, then drops privileges. The
-# `fxmily-uploads` named volume (docker-compose.prod.yml) can be ROOT-owned when
-# it pre-dates the image's `chown /app/.uploads` (S10) or was first initialised
-# from the historical `UPLOADS_DIR=/opt/fxmily/.uploads` mount the image never
-# created. Docker does NOT re-initialise a non-empty volume, so a root-owned one
-# makes the non-root app (uid 1001) EACCES on the first write →
-# `LocalStorageAdapter.put` throws → /api/uploads answers `storage_failed`.
-# Runtime-proven.
+# Heals the uploads directory ownership + routing, then drops privileges. We
+# start as root ONLY to fix the mount(s), then exec the server as the
+# unprivileged `fxmily` user (uid 1001) via setpriv (util-linux, already in the
+# image). Net runtime user is unchanged; no manual host `chown` is ever required.
 #
-# The chown MUST be recursive: the write path is `<root>/proofs/{userId}/…`, and
-# a real prod volume already carries root-owned SUBDIRECTORIES (`proofs/`, legacy
-# `trades/`/`annotations/`/`training/` media from before non-root uid 1001). A
-# root-only chown fixes the mount root but leaves `proofs/` root-owned, so
-# `mkdir -p proofs/{userId}` still EACCES — runtime-reproduced against the
-# deployed image with a root-owned `proofs/` subdir. `chown -R` heals the whole
-# tree (idempotent, uploads media is small; runs once at each container start).
+# --- Why this exists (runtime-proven root cause) -----------------------------
+# Two independent facts combine into an `/api/uploads` 500:
 #
-# We start as root ONLY to chown the mount(s), then exec the server as the
-# unprivileged `fxmily` user via setpriv (util-linux, already in the image). Net
-# runtime user is unchanged (1001); no manual host `chown` is ever required.
+#  1. The `fxmily-uploads` named volume (docker-compose.prod.yml) is mounted at
+#     `/app/.uploads` and can be ROOT-owned (it pre-dates the image's S10
+#     `chown /app/.uploads`, or carries root-owned SUBDIRS — `proofs/`, legacy
+#     `trades/`/`annotations/`/`training/` media from before uid 1001). Docker
+#     never re-initialises a non-empty volume, so a non-root app EACCESes on the
+#     first write. The recursive chown below heals the whole tree.
+#
+#  2. `web.env` sets `UPLOADS_DIR=/opt/fxmily/.uploads`, but the HOST compose
+#     file predates the Tour-14 second mount and the deploy pipeline NEVER syncs
+#     docker-compose.prod.yml to the host (deploy.yml only scp's cron scripts).
+#     So on prod that path is NOT a mounted volume: `LocalStorageAdapter` does
+#     `fs.mkdir('/opt/fxmily/.uploads/proofs/{userId}', {recursive:true})`, which
+#     walks up to the non-existent `/opt/fxmily` and tries to create it under the
+#     root-owned `/opt` as uid 1001 -> `EACCES` on `mkdir /opt/fxmily`
+#     (runtime-captured: syscall=mkdir path=/opt/fxmily uid=1001). Even if it
+#     could write, the bytes would live in the ephemeral overlay and be WIPED on
+#     every deploy (data-loss on the S3 anti-lie proofs).
+#
+# We can fix neither the host compose nor web.env from the image, so we route
+# `UPLOADS_DIR` INTO the real persistent volume with a symlink: writes land in
+# `/app/.uploads` (mounted, durable) while the app still honours its configured
+# path. Self-healing, no host change. If the host compose is later fixed to mount
+# the volume at `UPLOADS_DIR` too, that path exists as a real directory and we
+# just chown it instead (both mounts are the same volume — no conflict).
 set -e
 
-for d in /app/.uploads /opt/fxmily/.uploads; do
-  if [ -d "$d" ]; then
-    chown -R fxmily:fxmily "$d" 2>/dev/null || true
+# 1. Canonical persistent volume — always present (created by the Dockerfile,
+#    mounted by compose). Recursive chown so pre-existing root-owned subdirs
+#    become writable by uid 1001.
+mkdir -p /app/.uploads
+chown -R fxmily:fxmily /app/.uploads 2>/dev/null || true
+
+# 2. UPLOADS_DIR override routing (see fact #2 above).
+UD="${UPLOADS_DIR:-}"
+if [ -n "$UD" ] && [ "$UD" != "/app/.uploads" ]; then
+  if [ -d "$UD" ] && [ ! -L "$UD" ]; then
+    # Already a real directory (a proper mount of the volume once the host
+    # compose is fixed, or a stray ephemeral dir) — just make it writable.
+    chown -R fxmily:fxmily "$UD" 2>/dev/null || true
+  else
+    # Absent (current prod) or already our symlink -> (re)point it at the real
+    # persistent volume. `ln -sfn` repoints an existing symlink without
+    # dereferencing it, and replaces a stray file; the real-dir case above never
+    # reaches here so we never nest a link inside a directory.
+    mkdir -p "$(dirname "$UD")"
+    ln -sfn /app/.uploads "$UD"
   fi
-done
+fi
 
 exec setpriv --reuid=fxmily --regid=fxmily --init-groups "$@"

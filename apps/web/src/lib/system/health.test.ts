@@ -122,6 +122,11 @@ describe('getCronHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 10 * HOUR) },
       },
       {
+        // Leaderboard nightly ranking recompute (period DAY, age 10h → green).
+        action: 'cron.recompute_leaderboard.scan',
+        _max: { createdAt: new Date(now.getTime() - 10 * HOUR) },
+      },
+      {
         action: 'cron.dispatch_douglas.scan',
         _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
       },
@@ -215,7 +220,7 @@ describe('getCronHealthReport', () => {
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(20);
+    expect(report.entries).toHaveLength(21);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -715,11 +720,13 @@ describe('getCronHealthReport', () => {
    * a self-healer nobody watches is the blind spot the worker layer had).
    * Tour 15 raised it 19 → 20 (the daily admin brief — a STANDING report that
    * heartbeats every run, so a silently broken brief cron surfaces red).
+   * Leaderboard raised it 20 → 21 (the nightly ranking recompute — a silent
+   * failure quietly freezes /classement on a stale day, so it is monitored too).
    */
-  it('always returns exactly 20 entries (Tour 15 — added the daily admin brief)', async () => {
+  it('always returns exactly 21 entries (leaderboard — added the ranking recompute)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(20);
+    expect(report.entries).toHaveLength(21);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -744,6 +751,8 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.autoheal.heartbeat');
     // Tour 15 — daily admin brief heartbeat (standing report, 07:05 Paris).
     expect(report.entries.map((e) => e.action)).toContain('cron.admin_daily_brief.scan');
+    // Leaderboard — nightly ranking recompute heartbeat (02:20 Paris).
+    expect(report.entries.map((e) => e.action)).toContain('cron.recompute_leaderboard.scan');
   });
 
   /**

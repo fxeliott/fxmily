@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from 'next-auth';
 
+import { isPublic } from '@/lib/auth/public-paths';
+
 /**
  * Edge-compatible Auth.js config (no Prisma, no argon2 imports).
  *
@@ -8,35 +10,11 @@ import type { NextAuthConfig } from 'next-auth';
  * that the proxy keeps starting up fast — heavy work (DB lookups, password
  * verification) lives in `auth.ts`.
  *
+ * The public-route boundary lives in `@/lib/auth/public-paths` (single source
+ * of truth, shared with the AppShell chrome mirror — see that module's doc).
+ *
  * Reference: https://authjs.dev/getting-started/migrating-to-v5
  */
-
-const PUBLIC_PREFIXES = ['/api/auth', '/legal', '/_next', '/favicon'];
-// `/offline` (Tour 15) — the PWA offline fallback. It must be public so the
-// service worker can pre-cache it at install (the fetch would 307→/login
-// otherwise) and so an anonymous member who loses connectivity still sees the
-// calm offline page instead of an auth redirect. Purely informational, no data.
-// `/opengraph-image` (Tour 15) — link-preview crawlers (WhatsApp, X, Slack)
-// never carry a session; runtime-proven 307→/login without this entry, which
-// means NO link preview at all. Static brand image, no data.
-const PUBLIC_EXACT = new Set([
-  '/',
-  '/login',
-  '/forgot-password',
-  '/rejoindre',
-  '/offline',
-  '/opengraph-image',
-]);
-
-function isPublic(pathname: string): boolean {
-  if (PUBLIC_EXACT.has(pathname)) return true;
-  if (pathname.startsWith('/onboarding/')) return true;
-  if (pathname.startsWith('/reset-password')) return true;
-  for (const prefix of PUBLIC_PREFIXES) {
-    if (pathname.startsWith(prefix)) return true;
-  }
-  return false;
-}
 
 export const authConfig = {
   pages: {

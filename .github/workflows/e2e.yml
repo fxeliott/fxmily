@@ -148,6 +148,17 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
 
+      # The GitHub Ubuntu runners ship Microsoft apt repos (azure-cli,
+      # microsoft-prod) that intermittently serve a corrupt InRelease
+      # ("Clearsigned file isn't valid, got 'NOSPLIT'"), which makes the
+      # `apt-get update` inside `playwright install-deps` exit 100 and kills a
+      # random shard in ~47s before any test runs (2 different shards on
+      # 2026-07-07 alone, both green on re-run). Chromium's system libs come
+      # from the Ubuntu archive, not these repos — dropping them removes the
+      # flake without losing anything the job uses.
+      - name: Drop flaky Microsoft apt sources (install-deps NOSPLIT flake)
+        run: sudo find /etc/apt/sources.list.d -type f \( -name '*microsoft*' -o -name '*azure*' \) -print -delete
+
       - name: Install Playwright browsers + system deps
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @fxmily/web exec playwright install --with-deps chromium

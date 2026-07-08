@@ -33,6 +33,9 @@ vi.mock('@/lib/env', () => ({
   },
 }));
 
+import { currentParisWeekStart } from '@/lib/calendar/week';
+import { shiftLocalDate } from '@/lib/checkin/timezone';
+
 const { POST, GET } = await import('./route');
 
 beforeEach(() => {
@@ -40,10 +43,14 @@ beforeEach(() => {
   reportErrorMock.mockReset();
 });
 
-function makeRequest(opts: { token?: string; ip: string }): Request {
+function makeRequest(opts: { token?: string; ip: string; body?: unknown }): Request {
   const url = 'https://app.fxmilyapp.com/api/admin/calendar-batch/pull';
   const headers: Record<string, string> = { 'x-forwarded-for': opts.ip };
   if (opts.token !== undefined) headers['x-admin-token'] = opts.token;
+  if (opts.body !== undefined) {
+    headers['content-type'] = 'application/json';
+    return new Request(url, { method: 'POST', headers, body: JSON.stringify(opts.body) });
+  }
   return new Request(url, { method: 'POST', headers });
 }
 
@@ -86,6 +93,57 @@ describe('POST /api/admin/calendar-batch/pull — happy path', () => {
     const body = await res.json();
     expect(body).toEqual(fakeEnvelope);
     expect(loadMock).toHaveBeenCalledWith({});
+  });
+});
+
+describe('POST /api/admin/calendar-batch/pull — optional weekStart catch-up body', () => {
+  // Relative anchors (never a hard-coded future date): current Paris Monday
+  // and shifts of it, computed with the same pure helpers the route uses.
+  const currentMonday = currentParisWeekStart();
+  const pastMonday = shiftLocalDate(currentMonday, -7);
+  const tooOldMonday = shiftLocalDate(currentMonday, -35);
+  const notAMonday = shiftLocalDate(currentMonday, 2);
+
+  it('accepts a past Monday within range and forwards it to the loader', async () => {
+    loadMock.mockResolvedValueOnce({ weekStart: pastMonday, entries: [] });
+
+    const res = await POST(
+      makeRequest({ token: TEST_TOKEN, ip: '10.80.0.6', body: { weekStart: pastMonday } }) as never,
+    );
+    expect(res.status).toBe(200);
+    expect(loadMock).toHaveBeenCalledWith({ weekStart: pastMonday });
+  });
+
+  it('rejects a non-Monday weekStart with 400', async () => {
+    const res = await POST(
+      makeRequest({ token: TEST_TOKEN, ip: '10.80.0.7', body: { weekStart: notAMonday } }) as never,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('invalid_week_start');
+    expect(loadMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a weekStart older than 28 days with 400', async () => {
+    const res = await POST(
+      makeRequest({
+        token: TEST_TOKEN,
+        ip: '10.80.0.8',
+        body: { weekStart: tooOldMonday },
+      }) as never,
+    );
+    expect(res.status).toBe(400);
+    expect(loadMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown body key with 400 (strict schema)', async () => {
+    const res = await POST(
+      makeRequest({ token: TEST_TOKEN, ip: '10.80.0.9', body: { week: currentMonday } }) as never,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('invalid_body');
+    expect(loadMock).not.toHaveBeenCalled();
   });
 });
 

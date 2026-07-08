@@ -78,7 +78,7 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
           # Don't leave the GITHUB_TOKEN credential in `.git/config` after
           # the action exits — defense against artifact-uploaded leaks if a
@@ -139,7 +139,7 @@ jobs:
       # validator (/usr/local/bin/fxmily-sync-cron, sudoers NOPASSWD, no
       # args, strict line-by-line crontab validation) converge the host.
       - name: Checkout (cron + ops scripts only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -419,7 +419,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout (smoke script only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
           persist-credentials: false
           sparse-checkout: |

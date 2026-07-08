@@ -57,7 +57,12 @@ export function MilestoneBanner({ milestone, streak }: { milestone: number; stre
         <div className="flex flex-1 flex-col gap-1">
           <span className="t-eyebrow text-[var(--acc-hi)]">Palier {milestone} jours</span>
           <p className="text-[15px] leading-snug font-semibold text-[var(--t-1)]">
-            <span className="f-mono tabular-nums">{count}</span> jours consécutifs de check-in.
+            {/* Animated digits are visual-only; AT read the stable final streak
+                (a mid-animation "3 jours" would misreport the milestone). */}
+            <span aria-hidden className="f-mono tabular-nums">
+              {Math.round(count)}
+            </span>
+            <span className="sr-only">{streak}</span> jours consécutifs de check-in.
           </p>
           {/* Mark Douglas posture: name the process, not a trophy. No "ne casse
               pas la chaîne", no streak-loss anxiety — the regularity is the point. */}

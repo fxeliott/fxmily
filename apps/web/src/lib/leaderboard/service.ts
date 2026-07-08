@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { avatarUrlOf, initialsOf } from '@/lib/avatar/read-url';
 import {
   localDateOf,
   parseLocalDate,
@@ -11,7 +12,6 @@ import {
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
-import { selectStorage } from '@/lib/storage';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 
@@ -310,24 +310,6 @@ interface SnapshotUserRow {
     image: string | null;
     leaderboardOptOut: boolean;
   };
-}
-
-function initialsOf(firstName: string | null, lastName: string | null): string {
-  const a = firstName?.trim().charAt(0) ?? '';
-  const b = lastName?.trim().charAt(0) ?? '';
-  const s = `${a}${b}`.toUpperCase();
-  return s.length > 0 ? s : '?';
-}
-
-function avatarUrlOf(avatarKey: string | null, image: string | null): string | null {
-  if (avatarKey) {
-    try {
-      return selectStorage().getReadUrl(avatarKey);
-    } catch {
-      // Malformed key never breaks the board — fall through to initials.
-    }
-  }
-  return image ?? null;
 }
 
 function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {

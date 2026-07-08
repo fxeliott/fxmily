@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { ServiceWorkerRegister } from '@/components/account/sw-register';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Avatar } from '@/components/ui/avatar';
 import {
   Sheet,
   SheetContent,
@@ -33,6 +34,12 @@ interface SessionLite {
   name: string;
   email: string;
   isAdmin: boolean;
+  /** Resolved read URL for the member's/admin's own photo, or null → initials
+   * disc. Fetched once in the root layout so the face shows in the sidebar +
+   * mobile drawer chrome immediately (independent of the nightly board). */
+  avatarUrl: string | null;
+  /** First name, used only for the avatar image alt text (accessibility). */
+  firstName: string;
 }
 
 interface AppShellProps {
@@ -349,9 +356,12 @@ function UserFooter({
   return (
     <div className="shrink-0 border-t border-[var(--b-default)] p-3">
       <div className="mb-2 flex items-center gap-2.5 px-1">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--b-strong)] bg-[var(--bg-2)] text-[12px] font-semibold text-[var(--t-2)]">
-          {initials(session.name)}
-        </span>
+        <Avatar
+          url={session.avatarUrl}
+          initials={initials(session.name)}
+          firstName={session.firstName}
+          size={32}
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-medium text-[var(--t-1)]">{session.name}</p>
           <p className="truncate text-[11px] text-[var(--t-4)]">

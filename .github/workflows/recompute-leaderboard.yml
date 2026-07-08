@@ -1,0 +1,100 @@
+name: Recompute Leaderboard (manual backfill)
+
+# Manual, on-demand backfill of the member leaderboard snapshot.
+#
+# WHY THIS EXISTS
+# The board is a NIGHTLY snapshot written by the `recompute-leaderboard` host
+# cron (02:20 UTC, right after `recompute-scores` at 02:00). When that line is
+# freshly added to the schedule, the host crontab may not have converged yet
+# (deploy runs `fxmily-sync-cron` only if the root binary is installed), so the
+# first nightly run can lag by up to the 72h health grace window — during which
+# `/api/cron/health` reports the entry as `pending` (healthy), so the hourly
+# `cron-watch.yml` self-heal (which only fires on `red`/`never_ran`) does NOT
+# trigger it. That leaves the board empty even though members already have
+# historical activity.
+#
+# This workflow closes that gap: dispatch it once to populate the board with all
+# existing eligible members IMMEDIATELY, without waiting for the nightly cron or
+# the 72h grace to expire. It is also a durable manual lever for any future
+# "recompute the board now" need (both routes are idempotent).
+#
+# It mirrors the nightly ORDER: recompute-scores first (so every active member's
+# BehavioralScore is fresh), then recompute-leaderboard (which reads those
+# scores). Both endpoints are POST-only, guarded by the same `X-Cron-Secret`
+# header as the host cron.
+#
+# Required secret: `CRON_SECRET` (mirrors `/etc/fxmily/web.env`).
+# Required variable: `APP_URL` (e.g. `https://app.fxmilyapp.com`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_scores:
+        description: 'Skip recompute-scores and recompute the board off the existing scores'
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: Recompute scores + leaderboard now
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_URL: ${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Recompute behavioral scores (fresh inputs for the board)
+        if: ${{ ! inputs.skip_scores }}
+        run: |
+          set -euo pipefail
+          echo "POST $BASE_URL/api/cron/recompute-scores"
+          BODY=$(curl -sS \
+            --max-time 240 \
+            -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -H "Accept: application/json" \
+            -w "\n__HTTP_STATUS__%{http_code}" \
+            "$BASE_URL/api/cron/recompute-scores")
+          HTTP_CODE=$(echo "$BODY" | sed -n 's/.*__HTTP_STATUS__\([0-9]*\)$/\1/p')
+          BODY_ONLY=$(echo "$BODY" | sed '$d')
+          echo "::group::recompute-scores response (HTTP $HTTP_CODE)"
+          echo "$BODY_ONLY"
+          echo "::endgroup::"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error title=recompute-scores failed::HTTP $HTTP_CODE — see body above."
+            exit 1
+          fi
+          echo "✅ Scores recomputed"
+
+      - name: Recompute leaderboard snapshot (populate the board)
+        run: |
+          set -euo pipefail
+          echo "POST $BASE_URL/api/cron/recompute-leaderboard"
+          BODY=$(curl -sS \
+            --max-time 240 \
+            -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -H "Accept: application/json" \
+            -w "\n__HTTP_STATUS__%{http_code}" \
+            "$BASE_URL/api/cron/recompute-leaderboard")
+          HTTP_CODE=$(echo "$BODY" | sed -n 's/.*__HTTP_STATUS__\([0-9]*\)$/\1/p')
+          BODY_ONLY=$(echo "$BODY" | sed '$d')
+          echo "::group::recompute-leaderboard response (HTTP $HTTP_CODE)"
+          echo "$BODY_ONLY"
+          echo "::endgroup::"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error title=recompute-leaderboard failed::HTTP $HTTP_CODE — see body above."
+            exit 1
+          fi
+          COMPUTED=$(echo "$BODY_ONLY" | jq -r '.computed // "?"' 2>/dev/null || echo '?')
+          RANKED=$(echo "$BODY_ONLY" | jq -r '.ranked // "?"' 2>/dev/null || echo '?')
+          ERRORS=$(echo "$BODY_ONLY" | jq -r '.errors // "?"' 2>/dev/null || echo '?')
+          echo "✅ Board recomputed — computed=$COMPUTED ranked=$RANKED errors=$ERRORS"
+          echo "### Leaderboard backfill" >> "$GITHUB_STEP_SUMMARY"
+          echo "- computed: **$COMPUTED**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ranked: **$RANKED**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- errors: **$ERRORS**" >> "$GITHUB_STEP_SUMMARY"

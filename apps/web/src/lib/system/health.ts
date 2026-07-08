@@ -737,12 +737,16 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     expectedSince: WORKER_INSTALLED_AT,
   },
   {
-    // Weekly, Monday 05:10 local. ×2 → red only after TWO missed Mondays —
-    // one missed occurrence is amber (vacation, PC off), two is a dead task.
+    // Daily 05:10 local since 2026-07-08 (was Monday-only: a questionnaire
+    // filled after Monday 05:10 was never processed that week — the daily
+    // tick is the catch-up; the pull's already-generated/STALE filter makes
+    // it a free no-op otherwise). Alert calibrated to the new cadence:
+    // amber after a missed day (PC off — normal and calm), red past 7 days
+    // without a single pull (a full calendar week lost = dead task).
     action: 'calendar.batch.pulled',
     label: 'Worker · calendriers semaine',
-    periodMs: WEEK,
-    toleranceMultiplier: 2,
+    periodMs: DAY,
+    toleranceMultiplier: 7,
     expectedSince: WORKER_INSTALLED_AT,
   },
   {

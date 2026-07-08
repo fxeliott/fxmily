@@ -866,7 +866,12 @@ describe('getWorkerHealthReport', () => {
         action: 'verification.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
-      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      // 2026-07-08 — calendar is DAILY now (was Monday-only), so a "healthy"
+      // fixture pulls within hours, like the interval pipelines.
+      {
+        action: 'calendar.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
       {
         action: 'weekly_report.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
@@ -943,7 +948,12 @@ describe('getWorkerHealthReport', () => {
         action: 'verification.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
-      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      // 2026-07-08 — calendar is DAILY now (was Monday-only), so a "healthy"
+      // fixture pulls within hours, like the interval pipelines.
+      {
+        action: 'calendar.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
       {
         action: 'weekly_report.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
@@ -1032,7 +1042,12 @@ describe('getWorkerHealthReport', () => {
         action: 'verification.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
-      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      // 2026-07-08 — calendar is DAILY now (was Monday-only), so a "healthy"
+      // fixture pulls within hours, like the interval pipelines.
+      {
+        action: 'calendar.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
       {
         action: 'weekly_report.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
@@ -1084,7 +1099,12 @@ describe('getWorkerHealthReport', () => {
         action: 'verification.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
-      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      // 2026-07-08 — calendar is DAILY now (was Monday-only), so a "healthy"
+      // fixture pulls within hours, like the interval pipelines.
+      {
+        action: 'calendar.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
       {
         action: 'weekly_report.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
@@ -1138,7 +1158,12 @@ describe('getWorkerHealthReport', () => {
         action: 'verification.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
       },
-      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      // 2026-07-08 — calendar is DAILY now (was Monday-only), so a "healthy"
+      // fixture pulls within hours, like the interval pipelines.
+      {
+        action: 'calendar.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
       {
         action: 'weekly_report.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 2 * DAY) },

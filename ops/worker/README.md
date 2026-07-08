@@ -46,11 +46,13 @@ untouched:
 
 Schedules are staggered (onboarding every 20 min; verification every 5 min —
 tour 15, shortened from 20 min so an uploaded MT5 proof is analysed while the
-member is still waiting; calendar Mon 05:10; weekly Sun 05:40; monthly day-1
-06:10) so the pipelines effectively never collide. If two interval ticks still
-realign, the global lock + `MultipleInstances IgnoreNew` make the later tick
-skip cleanly, and the next tick — or the server-side overdue-alert net — picks
-the work up.
+member is still waiting; calendar DAILY 05:10 — 2026-07-08, was Monday-only:
+a week-prep questionnaire filled after Monday 05:10 was never processed that
+week, and the idempotent pull makes every extra tick a free no-op; weekly Sun
+05:40; monthly day-1 06:10) so the pipelines effectively never collide. If two
+interval ticks still realign, the global lock + `MultipleInstances IgnoreNew`
+make the later tick skip cleanly, and the next tick — or the server-side
+overdue-alert net — picks the work up.
 
 ## Claude auth & multi-comptes
 

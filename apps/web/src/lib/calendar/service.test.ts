@@ -147,6 +147,61 @@ describe('submitWeeklyScheduleQuestionnaire', () => {
     const res = await submitWeeklyScheduleQuestionnaire('user-1', input());
     expect(res.wasNew).toBe(false);
   });
+
+  it('short-circuits an IDENTICAL re-submission (no upsert → updatedAt untouched → no needless regeneration)', async () => {
+    // The stored row carries the same responses under the CURRENT instrument.
+    vi.mocked(db.weeklyScheduleQuestionnaire.findUnique).mockResolvedValue(
+      questionnaireRow({ instrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION }) as never,
+    );
+
+    const res = await submitWeeklyScheduleQuestionnaire('user-1', input());
+
+    expect(res.wasNew).toBe(false);
+    expect(res.questionnaire.weekStart).toBe('2026-06-08');
+    expect(db.weeklyScheduleQuestionnaire.upsert).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits even when jsonb re-ordered the stored keys (canonical comparison)', async () => {
+    // Postgres jsonb does not preserve key order — simulate by deep-reversing
+    // the stored responses' key order.
+    const reorder = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(reorder);
+      if (v !== null && typeof v === 'object') {
+        return Object.fromEntries(
+          Object.entries(v as Record<string, unknown>)
+            .reverse()
+            .map(([k, val]) => [k, reorder(val)]),
+        );
+      }
+      return v;
+    };
+    vi.mocked(db.weeklyScheduleQuestionnaire.findUnique).mockResolvedValue(
+      questionnaireRow({
+        instrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION,
+        responses: reorder(input().responses),
+      }) as never,
+    );
+
+    const res = await submitWeeklyScheduleQuestionnaire('user-1', input());
+
+    expect(res.wasNew).toBe(false);
+    expect(db.weeklyScheduleQuestionnaire.upsert).not.toHaveBeenCalled();
+  });
+
+  it('still upserts when the responses actually changed', async () => {
+    vi.mocked(db.weeklyScheduleQuestionnaire.findUnique).mockResolvedValue(
+      questionnaireRow({
+        instrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION,
+        responses: { ...input().responses, sessionGoal: 5 },
+      }) as never,
+    );
+    vi.mocked(db.weeklyScheduleQuestionnaire.upsert).mockResolvedValue(questionnaireRow() as never);
+
+    const res = await submitWeeklyScheduleQuestionnaire('user-1', input());
+
+    expect(res.wasNew).toBe(false);
+    expect(db.weeklyScheduleQuestionnaire.upsert).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('getQuestionnaireForUser', () => {

@@ -173,6 +173,23 @@ function serializeCalendar(row: {
  * (anti-flake PR#96 — never trust a client instant). Audit is emitted by the
  * J-C3 Server Action (`calendar.questionnaire.submitted`), not here.
  */
+/**
+ * Canonical (sorted-keys) JSON — Postgres `jsonb` does NOT preserve key order,
+ * so a naive `JSON.stringify` equality between a stored row and a fresh
+ * submission is false-negative even for identical content.
+ */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const rec = value as Record<string, unknown>;
+    return `{${Object.keys(rec)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(rec[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
 export async function submitWeeklyScheduleQuestionnaire(
   userId: string,
   input: SubmitWeeklyScheduleInput,
@@ -183,8 +200,19 @@ export async function submitWeeklyScheduleQuestionnaire(
 
   const existing = await db.weeklyScheduleQuestionnaire.findUnique({
     where: { userId_weekStart: { userId, weekStart: weekStartDb } },
-    select: { id: true },
   });
+
+  // Identical re-submission → no-op. Skipping the upsert keeps `updatedAt`
+  // untouched, so the daily batch does NOT regenerate (and re-spend Claude
+  // quota on) a calendar whose inputs did not change (batch DoD#1 compares
+  // questionnaire.updatedAt > calendar.generatedAt).
+  if (
+    existing !== null &&
+    existing.instrumentVersion === CURRENT_CALENDAR_INSTRUMENT_VERSION &&
+    canonicalJson(existing.responses) === canonicalJson(responsesJson)
+  ) {
+    return { questionnaire: serializeQuestionnaire(existing), wasNew: false };
+  }
 
   const row = await db.weeklyScheduleQuestionnaire.upsert({
     where: { userId_weekStart: { userId, weekStart: weekStartDb } },

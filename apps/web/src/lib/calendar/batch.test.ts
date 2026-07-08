@@ -151,7 +151,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-active-1', output: validOutput() }],
     });
 
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).toHaveBeenCalledOnce();
     const persistAudit = vi
       .mocked(logAudit)
@@ -177,7 +177,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-active-1', output: drifted }],
     });
 
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
     // The persisted calendar carries the canonical Mon..Sun dates, NOT the
     // model's drifted ones → daily-guidance `find(d => d.date === today)` works.
     const persistedArg = vi.mocked(persistAdaptiveCalendar).mock.calls[0]?.[0] as {
@@ -198,7 +198,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-active-1', output: wrongWeek }],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi
@@ -234,7 +234,7 @@ describe('persistGeneratedCalendars', () => {
       ],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 2 });
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 2, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi
@@ -253,7 +253,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-ghost', output: validOutput() }],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi
@@ -277,7 +277,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-active-1', output: validOutput() }],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi
@@ -304,7 +304,7 @@ describe('persistGeneratedCalendars', () => {
       ],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi
@@ -332,7 +332,7 @@ describe('persistGeneratedCalendars', () => {
       ],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(
       vi
         .mocked(logAudit)
@@ -380,7 +380,7 @@ describe('persistGeneratedCalendars', () => {
       ],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0, generationFailures: 0 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi.mocked(logAudit).mock.calls.some(([a]) => a.action === 'calendar.batch.amf_violation'),
@@ -388,17 +388,23 @@ describe('persistGeneratedCalendars', () => {
     expect(reportWarning).toHaveBeenCalled();
   });
 
-  it('passes through entries with an explicit error field (claude --print failure)', async () => {
+  it('counts entries with an explicit error field (claude --print failure) as generation failures', async () => {
     const result = await persistGeneratedCalendars({
       weekStart: WEEK_START,
       results: [{ userId: 'user-active-1', error: 'claude_exit_1' }],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 0, generationFailures: 1 });
     expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
     expect(
       vi.mocked(logAudit).mock.calls.some(([a]) => a.action === 'calendar.batch.skipped'),
     ).toBe(true);
+    // Never-sink: failed generations are ops-visible, not just an audit row.
+    expect(reportWarning).toHaveBeenCalledWith(
+      'calendar.batch',
+      'generation_failures',
+      expect.objectContaining({ generationFailures: 1 }),
+    );
   });
 
   it('falls back to the claude-code-local sentinel (cost 0) when a forged model name is provided', async () => {
@@ -428,7 +434,7 @@ describe('persistGeneratedCalendars', () => {
       results: [{ userId: 'user-active-1', output: validOutput() }],
     });
 
-    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1, generationFailures: 0 });
     expect(
       vi.mocked(logAudit).mock.calls.some(([a]) => a.action === 'calendar.batch.persist_failed'),
     ).toBe(true);
@@ -560,5 +566,52 @@ describe('loadAllSnapshotsForCalendarGeneration', () => {
     const envelope = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
 
     expect(envelope.entries).toHaveLength(0);
+  });
+
+  it('defaults weekStart to the current Paris week when omitted (injected now)', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([]);
+    vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([]);
+    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([]);
+
+    // Tue 2026-06-09 10:00 UTC → Paris week starts Mon 2026-06-08.
+    const envelope = await loadAllSnapshotsForCalendarGeneration({
+      now: new Date('2026-06-09T10:00:00.000Z'),
+    });
+
+    expect(envelope.weekStart).toBe('2026-06-08');
+    expect(envelope.entries).toHaveLength(0);
+  });
+
+  it('surfaces a REJECTED per-member snapshot load (warning + audit) without failing the batch', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([{ id: 'u1' } as never, { id: 'u2' } as never]);
+    vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([
+      { userId: 'u1', updatedAt: new Date('2026-06-08T09:00:00.000Z') } as never,
+      { userId: 'u2', updatedAt: new Date('2026-06-08T09:00:00.000Z') } as never,
+    ]);
+    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([]);
+    vi.mocked(loadCalendarSnapshotForUser).mockImplementation(async (userId: string) => {
+      if (userId === 'u1') throw new Error('corrupt row');
+      return fakeSnapshot(userId);
+    });
+
+    const envelope = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
+
+    // The other member still ships; the failing one is reported, never silent.
+    expect(envelope.entries).toHaveLength(1);
+    expect(envelope.entries[0]?.userId).toBe('u2');
+    expect(reportWarning).toHaveBeenCalledWith(
+      'calendar.batch',
+      'member_snapshot_load_failed',
+      expect.objectContaining({ userId: 'u1', reason: 'corrupt row' }),
+    );
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(
+          ([a]) =>
+            a.action === 'calendar.batch.skipped' &&
+            (a.metadata as { reason?: string })?.reason === 'corrupt row',
+        ),
+    ).toBe(true);
   });
 });

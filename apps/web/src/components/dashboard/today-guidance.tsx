@@ -248,7 +248,7 @@ function TodayBlocksList({
 function CalendarStateLine({ state }: { state: 'generated' | 'preparing' | 'none' }) {
   const text =
     state === 'preparing'
-      ? 'Ton calendrier de la semaine se prépare, reviens en début de semaine.'
+      ? 'Ton calendrier de la semaine se prépare, il sera prêt demain matin au plus tard.'
       : state === 'none'
         ? 'Ta semaine n’est pas encore organisée : le questionnaire plus bas prépare ton calendrier.'
         : 'Journée libre dans ton calendrier, aucun bloc planifié aujourd’hui.';

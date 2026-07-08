@@ -37,10 +37,14 @@ export const dynamic = 'force-dynamic';
  * adherence score, no streak shame, no red "pas fait"):
  *
  *   (i)  no questionnaire        → a calm CTA to fill it.
- *   (ii) questionnaire, no plan  → "ton calendrier se prépare, reviens lundi".
+ *   (ii) questionnaire, no plan  → "ton calendrier se prépare" (the worker
+ *         generates DAILY at ~05:10 Paris since 2026-07-08 — the copy promises
+ *         "demain matin", never "lundi").
  *   (iii) plan generated         → <AIGeneratedBanner> BEFORE the blocks (EU AI
  *         Act 50(1), 7ᵉ site prod) + first-view disclosure stamp + the
- *         overview / week-view / warnings.
+ *         overview / week-view / warnings. If the questionnaire was
+ *         re-submitted AFTER generation, a calm "régénération en cours" note
+ *         precedes the (still displayed) current plan.
  *
  * §2 (BLOQUANT): the calendar organises the member's TIME of practice
  * (sessions / backtest / Mark Douglas / réunions / rest), NEVER a market call.
@@ -75,8 +79,8 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
           <h2 className="t-h2 text-[var(--t-1)]">Organise ta semaine</h2>
           <p className="t-body max-w-prose text-[var(--t-2)]">
             Réponds à un court questionnaire : ta disponibilité, ton énergie, tes objectifs de
-            pratique. Claude prépare ensuite ton calendrier de la semaine. Aucun avis sur le marché
-            : on organise ton temps.
+            pratique. Claude prépare ensuite ton calendrier de la semaine, généré chaque matin tôt
+            (heure de Paris). Aucun avis sur le marché : on organise ton temps.
           </p>
         </div>
         <Link
@@ -99,8 +103,9 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
           <div className="flex flex-col gap-1.5">
             <h2 className="t-h2 text-[var(--t-1)]">Ton calendrier se prépare</h2>
             <p className="t-body max-w-prose text-[var(--t-2)]">
-              Ton organisation est enregistrée. Ton calendrier de la semaine sera prêt en début de
-              semaine. Reviens à ce moment-là, sans précipitation.
+              Ton organisation est enregistrée. Ton calendrier de la semaine sera prêt demain matin
+              au plus tard (il se génère chaque matin, tôt, heure de Paris). Reviens à ce moment-là,
+              sans précipitation.
             </p>
           </div>
         </div>
@@ -134,8 +139,32 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
       }
     }
 
+    // A questionnaire RE-submitted after generation marks the plan stale — the
+    // daily batch regenerates it next tick (batch DoD#1). Tell the member
+    // honestly instead of silently showing the outdated plan.
+    const regenerationPending =
+      questionnaire !== null &&
+      new Date(questionnaire.updatedAt).getTime() > new Date(calendar.generatedAt).getTime();
+
     body = (
       <div className="flex flex-col gap-5">
+        {regenerationPending ? (
+          <div
+            role="status"
+            data-state="stale-regenerating"
+            className="rounded-card flex items-start gap-2 border border-[var(--b-default)] bg-[var(--bg-2)] px-4 py-3"
+          >
+            <CalendarClock
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--t-3)]"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <p className="t-body text-[var(--t-2)]">
+              Tes nouvelles réponses sont enregistrées : ce calendrier sera régénéré demain matin
+              pour en tenir compte. En attendant, voici le plan actuel.
+            </p>
+          </div>
+        ) : null}
         <AIGeneratedBanner variant="inline" modelName={modelDisplay(calendar.claudeModel)} />
         <CalendarOverview schedule={calendar.schedule} weekStart={calendar.weekStart} />
         <div className="wow-reveal">

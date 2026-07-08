@@ -148,6 +148,10 @@ export function ScoreEventsHistory({
                 )}
               >
                 {REASON_LABEL[event.reason]}
+                {/* A blank day emits one ritual event PER slot — without the
+                    slot the two lines were strictly identical and read as a
+                    duplicate bug (runtime 2026-07-08). */}
+                {event.slot === 'morning' ? ' (matin)' : event.slot === 'evening' ? ' (soir)' : ''}
               </span>
               <span className="t-foot text-[var(--t-4)]">
                 {formatEventDate(event.createdAt, timezone)}

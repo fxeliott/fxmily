@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { getOffDaySet, isOffDay, type OffDayContext } from '@/lib/checkin/off-days';
+import { localDateOf } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { selectStorage } from '@/lib/storage';
 import { safeFreeText } from '@/lib/text/safe';
@@ -246,15 +248,63 @@ export interface DiscrepancyView {
   readonly declared: DiscrepancyDeclaredSide | null;
   /** Reality side for the face-à-face (null = no extracted position on this gap). */
   readonly reality: DiscrepancyRealitySide | null;
+  /** Tour 14 semantics carried to THIS surface (fix 2026-07-08): a blank-day
+   *  écart whose civil day is a member off day is a « pont », not something to
+   *  answer for. The scoring fold already neutralizes it (constancy.ts) — but
+   *  the list showed it as « À regarder » with a motif CTA, contradicting the
+   *  « Neutralisé · jour off » line of the score history on the SAME page.
+   *  True only for `unfilled_no_reason` on an off day. */
+  readonly offDayNeutralized: boolean;
+}
+
+/**
+ * Off-day context spanning exactly the civil days of the given
+ * `unfilled_no_reason` instants (mirror of `listRecentScoreEvents`, Tour 15).
+ * Returns `null` when there is nothing date-anchored to check (no query).
+ */
+async function offContextForBlankDays(
+  memberId: string,
+  blankDayInstants: readonly Date[],
+): Promise<OffDayContext | null> {
+  if (blankDayInstants.length === 0) return null;
+  const days = blankDayInstants.map((d) => localDateOf(d, 'Europe/Paris'));
+  const fromLocal = days.reduce((min, d) => (d < min ? d : min), days[0]!);
+  const toLocal = days.reduce((max, d) => (d > max ? d : max), days[0]!);
+  return getOffDaySet(memberId, fromLocal, toLocal);
+}
+
+/** The shared predicate: only blank-day écarts are date-anchored to an off day
+ *  (same rule as the fold's `discrepancies28d.addressed`, constancy.ts). */
+function isOffDayNeutralized(
+  row: { type: string; detectedAt: Date },
+  offContext: OffDayContext | null,
+): boolean {
+  return (
+    row.type === 'unfilled_no_reason' &&
+    offContext !== null &&
+    isOffDay(localDateOf(row.detectedAt, 'Europe/Paris'), offContext)
+  );
 }
 
 /**
  * Count of écarts still waiting for the member's attention (`status: open`).
- * Powers the dashboard card teaser (S4 — « écarts de vérité au bon endroit »).
+ * Powers the dashboard card teaser (S4 — « écarts de vérité au bon endroit »)
+ * and the weekly/monthly snapshot loaders.
  * Count-only, posture §33.2 : a factual number, never a guilt counter.
+ * Fix 2026-07-08 — blank-day écarts falling on a member OFF day are excluded:
+ * the scoring fold already treats them as « rien à rattraper », so counting
+ * them here made the teaser contradict the verification page.
  */
 export async function countOpenDiscrepancies(memberId: string): Promise<number> {
-  return db.discrepancy.count({ where: { memberId, status: 'open' } });
+  const rows = await db.discrepancy.findMany({
+    where: { memberId, status: 'open' },
+    select: { type: true, detectedAt: true },
+  });
+  const offContext = await offContextForBlankDays(
+    memberId,
+    rows.filter((r) => r.type === 'unfilled_no_reason').map((r) => r.detectedAt),
+  );
+  return rows.filter((r) => !isOffDayNeutralized(r, offContext)).length;
 }
 
 /**
@@ -322,6 +372,14 @@ export async function listDiscrepancies(memberId: string): Promise<readonly Disc
       },
     },
   });
+  // Mirror of the fold's off-day rule (constancy.ts `discrepancies28d`): the
+  // score forgives a blank day on an off day, so this list must not keep
+  // asking for a motif on it. One range query via the request-memoised
+  // `getOffDaySet`, only when a blank-day écart is present.
+  const offContext = await offContextForBlankDays(
+    memberId,
+    rows.filter((r) => r.type === 'unfilled_no_reason').map((r) => r.detectedAt),
+  );
   return rows.map((r) => ({
     id: r.id,
     type: r.type,
@@ -347,6 +405,7 @@ export async function listDiscrepancies(memberId: string): Promise<readonly Disc
           pnl: r.extractedPosition.pnl !== null ? Number(r.extractedPosition.pnl) : null,
         }
       : null,
+    offDayNeutralized: isOffDayNeutralized(r, offContext),
   }));
 }
 

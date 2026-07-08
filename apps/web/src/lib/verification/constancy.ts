@@ -1004,6 +1004,11 @@ export interface ScoreEventView {
   /** WHY it was excused, so the feed can show a clear motif (« jour off » vs
    *  « motif donné »). `null` when the event is not excused. */
   readonly excusedReason: ScoreEventExcusalReason | null;
+  /** Ritual slot for filled/forgot events (parsed from the deterministic
+   *  `ritualEventId` suffix). A blank day emits TWO forgot events (morning +
+   *  evening) whose labels were previously IDENTICAL — read as a duplicate bug
+   *  (runtime 2026-07-08). `null` for non-ritual events (reality_gap, …). */
+  readonly slot: 'morning' | 'evening' | null;
   readonly createdAt: Date;
 }
 
@@ -1064,6 +1069,9 @@ export async function listRecentScoreEvents(
       reason: r.reason,
       excused,
       excusedReason,
+      // `ritualEventId` deterministically suffixes the slot; other event ids
+      // (reality_gap, false_declaration) never carry these suffixes.
+      slot: r.id.endsWith('-morning') ? 'morning' : r.id.endsWith('-evening') ? 'evening' : null,
       createdAt: r.createdAt,
     };
   });

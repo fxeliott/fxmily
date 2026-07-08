@@ -13,6 +13,7 @@ function ev(reason: ScoreEventView['reason'], opts: { excused?: boolean } = {}):
     excused,
     // `pickDominantSignals` only reads `excused`; keep the reason consistent with it.
     excusedReason: excused ? 'member_reason' : null,
+    slot: null,
     createdAt: new Date('2026-06-01T00:00:00Z'),
   };
 }

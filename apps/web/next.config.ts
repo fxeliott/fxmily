@@ -28,12 +28,31 @@ const withBundleAnalyzer = bundleAnalyzer({
  * everything else (frames, plugin objects, base hijacking, mixed content).
  */
 function buildContentSecurityPolicy(isProd: boolean): string {
-  // `'unsafe-eval'` is needed by Next.js dev tooling (RSC/HMR) and disabled in prod.
-  const scriptSrc = isProd ? "'self' 'unsafe-inline'" : "'self' 'unsafe-inline' 'unsafe-eval'";
+  // `'unsafe-eval'` — REQUIRED (prod + dev) by the avatar picker, which converts
+  // iPhone HEIC photos to JPEG on-device with libheif compiled to WebAssembly
+  // (`heic-to/csp`, lazy-loaded only when a HEIC is actually picked). Its
+  // Emscripten glue instantiates the module via `new Function(...)`, so
+  // `'wasm-unsafe-eval'` (WASM-only) is NOT enough — runtime-proven in a real
+  // Chromium (both directives tested: `'wasm-unsafe-eval'` → CSP blocks the
+  // `new Function` call; `'unsafe-eval'` → converts a real HEIC 600×450 with 0
+  // violations). The marginal XSS risk over the pre-existing `'unsafe-inline'`
+  // (already in this baseline) is negligible: an injection that can run inline
+  // script does not need eval. The tighter long-term options (scope this to
+  // `/account/photo` + `/onboarding/photo`, or move HEIC decode server-side —
+  // no CSP cost there) belong to the planned J10 nonce/strict-CSP refactor.
+  const scriptSrc = "'self' 'unsafe-inline' 'unsafe-eval'";
 
   return [
     "default-src 'self'",
     `script-src ${scriptSrc}`,
+    // `worker-src` — REQUIRED: the `heic-to/csp` build runs libheif inside a Web
+    // Worker it spawns from a `blob:` URL (`new Worker(URL.createObjectURL(...))`),
+    // so `blob:` is mandatory or HEIC conversion is blocked (runtime-proven: drop
+    // it and the worker creation throws a CSP violation). `'self'` MUST stay: the
+    // PWA service worker (`/sw.js`) is same-origin and previously relied on the
+    // `default-src 'self'` fallback — naming `worker-src` explicitly overrides
+    // that fallback, so dropping `'self'` here would silently break the SW.
+    "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",

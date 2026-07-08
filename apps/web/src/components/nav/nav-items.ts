@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  Trophy,
   UserCircle,
   UserPlus,
   Users,
@@ -66,6 +67,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Ma progression',
     items: [
       { href: '/progression', label: 'Où j’en suis', icon: Gauge },
+      { href: '/classement', label: 'Classement', icon: Trophy },
       { href: '/objectifs', label: 'Mes objectifs', icon: Target },
       { href: '/patterns', label: 'Patterns', icon: Network },
     ],

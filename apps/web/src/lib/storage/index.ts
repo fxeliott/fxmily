@@ -52,6 +52,7 @@ export type {
   StorageAdapter,
   ScreenshotKind,
   TrainingUploadKind,
+  AvatarUploadKind,
   UploadInput,
   UploadKind,
 } from './types';
@@ -59,10 +60,12 @@ export {
   ALLOWED_IMAGE_MIME_TYPES,
   ALL_UPLOAD_KINDS,
   MAX_SCREENSHOT_BYTES,
+  MAX_AVATAR_BYTES,
   StorageError,
   isAnnotationUploadKind,
   isTradeUploadKind,
   isTrainingUploadKind,
+  isAvatarUploadKind,
 } from './types';
 export type {
   ParsedStorageKey,
@@ -70,20 +73,29 @@ export type {
   ParsedAnnotationKey,
   ParsedTrainingKey,
   ParsedTrainingAnnotationKey,
+  ParsedAvatarKey,
 } from './keys';
 export {
   ANNOTATION_KEY_PATTERN,
   TRAINING_KEY_PATTERN,
   TRAINING_ANNOTATION_KEY_PATTERN,
+  AVATAR_KEY_PATTERN,
   generateAnnotationKey,
+  generateAvatarKey,
   generateTradeKey,
   generateTrainingKey,
   generateTrainingAnnotationKey,
   parseAnnotationKey,
+  parseAvatarKey,
   parseStorageKey,
   parseTradeKey,
   parseTrainingKey,
   parseTrainingAnnotationKey,
   sniffImageMime,
 } from './keys';
-export { keyBelongsTo, openLocalReadStream, trainingKeyBelongsTo } from './local';
+export {
+  avatarKeyBelongsTo,
+  keyBelongsTo,
+  openLocalReadStream,
+  trainingKeyBelongsTo,
+} from './local';

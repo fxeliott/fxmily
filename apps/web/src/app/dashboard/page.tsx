@@ -26,6 +26,10 @@ import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { SessionTimeline } from '@/components/dashboard/session-timeline';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
+import {
+  LeaderboardRankSkeleton,
+  LeaderboardRankWidget,
+} from '@/components/leaderboard/my-rank-widget';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { MethodGoalCard } from '@/components/objectives/method-goal-card';
@@ -579,6 +583,19 @@ export default async function DashboardPage() {
             </Suspense>
           </section>
         </div>
+
+        {/* Leaderboard — le rang du membre surfacé sur le hub (classement « mis en
+            avant sur chaque compte »). Motivation calme, sur le travail et la
+            régularité, jamais sur les gains (SPEC §2 / §21.5). Un tap vers
+            /classement. */}
+        <section aria-labelledby="leaderboard-widget-heading" className="mb-6">
+          <h2 id="leaderboard-widget-heading" className="sr-only">
+            Mon classement
+          </h2>
+          <Suspense fallback={<LeaderboardRankSkeleton />}>
+            <LeaderboardRankWidget userId={userId!} />
+          </Suspense>
+        </section>
 
         {/* S19.2 — de-density (§11 "pas un mur") : the two compact status
             widgets (profile bridge + weekly calendar) pair side-by-side on lg

@@ -456,6 +456,28 @@ export async function purgeMaterialisedDeletions(
         }
       }
 
+      // Leaderboard (RGPD art.17) — sweep the member's profile-photo file BEFORE
+      // the cascade erases the `User` row that holds `avatarKey`. Best-effort,
+      // same rationale as the proof/training/trade sweeps above: without it a
+      // photo of the member's face (PII) is stranded in the uploads volume after
+      // they exercise their right to erasure. `image` (Auth.js) is a URL, not a
+      // stored object, so only `avatarKey` needs a storage delete.
+      const withAvatar = await db.user.findUnique({
+        where: { id: u.id },
+        select: { avatarKey: true },
+      });
+      if (withAvatar?.avatarKey) {
+        try {
+          await selectStorage().delete(withAvatar.avatarKey);
+        } catch (err) {
+          reportWarning('account.deletion.purge', 'storage_sweep_failed', {
+            userId: u.id,
+            kind: 'avatar',
+            error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+          });
+        }
+      }
+
       await db.user.delete({ where: { id: u.id } });
       purgedIds.push(u.id);
     } catch (err) {

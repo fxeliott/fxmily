@@ -93,6 +93,7 @@ interface HeartbeatExpectation<A extends string = string> {
 type CronAction =
   | 'cron.checkin_reminders.scan'
   | 'cron.recompute_scores.scan'
+  | 'cron.recompute_leaderboard.scan'
   | 'cron.dispatch_douglas.scan'
   | 'cron.weekly_reports.scan'
   | 'cron.dispatch_notifications.scan'
@@ -143,6 +144,38 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.recompute_scores.scan',
     label: 'Behavioral score recompute',
     periodMs: DAY, // 02:00 UTC daily
+  },
+  {
+    // Leaderboard — nightly ranking recompute (crontab: 02:20 Paris, right AFTER
+    // recompute-scores 02:00 so every BehavioralScore the board reads is fresh).
+    // Emits `cron.recompute_leaderboard.scan` (api/cron/recompute-leaderboard).
+    // Monitored here so a silent failure of the ranking cron — the /classement
+    // board quietly freezing on a stale day, the "mis en avant sur chaque compte"
+    // rank slot going flat — surfaces red on /admin/system + cron-watch instead
+    // of hiding behind a green dashboard. Same anti-silent-drift discipline as
+    // every other wired cron. Daily period, TZ-agnostic (periodMs=DAY).
+    //
+    // `expectedSince` is REQUIRED here (mirrors admin_daily_brief / autoheal): the
+    // `20 2 * * *` crontab line AND this `cron.recompute_leaderboard.scan` action
+    // are BRAND NEW on this branch, so on a rolling redeploy every OTHER cron keeps
+    // its historical audit rows (green/amber) while this one has ZERO rows until its
+    // first 02:20 Paris run. Without `expectedSince` that lone gap reads `never_ran`,
+    // which forces report.overall → never_ran → /api/cron/health returns 503. With
+    // it, the entry is a calm `pending` ("premier run à venir") until
+    // `expectedSince + tolerance` (72h), then flips to a genuine `never_ran` only if
+    // the cron truly never fired.
+    //
+    // Belt-and-suspenders: this action is ALSO in cron-watch.yml's self-heal map
+    // (it is pure computation + an idempotent snapshot upsert — no member-facing
+    // send). So even if a real 503 fired (merge slipped past the 72h grace, or the
+    // host crontab was never synced), the watcher re-fires the recompute route,
+    // which writes a fresh heartbeat and clears the red — no false hourly outage
+    // email. `expectedSince` keeps the nominal deploy clean; the self-heal map is
+    // the durability net that makes the exact date non-load-bearing.
+    action: 'cron.recompute_leaderboard.scan',
+    label: 'Leaderboard recompute',
+    periodMs: DAY,
+    expectedSince: '2026-07-08T00:00:00Z',
   },
   {
     action: 'cron.dispatch_douglas.scan',

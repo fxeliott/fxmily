@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
-import { reinstateMember, suspendMember } from '@/lib/admin/member-moderation';
+import { reinstateMember, removeMemberAvatar, suspendMember } from '@/lib/admin/member-moderation';
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { memberModerationActionSchema } from '@/lib/schemas/member-moderation';
@@ -41,6 +41,7 @@ export interface MemberModerationActionState {
     | 'member_not_found'
     | 'already_suspended'
     | 'not_suspended'
+    | 'no_avatar'
     | 'unknown';
   fieldErrors?: Record<string, string>;
 }
@@ -217,4 +218,54 @@ export async function reinstateMemberAction(
   revalidatePath(`/admin/members/${memberId}`);
   revalidatePath('/admin/members');
   return { ok: true, message: 'Membre réintégré, il peut de nouveau se connecter.' };
+}
+
+/**
+ * Take down a member's profile photo (an inappropriate/non-consensual image),
+ * optional motif. The member keeps their account, ranking and place on the
+ * board — only the image is removed. Curried with the member id like the sibling
+ * actions. No self/last-admin guard: the service predicate (`role:'member'`)
+ * already refuses admin rows, and removing a photo is non-destructive to access.
+ */
+export async function removeMemberAvatarAction(
+  memberId: string,
+  _prev: MemberModerationActionState | null,
+  formData: FormData,
+): Promise<MemberModerationActionState> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: 'forbidden', message: 'Accès refusé.' };
+
+  if (typeof memberId !== 'string' || memberId.length === 0 || memberId.length > MAX_ID_LEN) {
+    return { ok: false, error: 'invalid_input' };
+  }
+
+  const reason = parseReason(formData);
+  if (!reason.ok) {
+    return { ok: false, error: 'invalid_input', fieldErrors: reason.fieldErrors };
+  }
+
+  let result;
+  try {
+    result = await removeMemberAvatar({ memberId, actorId: admin.id, reason: reason.reason });
+  } catch (err) {
+    console.error('[admin.member.avatar_removed] failed', err);
+    return { ok: false, error: 'unknown', message: 'Échec du retrait de la photo, réessaie.' };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: 'no_avatar',
+      message: "Ce membre n'a pas de photo de profil à retirer.",
+    };
+  }
+
+  await logAudit({
+    action: 'admin.member.avatar_removed',
+    userId: admin.id,
+    metadata: { memberId, eventId: result.event.id },
+  });
+
+  revalidatePath(`/admin/members/${memberId}`);
+  revalidatePath('/admin/members');
+  return { ok: true, message: 'Photo de profil retirée. Le classement affiche ses initiales.' };
 }

@@ -23,6 +23,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const suspendMemberMock = vi.fn<(...args: unknown[]) => unknown>();
 const reinstateMemberMock = vi.fn<(...args: unknown[]) => unknown>();
+const removeMemberAvatarMock = vi.fn<(...args: unknown[]) => unknown>();
 const findUniqueMock = vi.fn<(...args: unknown[]) => unknown>();
 const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefined);
 const revalidateMock = vi.fn();
@@ -31,12 +32,14 @@ vi.mock('@/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/admin/member-moderation', () => ({
   suspendMember: suspendMemberMock,
   reinstateMember: reinstateMemberMock,
+  removeMemberAvatar: removeMemberAvatarMock,
 }));
 vi.mock('@/lib/db', () => ({ db: { user: { findUnique: findUniqueMock } } }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
 vi.mock('next/cache', () => ({ revalidatePath: revalidateMock }));
 
-const { suspendMemberAction, reinstateMemberAction } = await import('./actions');
+const { suspendMemberAction, reinstateMemberAction, removeMemberAvatarAction } =
+  await import('./actions');
 
 const ADMIN_SESSION = { user: { id: 'admin-1', role: 'admin', status: 'active' } };
 
@@ -51,6 +54,7 @@ beforeEach(() => {
   authMock.mockReset();
   suspendMemberMock.mockReset();
   reinstateMemberMock.mockReset();
+  removeMemberAvatarMock.mockReset();
   findUniqueMock.mockReset();
   logAuditMock.mockClear();
   revalidateMock.mockReset();
@@ -256,6 +260,78 @@ describe('reinstateMemberAction', () => {
     const result = await reinstateMemberAction('member-9', null, fd());
 
     expect(result.error).toBe('not_suspended');
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeMemberAvatarAction — the service predicate carries the role/no-avatar
+// guards, so this action skips the findUnique pre-flight and goes straight to
+// the service (unlike suspend/reinstate).
+// ---------------------------------------------------------------------------
+
+describe('removeMemberAvatarAction', () => {
+  it('returns forbidden for a non-admin and never touches the service', async () => {
+    authMock.mockResolvedValue({ user: { id: 'm-1', role: 'member', status: 'active' } });
+    const result = await removeMemberAvatarAction('member-9', null, fd());
+    expect(result.error).toBe('forbidden');
+    expect(removeMemberAvatarMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an over-long member id (anti-DoS) before the service', async () => {
+    const result = await removeMemberAvatarAction('x'.repeat(65), null, fd());
+    expect(result.error).toBe('invalid_input');
+    expect(removeMemberAvatarMock).not.toHaveBeenCalled();
+  });
+
+  it('re-validates the motif server-side (Trojan-Source rejected) before the service', async () => {
+    const result = await removeMemberAvatarAction('member-9', null, fd('Photo‮evil'));
+    expect(result.error).toBe('invalid_input');
+    expect(result.fieldErrors?.reason).toBeTruthy();
+    expect(removeMemberAvatarMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the photo, audits PII-FREE (avatar_removed), and revalidates both surfaces', async () => {
+    removeMemberAvatarMock.mockResolvedValue({
+      ok: true,
+      event: { id: 'evt-9' },
+      removedKey: 'avatars/member-9/photo.jpg',
+    });
+
+    const result = await removeMemberAvatarAction('member-9', null, fd('Photo inappropriée'));
+
+    expect(result.ok).toBe(true);
+    expect(removeMemberAvatarMock).toHaveBeenCalledWith({
+      memberId: 'member-9',
+      actorId: 'admin-1',
+      reason: 'Photo inappropriée',
+    });
+    // Audit carries NO motif / storage key — only ids.
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'admin.member.avatar_removed',
+      userId: 'admin-1',
+      metadata: { memberId: 'member-9', eventId: 'evt-9' },
+    });
+    expect(revalidateMock).toHaveBeenCalledWith('/admin/members/member-9');
+    expect(revalidateMock).toHaveBeenCalledWith('/admin/members');
+  });
+
+  it('maps a no-photo target (service ok:false) to no_avatar, no audit, no revalidate', async () => {
+    removeMemberAvatarMock.mockResolvedValue({ ok: false, reason: 'no_avatar' });
+
+    const result = await removeMemberAvatarAction('member-9', null, fd());
+
+    expect(result.error).toBe('no_avatar');
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(revalidateMock).not.toHaveBeenCalled();
+  });
+
+  it('degrades a thrown service error to unknown (no leak, no audit)', async () => {
+    removeMemberAvatarMock.mockRejectedValue(new Error('storage down'));
+
+    const result = await removeMemberAvatarAction('member-9', null, fd());
+
+    expect(result.error).toBe('unknown');
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

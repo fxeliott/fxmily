@@ -93,6 +93,12 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
     if (!trainingTrade || (!isAdmin && trainingTrade.userId !== session.user.id)) {
       return new Response('Forbidden', { status: 403 });
     }
+  } else if (parsed.kind === 'avatar') {
+    // Leaderboard/profile — `avatars/{userId}/...`. DELIBERATELY cross-member:
+    // any authenticated ACTIVE member (already gated above) may read ANY
+    // member's avatar so the leaderboard can render every face. A profile photo
+    // is not private data — the active session IS the gate, there is no
+    // per-owner check. No trade lookup, no P&L, firewall-neutral.
   } else {
     // annotation key — lookup the parent trade owner. We collapse the
     // "trade absent" and "trade present but not owner" branches into a

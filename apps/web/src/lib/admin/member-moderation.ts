@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import { reportWarning } from '@/lib/observability';
+import { selectStorage } from '@/lib/storage';
 import type { MemberModerationAction } from '@/generated/prisma/enums';
 import type { MemberModerationEventModel } from '@/generated/prisma/models/MemberModerationEvent';
 
@@ -126,6 +128,71 @@ export async function reinstateMember(input: ModerationInput): Promise<Reinstate
     });
     return { ok: true as const, event: serialize(event) };
   });
+}
+
+export type RemoveMemberAvatarResult =
+  | { ok: true; event: SerializedModerationEvent; removedKey: string }
+  // The target is not an actionable member with a photo (admin row, no avatar
+  // set, or vanished) — nothing to take down.
+  | { ok: false; reason: 'no_avatar' };
+
+/**
+ * Admin takedown of a member's profile photo (an inappropriate/non-consensual
+ * image). Atomic guarded clear of `User.avatarKey` + an `avatar_removed` event
+ * in ONE transaction, then a best-effort sweep of the stored file. The
+ * `WHERE { role:'member', avatarKey: { not: null } }` predicate keeps moderation
+ * off admin rows (mirrors suspend/reinstate) and makes a photoless member a
+ * `no_avatar` no-op — race-proof.
+ *
+ * The member KEEPS their account, ranking and place on the board — ONLY the
+ * image is removed (they can upload a new one; the leaderboard falls back to
+ * their initials). The file sweep runs AFTER the DB write, so the photo is off
+ * the board the instant `avatarKey` is cleared even if the unlink fails (that
+ * only orphans the file — swept later by the janitor); a failure is reported,
+ * never thrown — same best-effort posture as the RGPD erasure sweeps
+ * (`lib/account/deletion.ts`).
+ */
+export async function removeMemberAvatar(
+  input: ModerationInput,
+): Promise<RemoveMemberAvatarResult> {
+  const outcome = await db.$transaction(async (tx) => {
+    const member = await tx.user.findFirst({
+      where: { id: input.memberId, role: 'member', avatarKey: { not: null } },
+      select: { avatarKey: true },
+    });
+    if (!member?.avatarKey) return null;
+
+    await tx.user.update({
+      where: { id: input.memberId },
+      data: { avatarKey: null },
+    });
+    const event = await tx.memberModerationEvent.create({
+      data: {
+        memberId: input.memberId,
+        actorId: input.actorId,
+        action: 'avatar_removed',
+        reason: input.reason,
+      },
+    });
+    return { event: serialize(event), removedKey: member.avatarKey };
+  });
+
+  if (outcome === null) return { ok: false as const, reason: 'no_avatar' as const };
+
+  // Best-effort file sweep — the DB is already the source of truth (avatarKey
+  // cleared), so a failed unlink only orphans the file; it never blocks the
+  // takedown nor resurfaces the photo on the board.
+  try {
+    await selectStorage().delete(outcome.removedKey);
+  } catch (err) {
+    reportWarning('admin.member.avatar_removed', 'storage_sweep_failed', {
+      userId: input.memberId,
+      kind: 'avatar',
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
+  }
+
+  return { ok: true as const, event: outcome.event, removedKey: outcome.removedKey };
 }
 
 /**

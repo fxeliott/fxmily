@@ -71,18 +71,18 @@ export async function completeOnboardingAction(
     return { ok: false, error: result.reason };
   }
 
-  // Auto-login the freshly-created user, then land them on the profiling
-  // interview — NOT the dashboard. The acceptance link is "le lien vers les
-  // premières étapes de création du profil — c'est là que commence
-  // l'accumulation de données" (S2 brief, CONTEXTE GLOBAL › Onboarding & accès):
-  // data accumulation must START here, guided. The interview landing explains
-  // the step and lets the member begin when ready (with a calm /dashboard
-  // escape), so no one is dropped on an empty dashboard wondering what to do.
+  // Auto-login the freshly-created user, then land them on the profile-photo
+  // step — NOT the dashboard. `/onboarding/photo` is a skippable "mets un
+  // visage sur ton prénom" moment (the leaderboard bond) that continues to the
+  // profiling interview, where data accumulation actually starts ("le lien vers
+  // les premières étapes de création du profil", S2 brief). Photo first because
+  // it is one calm, optional gesture; the interview then explains the guided
+  // step so no one is dropped on an empty dashboard wondering what to do.
   try {
     await signIn('credentials', {
       email: result.email,
       password: parsed.data.password,
-      redirectTo: '/onboarding/interview',
+      redirectTo: '/onboarding/photo',
     });
     return { ok: true };
   } catch (err) {

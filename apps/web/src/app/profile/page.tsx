@@ -7,6 +7,7 @@ import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { ProfileAnalysisPulse } from '@/components/profile/profile-analysis-pulse';
 import { btnVariants } from '@/components/ui/btn';
+import { modelDisplay } from '@/lib/calendar/format';
 import { safeTimeZone } from '@/lib/checkin/timezone';
 import { getInterviewForUser, getProfileForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
@@ -165,7 +166,9 @@ export default async function ProfilePage() {
           <>
             <AIGeneratedBanner
               variant="inline"
-              {...(profile.claudeModelVersion ? { modelName: profile.claudeModelVersion } : {})}
+              {...(profile.claudeModelVersion
+                ? { modelName: modelDisplay(profile.claudeModelVersion) }
+                : {})}
             />
 
             <section
@@ -177,7 +180,9 @@ export default async function ProfilePage() {
                   Synthèse
                 </h2>
                 <span className="t-cap text-[var(--t-3)]">
-                  Instrument v{profile.instrumentVersion}
+                  {/* instrumentVersion already carries its "v" prefix ("v1") —
+                      a literal "v" here rendered "vv1" (runtime 2026-07-08). */}
+                  Instrument {profile.instrumentVersion}
                 </span>
               </header>
               <p className="t-body leading-relaxed text-[var(--t-2)]">{profile.summary}</p>

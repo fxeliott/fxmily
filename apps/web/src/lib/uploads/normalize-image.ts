@@ -6,7 +6,9 @@ import sharp from 'sharp';
  * Tour 13 — image normalisation for MT5-proof uploads (SPEC §33).
  *
  * The verification screen policy is « les images ne servent QU'À la
- * vérification, traitées à la volée et jamais conservées ». For the vision
+ * vérification » — proofs ARE retained in the member's verification space
+ * (owner + admin gated, see api/uploads/[...key]; the old « jamais
+ * conservées » wording was outdated, fixed 2026-07-08). For the vision
  * pipeline to read « tout type de screen » reliably, every accepted input is
  * re-encoded to a single canonical shape BEFORE it touches storage:
  *

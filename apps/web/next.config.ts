@@ -116,6 +116,17 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [],
   },
+  // Natural-URL redirects (runtime finding 2026-07-08): members who trim the
+  // URL bar or follow an old link hit a bare 404 on the two rubriques whose
+  // canonical pages live one segment away. Temporary (307) on purpose — the
+  // canonical URLs may still evolve; the auth proxy runs after the redirect,
+  // so unauthenticated hits still land on /login with the RIGHT callbackUrl.
+  async redirects() {
+    return [
+      { source: '/pre-trade', destination: '/pre-trade/new', permanent: false },
+      { source: '/trajectoire', destination: '/progression', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

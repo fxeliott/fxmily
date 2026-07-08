@@ -283,7 +283,12 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       </label>
 
       <p className="t-cap text-[var(--t-3)]">
-        Ta capture est analysée puis supprimée : elle n’est jamais conservée.
+        {/* HONEST copy (runtime finding 2026-07-08) : proofs ARE kept — the
+            gallery below lists them and /api/uploads gates access to the
+            owner + the coach. The previous « analysée puis supprimée : jamais
+            conservée » was contradicted two blocks lower on the same page. */}
+        Ta capture est conservée dans ton espace de vérification, visible ci-dessous. Toi et le
+        coach seuls pouvez la consulter ; elle ne sert qu’à vérifier tes trades.
       </p>
 
       {status === 'success' ? (

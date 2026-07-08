@@ -21,17 +21,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ModerationEventAction = 'suspended' | 'reinstated' | 'avatar_removed';
+
 interface UserRow {
   id: string;
   role: 'member' | 'admin';
   status: 'active' | 'suspended' | 'deleted';
   tokenVersion: number;
+  avatarKey: string | null;
 }
 interface EventRow {
   id: string;
   memberId: string;
   actorId: string | null;
-  action: 'suspended' | 'reinstated';
+  action: ModerationEventAction;
   reason: string | null;
   createdAt: Date;
 }
@@ -43,6 +46,10 @@ const store = vi.hoisted(() => {
     users: [] as UserRow[],
     events: [] as EventRow[],
     seq: 0,
+    // Storage sweep + observability are mocked below; kept on the hoisted store
+    // so a test can assert the best-effort file unlink / warning behaviour.
+    storageDelete: vi.fn(async (_key: string): Promise<void> => {}),
+    reportWarning: vi.fn(),
   };
 });
 
@@ -69,6 +76,33 @@ function buildDbApi(s: typeof store) {
           return { count: 1 };
         },
       ),
+      // `removeMemberAvatar` reads the target with a `role:'member'` +
+      // `avatarKey:{ not:null }` predicate before clearing it.
+      findFirst: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { id: string; role?: string; avatarKey?: { not: null } };
+          select?: unknown;
+        }) => {
+          const row = s.users.find(
+            (u) =>
+              u.id === where.id &&
+              (where.role === undefined || u.role === where.role) &&
+              (where.avatarKey === undefined ||
+                (where.avatarKey.not === null && u.avatarKey !== null)),
+          );
+          return row ? { avatarKey: row.avatarKey } : null;
+        },
+      ),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: { avatarKey?: string | null } }) => {
+          const row = s.users.find((u) => u.id === where.id);
+          if (!row) throw new Error('Record to update not found.');
+          if (data.avatarKey !== undefined) row.avatarKey = data.avatarKey;
+          return { ...row };
+        },
+      ),
     },
     memberModerationEvent: {
       create: vi.fn(
@@ -78,7 +112,7 @@ function buildDbApi(s: typeof store) {
           data: {
             memberId: string;
             actorId: string | null;
-            action: 'suspended' | 'reinstated';
+            action: ModerationEventAction;
             reason: string | null;
           };
         }) => {
@@ -117,8 +151,12 @@ function buildDbApi(s: typeof store) {
 }
 
 vi.mock('@/lib/db', () => ({ db: buildDbApi(store) }));
+// `removeMemberAvatar` sweeps the stored file (best-effort) + reports a warning
+// on failure; both are stubbed so the service runs without real I/O.
+vi.mock('@/lib/storage', () => ({ selectStorage: () => ({ delete: store.storageDelete }) }));
+vi.mock('@/lib/observability', () => ({ reportWarning: store.reportWarning }));
 
-const { suspendMember, reinstateMember, listModerationHistory } =
+const { suspendMember, reinstateMember, removeMemberAvatar, listModerationHistory } =
   await import('./member-moderation');
 
 function seedUser(overrides: Partial<UserRow> = {}): UserRow {
@@ -127,6 +165,7 @@ function seedUser(overrides: Partial<UserRow> = {}): UserRow {
     role: 'member',
     status: 'active',
     tokenVersion: 2,
+    avatarKey: null,
     ...overrides,
   };
   store.users.push(row);
@@ -138,6 +177,9 @@ beforeEach(() => {
   store.events = [];
   store.seq = 0;
   vi.clearAllMocks();
+  // Default sweep succeeds; a test overrides with `mockRejectedValueOnce`.
+  store.storageDelete.mockReset();
+  store.storageDelete.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -273,6 +315,106 @@ describe('reinstateMember', () => {
     expect(result.reason).toBe('not_suspended');
     expect(admin.status).toBe('suspended'); // never reactivated
     expect(store.events).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeMemberAvatar
+// ---------------------------------------------------------------------------
+
+describe('removeMemberAvatar', () => {
+  it('clears avatarKey, appends an avatar_removed event, and sweeps the stored file', async () => {
+    const user = seedUser({ avatarKey: 'avatars/member-1/photo.jpg' });
+
+    const result = await removeMemberAvatar({
+      memberId: 'member-1',
+      actorId: 'admin-1',
+      reason: 'Photo inappropriée',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected success');
+    expect(user.avatarKey).toBeNull(); // photo off the board immediately
+    expect(user.status).toBe('active'); // account/ranking untouched
+    expect(result.removedKey).toBe('avatars/member-1/photo.jpg');
+    expect(result.event.action).toBe('avatar_removed');
+    expect(result.event.reason).toBe('Photo inappropriée');
+    expect(store.events).toHaveLength(1);
+    // Best-effort file sweep ran with the cleared key.
+    expect(store.storageDelete).toHaveBeenCalledWith('avatars/member-1/photo.jpg');
+    expect(store.reportWarning).not.toHaveBeenCalled();
+  });
+
+  it('is a no_avatar no-op when the member has no photo — no event, no sweep', async () => {
+    const user = seedUser({ avatarKey: null });
+
+    const result = await removeMemberAvatar({
+      memberId: 'member-1',
+      actorId: 'admin-1',
+      reason: null,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toBe('no_avatar');
+    expect(user.avatarKey).toBeNull();
+    expect(store.events).toHaveLength(0);
+    expect(store.storageDelete).not.toHaveBeenCalled();
+  });
+
+  it('refuses to touch an ADMIN row (role guard) — no_avatar, no event, no sweep', async () => {
+    const admin = seedUser({
+      id: 'admin-2',
+      role: 'admin',
+      avatarKey: 'avatars/admin-2/photo.jpg',
+    });
+
+    const result = await removeMemberAvatar({
+      memberId: 'admin-2',
+      actorId: 'admin-1',
+      reason: null,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toBe('no_avatar');
+    expect(admin.avatarKey).toBe('avatars/admin-2/photo.jpg'); // never cleared
+    expect(store.events).toHaveLength(0);
+    expect(store.storageDelete).not.toHaveBeenCalled();
+  });
+
+  it('is a no_avatar no-op for a member that does not exist', async () => {
+    const result = await removeMemberAvatar({
+      memberId: 'ghost',
+      actorId: 'admin-1',
+      reason: null,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toBe('no_avatar');
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('still succeeds (photo already off the board) when the file sweep fails — warning reported, not thrown', async () => {
+    const user = seedUser({ avatarKey: 'avatars/member-1/photo.jpg' });
+    store.storageDelete.mockRejectedValueOnce(new Error('disk unreachable'));
+
+    const result = await removeMemberAvatar({
+      memberId: 'member-1',
+      actorId: 'admin-1',
+      reason: null,
+    });
+
+    expect(result.ok).toBe(true); // DB is the source of truth; unlink is best-effort
+    if (!result.ok) throw new Error('expected success');
+    expect(user.avatarKey).toBeNull(); // cleared regardless of the sweep
+    expect(store.events).toHaveLength(1);
+    expect(store.reportWarning).toHaveBeenCalledTimes(1);
+    expect(store.reportWarning).toHaveBeenCalledWith(
+      'admin.member.avatar_removed',
+      'storage_sweep_failed',
+      expect.objectContaining({ userId: 'member-1', kind: 'avatar' }),
+    );
   });
 });
 

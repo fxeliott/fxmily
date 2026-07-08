@@ -159,6 +159,55 @@ export function sniffProofInputFormat(bytes: Uint8Array): ProofInputFormat | nul
  * prebuilt libvips) or unreadable bytes; the storage-facing hash + write are
  * done on the RETURNED bytes, so the on-disk file IS the normalised image.
  */
+/** Avatar output edge in pixels. A crisp face at every leaderboard/profile size
+ *  (podium 96px → row 40px) while staying a few KiB as WebP. */
+const AVATAR_SIZE_PX = 512;
+
+/** WebP quality for avatars. 82 keeps a face clean; WebP beats JPEG on photos. */
+const AVATAR_WEBP_QUALITY = 82;
+
+/**
+ * Avatar normalisation result — a canonical square WebP, or a typed rejection
+ * (mirror of {@link NormalizeImageResult} with a WebP output shape).
+ */
+export type NormalizeAvatarResult =
+  | {
+      readonly ok: true;
+      readonly buffer: Buffer;
+      readonly ext: 'webp';
+      readonly mime: 'image/webp';
+    }
+  | { readonly ok: false; readonly reason: 'heic_unsupported' | 'decode_failed' };
+
+/**
+ * Re-encode an already-size-checked input to a canonical square avatar: EXIF
+ * baked in, cropped `cover` to {@link AVATAR_SIZE_PX}² with sharp's `attention`
+ * strategy (keeps the most salient region — a face — centred), re-encoded to
+ * WebP, all metadata stripped (no GPS/device PII persisted). Returns a typed
+ * rejection for HEIC / undecodable bytes — never throws for an expected reject.
+ */
+export async function normalizeAvatarImage(input: Uint8Array): Promise<NormalizeAvatarResult> {
+  if (isHeic(input)) {
+    return { ok: false, reason: 'heic_unsupported' };
+  }
+  try {
+    const buffer = await sharp(input, {
+      failOn: 'error',
+      limitInputPixels: MAX_INPUT_PIXELS,
+    })
+      .rotate()
+      .resize(AVATAR_SIZE_PX, AVATAR_SIZE_PX, {
+        fit: 'cover',
+        position: 'attention',
+      })
+      .webp({ quality: AVATAR_WEBP_QUALITY })
+      .toBuffer();
+    return { ok: true, buffer, ext: 'webp', mime: 'image/webp' };
+  } catch {
+    return { ok: false, reason: 'decode_failed' };
+  }
+}
+
 export async function normalizeProofImage(input: Uint8Array): Promise<NormalizeImageResult> {
   // Fail fast on HEIC BEFORE handing the bytes to sharp: the prebuilt binary
   // throws a cryptic "heif: Unsupported codec" that we would otherwise have to

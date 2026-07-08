@@ -15,12 +15,13 @@ name: Cron Watch
 #
 # Tour 12 — SELF-HEALING pass. On a 503, before alerting, the watcher
 # re-fires the stale crons itself — but ONLY those that are detection-only
-# and idempotent (the 5 overdue-alert nudges + verification-scan: pure
-# reads that at worst re-send an admin nudge). Member-facing dispatchers
-# (checkin-reminders, dispatch-douglas, weekly-reports,
-# dispatch-notifications) are NEVER re-fired out of schedule — a duplicate
-# member notification is worse than an hour of red. If the re-check still
-# fails, the run fails loudly exactly as before.
+# and idempotent (the 5 overdue-alert nudges, verification-scan and the
+# admin daily brief: pure reads that at worst re-send an admin nudge; plus
+# the nightly leaderboard recompute, which sends nothing at all — just an
+# idempotent snapshot upsert). Member-facing dispatchers (checkin-reminders,
+# dispatch-douglas, weekly-reports, dispatch-notifications) are NEVER
+# re-fired out of schedule — a duplicate member notification is worse than an
+# hour of red. If the re-check still fails, the run fails loudly as before.
 #
 # Required secrets : `CRON_SECRET` (mirrors `/etc/fxmily/web.env`) and
 # `APP_URL` repository variable (e.g. `https://app.fxmilyapp.com`).
@@ -70,7 +71,9 @@ jobs:
           # ---- Self-heal pass (tour 12) --------------------------------------
           # action slug (health report) -> cron route. ONLY detection-only,
           # idempotent routes: pure reads whose worst duplicate effect is a
-          # repeated ADMIN nudge. Never member-facing dispatchers.
+          # repeated ADMIN nudge (or, for recompute-leaderboard, NOTHING member-
+          # facing at all — it just re-upserts the (userId, date) ranking snapshot).
+          # Never member-facing dispatchers.
           declare -A HEALABLE=(
             ["cron.calendar_overdue.scan"]="calendar-overdue-alert"
             ["cron.monthly_debrief_overdue.scan"]="monthly-debrief-overdue-alert"
@@ -79,6 +82,11 @@ jobs:
             ["cron.verification_overdue.scan"]="verification-batch-overdue-alert"
             ["cron.verification_scan.scan"]="verification-scan"
             ["cron.admin_daily_brief.scan"]="admin-daily-brief"
+            # Nightly ranking recompute — pure computation + idempotent upsert on
+            # (userId, date), emits NO notification (safer to re-fire than every
+            # entry above). Self-healable so a delayed first run / un-synced host
+            # crontab clears itself instead of emailing a false hourly outage.
+            ["cron.recompute_leaderboard.scan"]="recompute-leaderboard"
           )
 
           STALE_ACTIONS=$(echo "$BODY_ONLY" | jq -r \

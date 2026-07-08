@@ -5,6 +5,7 @@ import { GeistSans } from 'geist/font/sans';
 import { Suspense } from 'react';
 import { auth, signOut } from '@/auth';
 import { MicroObjectivePillSlot } from '@/components/coaching/micro-objective-pill';
+import { RankFooterSlot } from '@/components/leaderboard/rank-footer-slot';
 import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
@@ -169,6 +170,17 @@ export default async function RootLayout({
                   session?.user?.id && session.user.role !== 'admin' ? (
                     <Suspense fallback={null}>
                       <MicroObjectivePillSlot userId={session.user.id} />
+                    </Suspense>
+                  ) : null
+                }
+                // Classement du membre (avatar + rang) épinglé dans le chrome,
+                // sous le micro-objectif. Membres uniquement (l'admin n'est pas
+                // classé). Suspense null : le shell flush sans attendre ; la
+                // requête est React.cache()-ée avec /dashboard et /classement.
+                rankSlot={
+                  session?.user?.id && session.user.role !== 'admin' ? (
+                    <Suspense fallback={null}>
+                      <RankFooterSlot userId={session.user.id} />
                     </Suspense>
                   ) : null
                 }

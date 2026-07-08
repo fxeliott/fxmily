@@ -322,6 +322,13 @@ model User {
   status UserStatus @default(active)
 
   // SPEC §6.1 — behavioral profile fields
+  /// Leaderboard (NEW) — server-issued storage key for the member's profile
+  /// photo: `avatars/{userId}/{nanoid32}.jpg`. Deliberately SEPARATE from
+  /// `image` (Auth.js display field read by `authorize-credentials.ts`) so the
+  /// auth display path is never coupled to the avatar. Null = no photo → the
+  /// UI renders an initials fallback. Cleared by `removeAvatarAction` or the
+  /// admin `avatar_removed` moderation event.
+  avatarKey        String?   @map("avatar_key")
   timezone         String    @default("Europe/Paris")
   /// Tour 14 — weekends are OFF by default: a member trades a normal work week,
   /// so Saturday/Sunday never break the streak, never enter the fill-rate
@@ -329,6 +336,13 @@ model User {
   /// trade weekends opt out (`false`) and every civil day counts as before.
   /// Local-day semantics anchor to `timezone` exactly like DailyCheckin.date.
   weekendsOff      Boolean   @default(true) @map("weekends_off")
+  /// Leaderboard (NEW) — RGPD visibility control for the discipline/effort
+  /// ranking. The board is visible to the whole cohort by default (the point
+  /// is shared motivation), but a member can hide their row (name+photo+rank)
+  /// from OTHER members. Their OWN position is always visible to themselves —
+  /// opting out only removes them from others' view, never from their own
+  /// progress. Default false = visible.
+  leaderboardOptOut Boolean  @default(false) @map("leaderboard_opt_out")
   pushSubscription Json?     @map("push_subscription") // J9
   consentRgpdAt    DateTime? @map("consent_rgpd_at")
 
@@ -370,6 +384,9 @@ model User {
   offDays                       MemberOffDay[]
   // J6 — daily behavioral score snapshots (cached, recomputed nightly).
   behavioralScores              BehavioralScore[]
+  // Leaderboard (NEW) — nightly cached engagement/discipline ranking snapshots
+  // (1 row/day/member). Cascade on User delete (RGPD §17, schema-wide).
+  leaderboardSnapshots          LeaderboardSnapshot[]
   // J7 - Mark Douglas contextual card deliveries + manual favorites.
   douglasDeliveries             MarkDouglasDelivery[]
   douglasFavorites              MarkDouglasFavorite[]
@@ -639,6 +656,10 @@ model MemberModerationEvent {
 enum MemberModerationAction {
   suspended
   reinstated
+  /// Leaderboard (NEW) — admin removed a member's profile photo (avatarKey
+  /// cleared). Append-only, same anti-abuse audit trail as suspend/reinstate.
+  /// The member keeps their account/ranking — only the image is taken down.
+  avatar_removed
 }
 
 // =============================================================================
@@ -1615,6 +1636,72 @@ model BehavioralScore {
   // Dashboard read (today + 30-day trend), index covers ORDER BY date DESC.
   @@index([userId, date(sort: Desc)])
   @@map("behavioral_scores")
+}
+
+/// Leaderboard (NEW) — nightly cached "EngagementDiscipline" ranking.
+///
+/// One snapshot per (member, local-day), mirroring `BehavioralScore`'s cache
+/// pattern exactly (idempotent upsert on `(userId, date)`, `@db.Date` anchored
+/// in `user.timezone`). The 0-100 `score` measures WORK / CONSISTENCY /
+/// DISCIPLINE / ATTENDANCE (SPEC §2 posture) — it NEVER reads trading
+/// performance / P&L (`realizedR` / `outcome` / `plannedRR`): the firewall
+/// §21.5 invariant is locked by `src/test/anti-leak/leaderboard-isolation.test.ts`.
+///
+/// The nightly cron (`/api/cron/recompute-leaderboard`, runs after
+/// `recompute-scores`) computes every ACTIVE member's score, sorts, assigns a
+/// dense `rank`, and upserts. `/classement` reads the pre-computed snapshot
+/// (no live recompute at request time). `components` carries the per-component
+/// breakdown that powers the "Pourquoi ce rang ?" transparency panel — same
+/// spirit as `BehavioralScore.components`.
+///
+/// `score`/`rank` are NULL for a member with `status='insufficient_data'` (too
+/// recent / too little signal): they are shown in a separate calm "en cours
+/// d'installation" section, NEVER ranked last by default (anti-shame, §31.2).
+model LeaderboardSnapshot {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Local-day anchor in user.timezone — identical convention to
+  /// `BehavioralScore.date` / `DailyCheckin.date` (stable across DST).
+  date DateTime @db.Date
+
+  /// 0-100 EngagementDiscipline score. NULL when `status='insufficient_data'`.
+  score Int?
+
+  /// Dense rank among ranked (`status='ok'`) members for this date, 1 = best.
+  /// NULL for insufficient_data members. Ties broken deterministically in the
+  /// service layer (score desc → streak desc → joinedAt asc → userId).
+  rank Int?
+
+  /// Full ScoreResult for the "Pourquoi ce rang ?" panel (shape parity with
+  /// `BehavioralScore.components`): { score: { score, status, reason?, parts,
+  /// sample } } where parts = { assiduity, discipline, regularity, work }, each
+  /// a SubScore carrying its pointsAwarded / pointsMax (the pillar weight).
+  components Json
+
+  /// Sample-size guards + raw counters (parity with `BehavioralScore.sampleSize`)
+  /// so the UI can render the disclaimer without re-running the scoring layer.
+  sampleSize Json @map("sample_size")
+
+  /// Rolling window used for this snapshot (30 by default, Mark Douglas habit
+  /// window). Configurable for future experimentation without a migration.
+  windowDays Int @default(30) @map("window_days")
+
+  /// 'ok' | 'insufficient_data' — mirrors the per-dimension status vocabulary.
+  status String @default("ok")
+
+  computedAt DateTime @default(now()) @map("computed_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Idempotent nightly recompute: 1 snapshot per (member, day).
+  @@unique([userId, date])
+  // Leaderboard read: fetch a day's ranked rows in rank order (1 indexed query).
+  @@index([date, rank])
+  // Member self-history ("ton rang au fil du temps").
+  @@index([userId, date(sort: Desc)])
+  @@map("leaderboard_snapshots")
 }
 
 // =============================================================================

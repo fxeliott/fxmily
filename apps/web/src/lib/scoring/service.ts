@@ -35,6 +35,10 @@ import {
   type DisciplineCheckinInput,
   type DisciplineTradeInput,
 } from './discipline';
+// Fair-indexing — floors the engagement fill-rate denominator at the join day
+// so a diligent newcomer's assiduité reflects reality, not an empty pre-join
+// window (the scoring analogue of `floorMeetingWindowAtJoin`).
+import { floorFillWindowStart } from './fill-window';
 import {
   computeEmotionalStabilityScore,
   type EmotionalStabilityCheckinInput,
@@ -266,14 +270,33 @@ export async function computeScoresForUser(
     getOffDaySet(userId, windowStart, anchor),
   ]);
 
-  // Tour 14 — count the off days that fall inside the scoring window
-  // [windowStart, anchor] (both inclusive, civil-local). Weekends off-by-default
-  // are folded in via `offCtx.weekendsOff` so the denominator matches exactly the
-  // days the member was never expected to check in.
+  // Fair-indexing — the engagement fill-rate window is floored at the member's
+  // join day, the exact analogue of `floorMeetingWindowAtJoin` above: a member
+  // who registered mid-window is measured on the days they actually existed, not
+  // charged an empty denominator for the weeks before they joined. Without this a
+  // 10-day-old member checking in 9/10 days shows 9/30 ≈ 30 % assiduité instead
+  // of the true 90 % — structurally barring a diligent newcomer from climbing,
+  // when assiduité is exactly the lever they own from day one. A `null` join day
+  // (a caller that never resolved it) leaves the window at `windowStart`; a
+  // veteran who joined on/before the window start is byte-identical.
+  const joinLocalDay = joinedAt ? localDateOfDate(joinedAt, timezone) : null;
+  const engagementWindowStart = floorFillWindowStart(windowStart, joinLocalDay);
+
+  // Tour 14 — count the off days inside the (join-floored) engagement window
+  // [engagementWindowStart, anchor] (both inclusive, civil-local). Weekends
+  // off-by-default are folded in via `offCtx.weekendsOff` so the denominator
+  // matches exactly the days the member was expected to check in. The SAME loop
+  // measures the floored window length so a mid-window joiner's fill-rate uses a
+  // denominator of `daysSinceJoin − offDays`, never the full 30. `max(1, …)`
+  // guards the degenerate "joined after the anchor" case (0-length window →
+  // daysWithAny is 0 anyway → engagement returns insufficient_data, unchanged).
   let offDaysInWindow = 0;
-  for (let d = windowStart; d <= anchor; d = shiftLocalDate(d, 1)) {
+  let engagementWindowDays = 0;
+  for (let d = engagementWindowStart; d <= anchor; d = shiftLocalDate(d, 1)) {
+    engagementWindowDays += 1;
     if (isOffDay(d, offCtx)) offDaysInWindow += 1;
   }
+  engagementWindowDays = Math.max(1, engagementWindowDays);
 
   // Map to scoring inputs.
   const disciplineTrades: DisciplineTradeInput[] = trades.map((t) => ({
@@ -365,7 +388,21 @@ export async function computeScoresForUser(
   const engagement = computeEngagementScore({
     checkins: engagementCheckins,
     streak: distinctDates.size,
-    windowDays,
+    // Fair-indexing — the join-floored fill window (never the raw 30) so a
+    // mid-window joiner's assiduité rate isn't diluted by pre-join days. Equals
+    // `windowDays` for every veteran (byte-identical). Only the engagement
+    // fill-rate uses this; discipline/emotional/consistency keep the full window
+    // (they are rates over the member's OWN acts, with no tenure inflation).
+    //
+    // ⚠️ INVARIANT (fill-rate) — the DENOMINATOR is floored here, the NUMERATOR
+    // is NOT: `checkins` above is the raw full-window fetch (deliberately not
+    // re-filtered on the join day). That is only sound because a member cannot
+    // check in before they exist, so every pre-join day contributes 0 to the
+    // count — flooring one side can never make the rate exceed 1 (8/10, never
+    // 8/30). Do NOT "symmetrize" this by clipping `checkins` to the join day: at
+    // best a no-op, at worst it desyncs the numerator from `distinctDates.size`
+    // (the streak input) which is intentionally the full-window count.
+    windowDays: engagementWindowDays,
     // 🚨 §21.5 — effort COUNT only (volume/recency feeds engagement; backtest
     // P&L never does). Empty for all 30 V1 members at deploy → training
     // sub-score null → engagement renormalizes to its exact pre-J-T4 value.

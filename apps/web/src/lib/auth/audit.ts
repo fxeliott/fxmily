@@ -49,6 +49,9 @@ export type AuditAction =
   // `MemberModerationEvent` row, never here (AuditLog is ids-only).
   | 'admin.member.suspended'
   | 'admin.member.reinstated'
+  // Leaderboard — admin took down a member's profile photo (avatarKey cleared).
+  // PII-free: metadata carries only `{memberId, eventId}`.
+  | 'admin.member.avatar_removed'
   | 'admin.trade.viewed'
   // J4 — annotation workflow
   | 'admin.annotation.created'
@@ -76,6 +79,8 @@ export type AuditAction =
   // J6 — behavioral score snapshot
   | 'score.computed'
   | 'cron.recompute_scores.scan'
+  // Leaderboard — nightly ranking recompute heartbeat (runs after recompute_scores)
+  | 'cron.recompute_leaderboard.scan'
   // J7 - Mark Douglas card module (created/updated reserved for J7.5 admin CRUD form)
   | 'douglas.card.deleted'
   | 'douglas.card.published'
@@ -152,6 +157,16 @@ export type AuditAction =
   // carries only the new IANA timezone string (no location precision beyond
   // the zone the member chose themselves).
   | 'account.timezone.updated'
+  // Leaderboard/profile — member self-service avatar (photo de profil). PII-free:
+  // metadata carries only the opaque storage key + byte size, never the image.
+  | 'account.avatar.updated'
+  | 'account.avatar.removed'
+  // Leaderboard visibility (RGPD self-service) — the member opts their row IN or
+  // OUT of the public /classement (the read layer already honours the
+  // `leaderboardOptOut` column; this is the control that sets it). PII-free:
+  // metadata carries the resulting boolean only, never any ranking data.
+  | 'account.leaderboard.opted_out'
+  | 'account.leaderboard.opted_in'
   | 'account.deletion.requested'
   | 'account.deletion.cancelled'
   | 'account.deletion.materialised'

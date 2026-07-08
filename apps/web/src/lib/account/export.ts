@@ -113,6 +113,11 @@ export const EXPORTED_USER_RELATIONS = [
   // The member's own planning content: no admin authorship, no secret →
   // exported (art. 20), mirroring `dailyCheckins`.
   'offDays',
+  // Leaderboard — nightly engagement/discipline ranking snapshots (score, rank,
+  // per-pillar breakdown). AI-free, derived FROM the member's own act surfaces
+  // (art. 15 access right), member-owned, no admin authorship, no secret, no P&L
+  // (§21.5) → exported as full rows, mirroring `behavioralScores`.
+  'leaderboardSnapshots',
 ] as const;
 
 /**
@@ -202,6 +207,8 @@ export interface UserDataExport {
   // S5 §32-E3 — member's mental micro-objective engagement loops.
   mentalMicroObjectives: SafeMentalMicroObjective[];
   offDays: SafeMemberOffDay[];
+  // Leaderboard — nightly engagement/discipline ranking snapshots.
+  leaderboardSnapshots: SafeLeaderboardSnapshot[];
 }
 
 // Whitelist DTOs : explicit `Pick<>` (or shaped literal) per row so a future
@@ -216,6 +223,11 @@ type SafeUser = {
   firstName: string | null;
   lastName: string | null;
   image: string | null;
+  // Leaderboard — the member's own profile-photo storage key (opaque reference
+  // to THEIR upload, like `Mt5AccountProof.fileKey`, not a credential) + their
+  // public-board visibility choice. Member-owned settings/content → art.20.
+  avatarKey: string | null;
+  leaderboardOptOut: boolean;
   role: string;
   status: string;
   timezone: string;
@@ -285,6 +297,8 @@ type SafeMentalMicroObjective = Awaited<
 >[number];
 // Tour 14 — member-declared off days (date + optional reason, member-owned).
 type SafeMemberOffDay = Awaited<ReturnType<typeof db.memberOffDay.findMany>>[number];
+// Leaderboard — nightly ranking snapshots (member-owned, no auth secret, no P&L).
+type SafeLeaderboardSnapshot = Awaited<ReturnType<typeof db.leaderboardSnapshot.findMany>>[number];
 
 type SafePushSubscription = {
   id: string;
@@ -343,6 +357,7 @@ export interface ExportSummary {
   trackingScheduleCount: number;
   mentalMicroObjectiveCount: number;
   offDayCount: number;
+  leaderboardSnapshotCount: number;
 }
 
 export async function buildUserDataExport(userId: string): Promise<UserDataExport> {
@@ -374,6 +389,9 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
         firstName: true,
         lastName: true,
         image: true,
+        // Leaderboard — member's own avatar key + board-visibility preference.
+        avatarKey: true,
+        leaderboardOptOut: true,
         role: true,
         status: true,
         timezone: true,
@@ -461,6 +479,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     trackingSchedules,
     mentalMicroObjectives,
     offDays,
+    leaderboardSnapshots,
   ] = await Promise.all([
     db.weeklyReview.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.reflectionEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -497,6 +516,8 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     }),
     // Tour 14 — member-declared off days, calendar order.
     db.memberOffDay.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+    // Leaderboard — nightly ranking snapshots, chronological order.
+    db.leaderboardSnapshot.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
   ]);
 
   return {
@@ -548,6 +569,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     trackingSchedules,
     mentalMicroObjectives,
     offDays,
+    leaderboardSnapshots,
   };
 }
 
@@ -593,6 +615,7 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     trackingScheduleCount: snapshot.trackingSchedules.length,
     mentalMicroObjectiveCount: snapshot.mentalMicroObjectives.length,
     offDayCount: snapshot.offDays.length,
+    leaderboardSnapshotCount: snapshot.leaderboardSnapshots.length,
   };
 }
 

@@ -65,12 +65,26 @@ export type TrainingAnnotationUploadKind = (typeof TRAINING_ANNOTATION_UPLOAD_KI
 export const PROOF_UPLOAD_KINDS = ['mt5-proof'] as const;
 export type ProofUploadKind = (typeof PROOF_UPLOAD_KINDS)[number];
 
+/**
+ * Leaderboard/profile — member avatar (photo de profil). Lives under
+ * `avatars/{userId}/…` (member-owned, exactly like a trade screenshot: the
+ * uploading member owns the path). A DISTINCT kind so the audit slug + storage
+ * prefix never collide with any other surface. Unlike every other kind, an
+ * avatar is READ cross-member (any authenticated active member can see another
+ * member's face in the leaderboard) — that read policy lives in the
+ * `/api/uploads/[...key]` handler, NOT here. 🔒 Firewall-neutral: a profile
+ * photo carries no trading data.
+ */
+export const AVATAR_UPLOAD_KINDS = ['avatar-image'] as const;
+export type AvatarUploadKind = (typeof AVATAR_UPLOAD_KINDS)[number];
+
 export const ALL_UPLOAD_KINDS = [
   ...TRADE_UPLOAD_KINDS,
   ...ANNOTATION_UPLOAD_KINDS,
   ...TRAINING_UPLOAD_KINDS,
   ...TRAINING_ANNOTATION_UPLOAD_KINDS,
   ...PROOF_UPLOAD_KINDS,
+  ...AVATAR_UPLOAD_KINDS,
 ] as const;
 export type UploadKind = (typeof ALL_UPLOAD_KINDS)[number];
 
@@ -96,6 +110,10 @@ export function isTrainingAnnotationUploadKind(
 
 export function isProofUploadKind(kind: UploadKind): kind is ProofUploadKind {
   return (PROOF_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
+export function isAvatarUploadKind(kind: UploadKind): kind is AvatarUploadKind {
+  return (AVATAR_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
 }
 
 export interface UploadInput {
@@ -155,6 +173,13 @@ export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
 
 /** Hard cap on a single screenshot. 8 MiB covers high-DPI captures comfortably. */
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Hard cap on a raw avatar upload BEFORE normalization. 8 MiB comfortably
+ * covers a modern phone photo; `normalizeAvatarImage` then re-encodes it to a
+ * small square WebP, so the STORED file is a fraction of this.
+ */
+export const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
 
 export class StorageError extends Error {
   constructor(

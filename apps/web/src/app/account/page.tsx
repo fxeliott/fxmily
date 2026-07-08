@@ -1,4 +1,14 @@
-import { ArrowLeft, Bell, CalendarOff, Database, Globe2, Trash2, UserCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  CalendarOff,
+  Camera,
+  Database,
+  Eye,
+  Globe2,
+  Trash2,
+  UserCircle,
+} from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -96,6 +106,18 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         </header>
 
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <AccountCard
+            href="/account/photo"
+            title="Photo de profil"
+            description="Ajoute ou change ta photo. Elle apparaît sur le classement des membres, à côté de ton prénom, pour créer du lien."
+            icon={<Camera aria-hidden="true" className="h-5 w-5" />}
+          />
+          <AccountCard
+            href="/account/visibilite"
+            title="Visibilité au classement"
+            description="Choisis si ton prénom et ta photo apparaissent sur le classement des membres. Ton rang reste toujours visible pour toi seul."
+            icon={<Eye aria-hidden="true" className="h-5 w-5" />}
+          />
           <AccountCard
             href="/account/notifications"
             title="Notifications"

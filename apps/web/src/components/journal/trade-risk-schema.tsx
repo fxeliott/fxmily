@@ -84,7 +84,12 @@ export function TradeRiskSchema({ trade }: { trade: TradeRiskInput }) {
   const rewardH = Math.abs(tpY - entryY);
   const riskTop = Math.min(entryY, slY);
   const riskH = Math.abs(slY - entryY);
+  // Animated value drives the VISUAL pill only. Every accessible surface
+  // (SVG aria-label, sr-only pill text) carries the final ratio: assistive
+  // tech and rAF-throttled tabs must never read a transient "0.00 pour 1"
+  // (runtime finding 2026-07-08 — the a11y snapshot froze mid-animation).
   const rr = (rrCount / 100).toFixed(2);
+  const rrFinal = levels.plannedRR.toFixed(2);
 
   const grow = (delay: number) => ({
     initial: prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scaleY: 0 },
@@ -104,7 +109,7 @@ export function TradeRiskSchema({ trade }: { trade: TradeRiskInput }) {
         role="img"
         aria-label={`Schéma du trade : entrée ${FMT.format(levels.entry)}, stop-loss ${FMT.format(
           levels.stopLoss,
-        )}, objectif ${FMT.format(levels.target)} pour un ratio de ${rr} pour 1${
+        )}, objectif ${FMT.format(levels.target)} pour un ratio de ${rrFinal} pour 1${
           levels.exit != null ? `, sortie ${FMT.format(levels.exit)}` : ''
         }.`}
       >
@@ -198,9 +203,13 @@ export function TradeRiskSchema({ trade }: { trade: TradeRiskInput }) {
         ) : null}
         <div className="mt-1 flex items-center gap-2 border-t border-[var(--b-default)] pt-2">
           <span className="t-mono-cap text-[var(--t-4)]">R:R prévu</span>
-          <span className="f-mono rounded-pill ml-auto border border-[var(--b-acc)] bg-[var(--acc-dim)] px-2 py-0.5 text-[12px] font-semibold text-[var(--acc-hi)] tabular-nums">
+          <span
+            aria-hidden
+            className="f-mono rounded-pill ml-auto border border-[var(--b-acc)] bg-[var(--acc-dim)] px-2 py-0.5 text-[12px] font-semibold text-[var(--acc-hi)] tabular-nums"
+          >
             {rr} : 1
           </span>
+          <span className="sr-only">{rrFinal} : 1</span>
         </div>
       </figcaption>
     </figure>

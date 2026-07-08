@@ -136,8 +136,16 @@ export default async function VerificationPage() {
       // dérivée des signaux déjà calculés (0 nouvelle table). Lu en parallèle.
       getProcessObjectives(session.user.id, timezone),
     ]);
-  const openDiscrepancies = discrepancies.filter((d) => d.status === 'open');
-  const handledDiscrepancies = discrepancies.filter((d) => d.status !== 'open');
+  // A blank-day écart on an off day is neutralized (« pont », Tour 14) — it is
+  // NOT waiting on the member, so it never counts as « À regarder » (fix
+  // 2026-07-08: the hero counter + the badge said the opposite of the score
+  // history two sections lower).
+  const openDiscrepancies = discrepancies.filter(
+    (d) => d.status === 'open' && !d.offDayNeutralized,
+  );
+  const handledDiscrepancies = discrepancies.filter(
+    (d) => d.status !== 'open' || d.offDayNeutralized,
+  );
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
@@ -297,6 +305,8 @@ export default async function VerificationPage() {
                             </span>
                             {d.memberReason !== null ? (
                               <Pill tone="cy">Motif donné</Pill>
+                            ) : d.offDayNeutralized ? (
+                              <Pill tone="mute">Neutralisé · jour off</Pill>
                             ) : d.status === 'open' ? (
                               <Pill tone="warn" dot>
                                 À regarder
@@ -322,6 +332,13 @@ export default async function VerificationPage() {
                         />
                         {d.memberReason !== null ? (
                           <p className="t-cap text-[var(--t-4)]">Ton motif : {d.memberReason}</p>
+                        ) : d.offDayNeutralized ? (
+                          /* Off day = rien à rattraper : demander un motif ici
+                             contredirait la ligne « Neutralisé · jour off » du
+                             score juste au-dessus (fix 2026-07-08). */
+                          <p className="t-cap text-[var(--t-4)]">
+                            Jour off : rien à rattraper, ton score n&apos;en tient pas compte.
+                          </p>
                         ) : (
                           <DiscrepancyReasonForm discrepancyId={d.id} />
                         )}

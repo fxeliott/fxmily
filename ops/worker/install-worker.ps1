@@ -20,7 +20,17 @@
                                    costs zero when the queue is empty. Shortened
                                    from 20 min so an uploaded MT5 proof is
                                    analysed while the member is still waiting.)
-    calendar      Mon     05:10
+    calendar      daily   05:10  (2026-07-08 — was Monday-only: a questionnaire
+                                   filled AFTER Monday 05:10 was never processed
+                                   that week (proven: week of 2026-07-06, member
+                                   questionnaire filled in-week, no calendar until
+                                   a manual rerun). The pull is idempotent — a
+                                   member with a fresh calendar is excluded, and
+                                   a re-submitted questionnaire marks it STALE for
+                                   regeneration — so a daily tick is a no-op when
+                                   there is nothing to do and a catch-up when
+                                   there is. Also makes a Monday lock-skip benign:
+                                   the next daily tick recovers it.)
     weekly        Sun     05:40
     monthly       day 1   06:10
     profile       day 2   06:40   (J-E monthly deep re-profiling; day 2 so the
@@ -108,7 +118,7 @@ $RunBatchBash = ConvertTo-BashPath $RunBatch
 $Pipelines = @(
   @{ Name = 'onboarding'; Kind = 'interval' },
   @{ Name = 'verification'; Kind = 'interval'; IntervalMinutes = 5 },
-  @{ Name = 'calendar'; Kind = 'weekly'; At = '05:10'; Day = 'Monday' },
+  @{ Name = 'calendar'; Kind = 'daily'; At = '05:10' },
   @{ Name = 'weekly'; Kind = 'weekly'; At = '05:40'; Day = 'Sunday' },
   @{ Name = 'monthly'; Kind = 'monthly'; At = '06:10'; DayOfMonth = 1 },
   @{ Name = 'profile'; Kind = 'monthly'; At = '06:40'; DayOfMonth = 2 }

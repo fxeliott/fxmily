@@ -133,8 +133,15 @@ export interface CalendarBatchPersistRequest {
 
 export interface CalendarBatchPersistResult {
   persisted: number;
+  /** Entries dropped by a server-side gate (forged id, no questionnaire,
+   *  invalid output). Distinct from `generationFailures`. */
   skipped: number;
+  /** Persist-side failures (the DB write threw). */
   errors: number;
+  /** Entries the LOCAL script reported as failed generations (claude exited
+   *  non-zero / invalid JSON output). Previously folded into `skipped`, which
+   *  under-reported real generation failures on the audit trail. */
+  generationFailures: number;
 }
 
 // =============================================================================
@@ -389,7 +396,7 @@ export async function persistGeneratedCalendars(
         error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
       },
     });
-    return { persisted: 0, skipped: 0, errors: request.results.length };
+    return { persisted: 0, skipped: 0, errors: request.results.length, generationFailures: 0 };
   }
 
   // Gate 2 prep — active users (forged-id defense, mirror weekly BLOCKER 4).
@@ -425,10 +432,14 @@ export async function persistGeneratedCalendars(
   let persisted = 0;
   let skipped = 0;
   let errors = 0;
+  let generationFailures = 0;
 
   for (const entry of request.results) {
     if ('error' in entry) {
-      skipped += 1;
+      // The local script could not GENERATE this member's calendar (claude
+      // exit / invalid JSON). Count it as a generation failure, not a benign
+      // skip — the audit under-reported real failures otherwise.
+      generationFailures += 1;
       await logAudit({
         action: 'calendar.batch.skipped',
         userId: entry.userId,
@@ -668,6 +679,16 @@ export async function persistGeneratedCalendars(
     }
   }
 
+  // Never-sink: a batch whose generations failed must be ops-visible, not
+  // just a number in an audit row nobody greps.
+  if (generationFailures > 0) {
+    reportWarning('calendar.batch', 'generation_failures', {
+      weekStart: request.weekStart,
+      generationFailures,
+      total: request.results.length,
+    });
+  }
+
   await logAudit({
     action: 'calendar.batch.persisted',
     metadata: {
@@ -676,9 +697,10 @@ export async function persistGeneratedCalendars(
       persisted,
       skipped,
       errors,
+      generationFailures,
       total: request.results.length,
     },
   });
 
-  return { persisted, skipped, errors };
+  return { persisted, skipped, errors, generationFailures };
 }

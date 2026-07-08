@@ -83,7 +83,10 @@ export function sessionPhaseGuidance(phase: SessionPhase): SessionPhaseGuidance 
     case 'before':
       return {
         headline: 'Avant la session',
-        line: 'La session de New York s’ouvre à 12h. Tu démarres à zéro position : prépare ton mental, pas encore le marché.',
+        // 12h Paris is the METHOD's clock (analysis slot), not the New York
+        // open (~13h30-15h30 Paris) — the old wording pinned the hour on the
+        // wrong referent, which any trader spots (runtime finding 2026-07-08).
+        line: 'Ta journée de trading démarre à 12h avec l’analyse. Tu démarres à zéro position : prépare ton mental, pas encore le marché.',
       };
     case 'analysis':
       return {

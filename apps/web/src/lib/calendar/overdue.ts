@@ -12,18 +12,17 @@ import { currentParisWeekStart, formatWeekRangeFr } from './week';
 /**
  * §26 Calendrier adaptatif — permanence safety-net (Session 5, DoD#4).
  *
- * The calendar batch (`claude --print` local, ban-risk human-in-the-loop §5.4)
- * is triggered MANUALLY by the admin, by design — a fixed cron driving the
- * headless Claude binary would raise the ban risk. The unwanted side effect of
- * that design is a SILENT failure mode : a member fills the weekly schedule
- * questionnaire, the admin forgets to run the batch, and the member stays on
- * "ton calendrier se prépare" forever — no calendar, no alert, no one notified.
+ * The calendar batch (`claude --print` local) runs on Eliott's machine — since
+ * J2 as a daily scheduled task (see ops/worker/), before that manually. Either
+ * way the server cannot drive it, so its failure mode is SILENT : a member
+ * fills the weekly schedule questionnaire, the local worker is off/broken, and
+ * the member stays on "ton calendrier se prépare" forever — no calendar, no
+ * alert, no one notified.
  *
  * This module is the safety-net that closes DoD#4 ("tout permanent/durable ;
- * 0 bug") WITHOUT touching the ban-risk trigger : a read-only scan, run by a
+ * 0 bug") WITHOUT touching the local trigger : a read-only scan, run by a
  * server cron, that nudges the ADMIN (not the member) when questionnaires have
- * been waiting past a grace window with no calendar. The human-in-the-loop stays
- * exactly as designed — the admin is simply reminded so nothing slips silently.
+ * been waiting past a grace window with no up-to-date calendar.
  *
  * Pure-read + §2-clean : it counts rows (questionnaires vs calendars) for the
  * current Europe/Paris week. NO P&L, NO member free-text, NO calendar content
@@ -33,10 +32,12 @@ import { currentParisWeekStart, formatWeekRangeFr } from './week';
 
 /**
  * Grace window (hours) before a filled questionnaire is considered "overdue".
- * The batch is meant to run early in the week ; we never nudge the admin the
- * instant a member submits — they get a calm buffer to run it. 18h means a
- * Monday-morning fill won't surface until the next daily cron pass (~Tuesday).
- * Mirrors the "give the operator a beat" cadence of the weekly digest.
+ * The worker generates daily at 05:10 Paris ; we never nudge the admin the
+ * instant a member (re-)submits — the next daily tick gets a calm chance to
+ * run first. 18h means a Monday-morning fill won't surface until the next
+ * daily cron pass (~Tuesday), by which time the Tuesday 05:10 tick has
+ * normally already generated. The grace anchors on `updatedAt` (last
+ * (re-)submission), mirroring the batch freshness clock.
  */
 const OVERDUE_GRACE_HOURS = 18;
 
@@ -47,15 +48,18 @@ export interface OverdueCalendarScan {
   weekStart: string;
   /** Human FR range, e.g. "8 juin → 14 juin" — for the admin email/audit. */
   weekRange: string;
-  /** Active members who filled the questionnaire > grace ago AND still have no
-   *  AdaptiveCalendar for this week. Mirrors the batch candidate filter
-   *  (`loadAllSnapshotsForCalendarGeneration`: `active ∩ has-questionnaire ∩
-   *  no-calendar`) for the CURRENT week, minus the freshly-filled (grace) ones.
-   *  High-confidence (not absolute) predictor of batch output: it counts rows,
-   *  whereas the batch additionally drops a member whose snapshot vanishes
-   *  mid-run (questionnaire deleted) — a benign transient that self-heals next
-   *  pass. The scan only ever looks at the current week (the batch can be
-   *  pulled for a past week explicitly; the nudge intentionally does not). */
+  /** Active members whose questionnaire was (re-)submitted > grace ago AND
+   *  whose AdaptiveCalendar for this week is MISSING or STALE (generated
+   *  before the last re-submission). Exact mirror of the batch candidate
+   *  filter (`loadAllSnapshotsForCalendarGeneration`, DoD#1:
+   *  `active ∩ has-questionnaire ∩ (no-calendar ∪ updatedAt > generatedAt)`)
+   *  minus the freshly-(re)filled (grace) ones — so a correction the batch
+   *  would regenerate for is never silently unmonitored. High-confidence (not
+   *  absolute) predictor of batch output: it counts rows, whereas the batch
+   *  additionally drops a member whose snapshot vanishes mid-run
+   *  (questionnaire deleted) — a benign transient that self-heals next pass.
+   *  The scan only ever looks at the current week (the batch can be pulled
+   *  for a past week explicitly; the nudge intentionally does not). */
   overdueCount: number;
   /** Total questionnaires submitted for this week (any age) — context for the
    *  admin ("3 attendent sur 5 organisés"). */
@@ -66,8 +70,9 @@ export interface OverdueCalendarScan {
 
 /**
  * Read-only scan of the current Paris week. Mirrors the batch candidate query
- * (`active` ∩ `has questionnaire` ∩ `no calendar`) + the grace filter on
- * `createdAt`. Three parallel index-bounded reads ; no writes, no side effects.
+ * (`active` ∩ `has questionnaire` ∩ (`no calendar` ∪ `stale calendar`)) + the
+ * grace filter on `updatedAt`. Three parallel index-bounded reads ; no writes,
+ * no side effects.
  */
 export async function scanOverdueCalendars(
   options: { now?: Date } = {},
@@ -79,26 +84,37 @@ export async function scanOverdueCalendars(
 
   const [activeUsers, questionnaireRows, calendarRows] = await Promise.all([
     db.user.findMany({ where: { status: 'active' }, select: { id: true } }),
-    // Questionnaires filled for this week, older than the grace window. We read
-    // both the all-age count (questionnaireCount, for admin context) and the
-    // grace-filtered set (the overdue candidates). One query, filter in JS —
-    // the per-week row count is tiny (≤ cohort size).
+    // Questionnaires filled for this week. We read both the all-age count
+    // (questionnaireCount, for admin context) and the grace-filtered set (the
+    // overdue candidates). `updatedAt` = last (re-)submission — the batch's
+    // freshness clock. One query, filter in JS — the per-week row count is
+    // tiny (≤ cohort size).
     db.weeklyScheduleQuestionnaire.findMany({
       where: { weekStart: weekStartDb },
-      select: { userId: true, createdAt: true },
+      select: { userId: true, updatedAt: true },
     }),
+    // `generatedAt` mirrors the batch STALE check: a calendar generated BEFORE
+    // the questionnaire's last re-submission is due for regeneration.
     db.adaptiveCalendar.findMany({
       where: { weekStart: weekStartDb },
-      select: { userId: true },
+      select: { userId: true, generatedAt: true },
     }),
   ]);
 
   const active = new Set(activeUsers.map((u) => u.id));
-  const hasCalendar = new Set(calendarRows.map((r) => r.userId));
+  const calendarGeneratedAt = new Map(calendarRows.map((r) => [r.userId, r.generatedAt]));
 
-  const overdueCount = questionnaireRows.filter(
-    (q) => active.has(q.userId) && !hasCalendar.has(q.userId) && q.createdAt < graceThreshold,
-  ).length;
+  // Mirror of the batch DoD#1 candidate filter (batch.ts): overdue when the
+  // calendar is MISSING or STALE, once the grace after the last (re-)submission
+  // has elapsed. A calendar generated at (or after) the last submission is up
+  // to date → never overdue.
+  const overdueCount = questionnaireRows.filter((q) => {
+    if (!active.has(q.userId)) return false;
+    if (q.updatedAt >= graceThreshold) return false; // fresh (re-)submission → grace
+    const generatedAt = calendarGeneratedAt.get(q.userId);
+    if (generatedAt === undefined) return true; // no calendar at all
+    return q.updatedAt.getTime() > generatedAt.getTime(); // stale calendar
+  }).length;
 
   return {
     weekStart,

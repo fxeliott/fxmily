@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Session 5 §26 — calendar overdue safety-net (DoD#4 permanence).
  *
  * `scanOverdueCalendars` (candidate logic: active ∩ questionnaire>grace ∩
- * no-calendar) + `runCalendarOverdueAlert` (alert vs quiet, all email outcomes)
+ * (no-calendar ∪ stale-calendar) — exact mirror of the batch DoD#1 filter) +
+ * `runCalendarOverdueAlert` (alert vs quiet, all email outcomes)
  * run REAL. `parseLocalDate` + `./week` (currentParisWeekStart/formatWeekRangeFr)
  * are pure → not mocked. db / audit / observability / email / env are mocked.
  */
@@ -40,16 +41,14 @@ const FRESH = new Date('2026-06-09T06:00:00.000Z'); // ~4h before NOW → within
 
 function mockDb(opts: {
   activeIds: string[];
-  questionnaires: Array<{ userId: string; createdAt: Date }>;
-  calendarIds: string[];
+  questionnaires: Array<{ userId: string; updatedAt: Date }>;
+  calendars: Array<{ userId: string; generatedAt: Date }>;
 }) {
   vi.mocked(db.user.findMany).mockResolvedValue(opts.activeIds.map((id) => ({ id })) as never);
   vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue(
     opts.questionnaires as never,
   );
-  vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue(
-    opts.calendarIds.map((userId) => ({ userId })) as never,
-  );
+  vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue(opts.calendars as never);
 }
 
 beforeEach(() => {
@@ -63,11 +62,11 @@ describe('scanOverdueCalendars — candidate logic', () => {
     mockDb({
       activeIds: ['u1', 'u2', 'u3'],
       questionnaires: [
-        { userId: 'u1', createdAt: OLD }, // overdue: old + no calendar
-        { userId: 'u2', createdAt: OLD }, // not overdue: has a calendar
-        { userId: 'u3', createdAt: FRESH }, // not overdue: within grace
+        { userId: 'u1', updatedAt: OLD }, // overdue: old + no calendar
+        { userId: 'u2', updatedAt: OLD }, // not overdue: has a calendar
+        { userId: 'u3', updatedAt: FRESH }, // not overdue: within grace
       ],
-      calendarIds: ['u2'],
+      calendars: [{ userId: 'u2', generatedAt: NOW }],
     });
 
     const scan = await scanOverdueCalendars({ now: NOW });
@@ -82,10 +81,10 @@ describe('scanOverdueCalendars — candidate logic', () => {
     mockDb({
       activeIds: ['u1'], // u9 absent from the active set
       questionnaires: [
-        { userId: 'u1', createdAt: OLD },
-        { userId: 'u9', createdAt: OLD },
+        { userId: 'u1', updatedAt: OLD },
+        { userId: 'u9', updatedAt: OLD },
       ],
-      calendarIds: [],
+      calendars: [],
     });
 
     const scan = await scanOverdueCalendars({ now: NOW });
@@ -97,10 +96,13 @@ describe('scanOverdueCalendars — candidate logic', () => {
     mockDb({
       activeIds: ['u1', 'u2'],
       questionnaires: [
-        { userId: 'u1', createdAt: OLD },
-        { userId: 'u2', createdAt: OLD },
+        { userId: 'u1', updatedAt: OLD },
+        { userId: 'u2', updatedAt: OLD },
       ],
-      calendarIds: ['u1', 'u2'],
+      calendars: [
+        { userId: 'u1', generatedAt: NOW },
+        { userId: 'u2', generatedAt: NOW },
+      ],
     });
 
     const scan = await scanOverdueCalendars({ now: NOW });
@@ -110,19 +112,63 @@ describe('scanOverdueCalendars — candidate logic', () => {
   it('returns 0 overdue when all questionnaires are within the grace window', async () => {
     mockDb({
       activeIds: ['u1'],
-      questionnaires: [{ userId: 'u1', createdAt: FRESH }],
-      calendarIds: [],
+      questionnaires: [{ userId: 'u1', updatedAt: FRESH }],
+      calendars: [],
     });
 
     const scan = await scanOverdueCalendars({ now: NOW });
     expect(scan.overdueCount).toBe(0);
     expect(scan.questionnaireCount).toBe(1);
   });
+
+  // Mirror of the batch DoD#1 STALE clause: a questionnaire RE-submitted after
+  // the calendar was generated makes that calendar stale — the batch would
+  // regenerate it, so the safety-net must count it once past the grace.
+  it('counts a STALE calendar (re-submission after generation) as overdue', async () => {
+    const generatedBefore = new Date(OLD.getTime() - 60 * 60 * 1000); // 1h before the re-submission
+    mockDb({
+      activeIds: ['u1'],
+      questionnaires: [{ userId: 'u1', updatedAt: OLD }], // re-submitted > grace ago
+      calendars: [{ userId: 'u1', generatedAt: generatedBefore }],
+    });
+
+    const scan = await scanOverdueCalendars({ now: NOW });
+    expect(scan.overdueCount).toBe(1);
+  });
+
+  it('does NOT count a stale calendar while the re-submission is within grace', async () => {
+    const generatedBefore = new Date(FRESH.getTime() - 60 * 60 * 1000);
+    mockDb({
+      activeIds: ['u1'],
+      questionnaires: [{ userId: 'u1', updatedAt: FRESH }], // re-submitted 4h ago → grace
+      calendars: [{ userId: 'u1', generatedAt: generatedBefore }],
+    });
+
+    const scan = await scanOverdueCalendars({ now: NOW });
+    expect(scan.overdueCount).toBe(0);
+  });
+
+  it('does NOT count a calendar generated AT or AFTER the last re-submission (up to date)', async () => {
+    mockDb({
+      activeIds: ['u1', 'u2'],
+      questionnaires: [
+        { userId: 'u1', updatedAt: OLD },
+        { userId: 'u2', updatedAt: OLD },
+      ],
+      calendars: [
+        { userId: 'u1', generatedAt: OLD }, // exactly equal → up to date (strict >)
+        { userId: 'u2', generatedAt: new Date(OLD.getTime() + 1000) }, // after → up to date
+      ],
+    });
+
+    const scan = await scanOverdueCalendars({ now: NOW });
+    expect(scan.overdueCount).toBe(0);
+  });
 });
 
 describe('runCalendarOverdueAlert — notification', () => {
   it('overdue=0 → quiet scan audit, no email, no warning', async () => {
-    mockDb({ activeIds: ['u1'], questionnaires: [], calendarIds: [] });
+    mockDb({ activeIds: ['u1'], questionnaires: [], calendars: [] });
 
     const result = await runCalendarOverdueAlert({ now: NOW });
 
@@ -139,10 +185,10 @@ describe('runCalendarOverdueAlert — notification', () => {
     mockDb({
       activeIds: ['u1', 'u2'],
       questionnaires: [
-        { userId: 'u1', createdAt: OLD },
-        { userId: 'u2', createdAt: OLD },
+        { userId: 'u1', updatedAt: OLD },
+        { userId: 'u2', updatedAt: OLD },
       ],
-      calendarIds: [],
+      calendars: [],
     });
 
     const result = await runCalendarOverdueAlert({ now: NOW });
@@ -172,8 +218,8 @@ describe('runCalendarOverdueAlert — notification', () => {
     envMock.WEEKLY_REPORT_RECIPIENT = undefined;
     mockDb({
       activeIds: ['u1'],
-      questionnaires: [{ userId: 'u1', createdAt: OLD }],
-      calendarIds: [],
+      questionnaires: [{ userId: 'u1', updatedAt: OLD }],
+      calendars: [],
     });
 
     const result = await runCalendarOverdueAlert({ now: NOW });
@@ -191,8 +237,8 @@ describe('runCalendarOverdueAlert — notification', () => {
     sendMock.mockRejectedValue(new Error('Resend 500'));
     mockDb({
       activeIds: ['u1'],
-      questionnaires: [{ userId: 'u1', createdAt: OLD }],
-      calendarIds: [],
+      questionnaires: [{ userId: 'u1', updatedAt: OLD }],
+      calendars: [],
     });
 
     const result = await runCalendarOverdueAlert({ now: NOW });

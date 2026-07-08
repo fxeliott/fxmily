@@ -18,9 +18,11 @@ const m = vi.hoisted(() => ({
   proofCount: vi.fn(),
   positionGroupBy: vi.fn(),
   discrepancyFindUnique: vi.fn(),
+  discrepancyFindMany: vi.fn(),
   discrepancyUpdateMany: vi.fn(),
   storageDelete: vi.fn(),
   storageGetReadUrl: vi.fn((key: string) => `/api/uploads/${key}`),
+  getOffDaySet: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -41,10 +43,18 @@ vi.mock('@/lib/db', () => ({
     },
     discrepancy: {
       findUnique: m.discrepancyFindUnique,
+      findMany: m.discrepancyFindMany,
       updateMany: m.discrepancyUpdateMany,
     },
   },
 }));
+
+// Only `getOffDaySet` (the DB read) is mocked — `isOffDay` stays REAL so the
+// weekend predicate under test is the production one, not a test stub.
+vi.mock('@/lib/checkin/off-days', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/checkin/off-days')>();
+  return { ...actual, getOffDaySet: m.getOffDaySet };
+});
 
 vi.mock('@/lib/storage', () => ({
   selectStorage: () => ({
@@ -60,10 +70,12 @@ import {
   DiscrepancyNotFoundError,
   MAX_BROKER_ACCOUNTS_PER_MEMBER,
   ProofNotFoundError,
+  countOpenDiscrepancies,
   countPendingProofs,
   createBrokerAccount,
   deleteProof,
   getVerificationOverview,
+  listDiscrepancies,
   resolveDiscrepancyAsAdmin,
   submitDiscrepancyReason,
 } from './service';
@@ -280,5 +292,74 @@ describe('deleteProof', () => {
 
     await expect(deleteProof('member1', 'p1')).resolves.toBeUndefined();
     expect(m.proofDelete).toHaveBeenCalled();
+  });
+});
+
+describe('off-day neutralization — listDiscrepancies + countOpenDiscrepancies (fix 2026-07-08)', () => {
+  // 2026-07-04 = a Saturday (10:00 Paris), 2026-07-07 = a Tuesday. The fold
+  // (constancy.ts) already forgives the Saturday blank day; these tests pin
+  // that the LIST + the COUNT tell the member the same story.
+  const saturday = new Date('2026-07-04T08:00:00Z');
+  const tuesday = new Date('2026-07-07T08:00:00Z');
+
+  const blankDayRow = (id: string, detectedAt: Date) => ({
+    id,
+    type: 'unfilled_no_reason' as const,
+    severity: 1,
+    status: 'open' as const,
+    claudeReasoning: null,
+    memberReason: null,
+    detectedAt,
+    declaredTrade: null,
+    extractedPosition: null,
+  });
+
+  beforeEach(() => {
+    m.discrepancyFindMany.mockReset();
+    m.getOffDaySet.mockReset();
+    m.getOffDaySet.mockResolvedValue({ weekendsOff: true, explicitDates: new Set() });
+  });
+
+  it('flags a weekend blank-day écart as offDayNeutralized, weekday one stays actionable', async () => {
+    m.discrepancyFindMany.mockResolvedValue([
+      blankDayRow('d-sat', saturday),
+      blankDayRow('d-tue', tuesday),
+      { ...blankDayRow('d-mismatch-sat', saturday), type: 'mismatch' as const },
+    ]);
+
+    const views = await listDiscrepancies('member1');
+
+    expect(views.find((v) => v.id === 'd-sat')?.offDayNeutralized).toBe(true);
+    expect(views.find((v) => v.id === 'd-tue')?.offDayNeutralized).toBe(false);
+    // Only blank-day écarts are date-anchored to an off day — a mismatch on a
+    // Saturday is still a real face-à-face divergence.
+    expect(views.find((v) => v.id === 'd-mismatch-sat')?.offDayNeutralized).toBe(false);
+  });
+
+  it('respects weekendsOff:false — nothing is neutralized', async () => {
+    m.getOffDaySet.mockResolvedValue({ weekendsOff: false, explicitDates: new Set() });
+    m.discrepancyFindMany.mockResolvedValue([blankDayRow('d-sat', saturday)]);
+
+    const views = await listDiscrepancies('member1');
+    expect(views[0]?.offDayNeutralized).toBe(false);
+  });
+
+  it('skips the off-day query entirely when no blank-day écart is present', async () => {
+    m.discrepancyFindMany.mockResolvedValue([
+      { ...blankDayRow('d-mismatch', tuesday), type: 'mismatch' as const },
+    ]);
+
+    await listDiscrepancies('member1');
+    expect(m.getOffDaySet).not.toHaveBeenCalled();
+  });
+
+  it('countOpenDiscrepancies excludes the neutralized blank day (teaser mirrors the page)', async () => {
+    m.discrepancyFindMany.mockResolvedValue([
+      { type: 'unfilled_no_reason', detectedAt: saturday },
+      { type: 'unfilled_no_reason', detectedAt: tuesday },
+      { type: 'mismatch', detectedAt: saturday },
+    ]);
+
+    await expect(countOpenDiscrepancies('member1')).resolves.toBe(2);
   });
 });

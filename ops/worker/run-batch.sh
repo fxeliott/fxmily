@@ -116,6 +116,14 @@ if [[ -f "$ENV_FILE" ]]; then
   done < "$ENV_FILE"
 fi
 
+# FXMILY_BASE_URL is THE documented target-URL knob (this header + worker.env
+# .example), but 4 of the 6 batch scripts read FXMILY_APP_URL. Bridge the two
+# so the documented knob actually reaches every pipeline (explicit
+# FXMILY_APP_URL still wins).
+if [[ -n "${FXMILY_BASE_URL:-}" && -z "${FXMILY_APP_URL:-}" ]]; then
+  export FXMILY_APP_URL="$FXMILY_BASE_URL"
+fi
+
 # --- Not-configured-yet guard -------------------------------------------------
 # If there is NO worker.env at all AND no token was passed in the environment,
 # the worker simply hasn't been set up yet. A scheduled tick must then be a
@@ -221,13 +229,21 @@ LOCK_DIR="${FXMILY_WORKER_LOCK_DIR:-${HOME:-/tmp}/.fxmily-worker.lock}"
 # Stale-lock recovery — a hard kill (reboot, Task Scheduler stop, kill -9)
 # leaves the lock dir behind and would starve EVERY future tick forever.
 # Liveness check: the holder wrote its PID; if that PID is gone, the lock is
-# stale and we reclaim it. Fallback for a lock with no readable PID (partial
-# write): reclaim after 6h (longest legitimate batch ≈ 2h at 30 members).
+# stale and we reclaim it. A LIVE pid is only trusted while the lock is
+# younger than 150 min (ExecutionTimeLimit 2h + margin): Windows recycles
+# PIDs, so a recycled pid could otherwise impersonate a long-dead holder
+# forever and starve the whole worker silently. Fallback for a lock with no
+# readable PID (partial write): reclaim after 6h.
 lock_is_stale() {
   local pid
   pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
   if [[ "$pid" =~ ^[0-9]+$ ]]; then
-    kill -0 "$pid" 2>/dev/null && return 1  # holder alive → not stale
+    if kill -0 "$pid" 2>/dev/null; then
+      # Holder seems alive — but no legitimate batch outlives the 2h task
+      # limit, so an over-age lock means the pid was recycled → stale anyway.
+      [[ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +150 2>/dev/null)" ]]
+      return
+    fi
     return 0                                 # holder dead → stale
   fi
   # No PID file — stale only if the dir is old enough (find -mmin on the dir).
@@ -243,8 +259,18 @@ acquire_lock() {
 
 if ! acquire_lock; then
   if lock_is_stale; then
-    echo "[worker] $BATCH — stale lock detected (holder dead); reclaiming."
-    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    # ATOMIC reclaim: `mv` (rename) succeeds for exactly ONE tick — the loser
+    # sees it fail and skips. The previous "delete then re-mkdir" window let
+    # two simultaneous ticks both reclaim and run two `claude --print` in
+    # parallel (the exact ban-risk this lock exists to prevent).
+    REAP_DIR="$LOCK_DIR.reap.$$"
+    if mv "$LOCK_DIR" "$REAP_DIR" 2>/dev/null; then
+      echo "[worker] $BATCH — stale lock detected (holder dead/over-age); reclaimed atomically."
+      rm -rf "$REAP_DIR" 2>/dev/null || true
+    else
+      echo "[worker] $BATCH — stale lock reaped by another tick first; skipping (benign)."
+      exit 0
+    fi
     if ! acquire_lock; then
       echo "[worker] $BATCH — lock re-acquired by another tick during recovery; skipping (benign)."
       exit 0

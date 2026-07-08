@@ -11,12 +11,17 @@ name: Quality Checks
 #     edited in `src/` (and not updated in the spec) fails as an opaque locator
 #     timeout in the 25-min E2E run. Fails the PR at check time with the exact
 #     orphaned literal instead.
+#   • claude-batch-core.test.sh — deterministic unit tests for the shared
+#     local-worker batch core (failure classifier, breaker, invoke wrapper).
+#     No network, no real `claude` (mock on PATH) — it was previously run only
+#     by hand on the operator's box, so a core regression reached the worker
+#     silently (2026-07-08).
 #
-# Both scripts only read files already in the checkout (node:fs / node:path,
-# no install), so this job is fast and has ZERO production side-effect. The same
-# logic is ALSO enforced by the Vitest suite (apps/web/src/lib/quality/*.test.ts)
-# so a coverage run catches it too — this standalone workflow gives the failure
-# its own precise red signal without needing the full test job.
+# All checks only read files already in the checkout (no install), so this job
+# is fast and has ZERO production side-effect. The .mjs logic is ALSO enforced
+# by the Vitest suite (apps/web/src/lib/quality/*.test.ts) so a coverage run
+# catches it too — this standalone workflow gives each failure its own precise
+# red signal without needing the full test job.
 
 on:
   push:
@@ -26,6 +31,7 @@ on:
       - 'apps/web/**/*.test.tsx'
       - 'apps/web/tests/e2e/**'
       - 'apps/web/src/**'
+      - 'ops/scripts/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'
@@ -36,6 +42,7 @@ on:
       - 'apps/web/**/*.test.tsx'
       - 'apps/web/tests/e2e/**'
       - 'apps/web/src/**'
+      - 'ops/scripts/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'
@@ -77,3 +84,7 @@ jobs:
 
       - name: E2E copy assertions in sync with src
         run: node scripts/check-e2e-copy-sync.mjs
+
+      - name: Local-worker batch core unit tests
+        # Deterministic by design: mock `claude` on PATH, no network, no jq/curl.
+        run: bash ops/scripts/lib/claude-batch-core.test.sh

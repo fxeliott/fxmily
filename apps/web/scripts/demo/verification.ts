@@ -20,7 +20,17 @@
  * member-scoped first (§0 below) — never touching the demo user, who is
  * wiped + recreated by the orchestrator.
  */
-import { type SeedCtx, at, mondayOf, makePrng, pick, clamp, round } from './_shared.js';
+import {
+  type SeedCtx,
+  at,
+  mondayOf,
+  makePrng,
+  pick,
+  clamp,
+  priceDecimals,
+  priceForInstrument,
+  round,
+} from './_shared.js';
 
 // =============================================================================
 // Static content pools (kept §2-clean — factual labels, never market advice)
@@ -238,6 +248,16 @@ export async function seedVerification(ctx: SeedCtx): Promise<Record<string, num
 
   const extractedIds: string[] = [];
   let missingDeclaredPositionId: string | null = null;
+  let mismatchPosition: {
+    id: string;
+    symbol: string;
+    side: 'long' | 'short';
+    openTime: Date;
+    entryPrice: number;
+    exitPrice: number;
+    volume: number;
+    daysAgo: number;
+  } | null = null;
   for (let i = 0; i < positionSpecs.length; i++) {
     const spec = positionSpecs[i];
     if (!spec) continue;
@@ -249,11 +269,13 @@ export async function seedVerification(ctx: SeedCtx): Promise<Record<string, num
     const openTime = at(ctx.now, spec.daysAgo, spec.utcHour, 10 + i);
     const closeTime = new Date(openTime.getTime() + (25 + Math.floor(rand() * 90)) * 60_000);
     const volume = round(0.1 + rand() * 0.6, 2);
-    const entryPrice = round(1.0 + rand() * 0.6, 5);
-    const exitDelta = round((spec.winning ? 1 : -1) * Math.abs(entryPrice * 0.012), 5);
+    // Instrument-realistic prices (runtime finding 2026-07-08) — mirror core.ts.
+    const entryPrice = priceForInstrument(rand, spec.symbol);
+    const decimals = priceDecimals(spec.symbol);
+    const exitDelta = round((spec.winning ? 1 : -1) * Math.abs(entryPrice * 0.012), decimals);
     const exitPrice = round(
       spec.side === 'long' ? entryPrice + exitDelta : entryPrice - exitDelta,
-      5,
+      decimals,
     );
     const pnl = round((spec.winning ? 1 : -1) * (40 + rand() * 180), 2);
 
@@ -278,6 +300,21 @@ export async function seedVerification(ctx: SeedCtx): Promise<Record<string, num
     extractedIds.push(created.id);
     // The US30 position (proof #3, daysAgo 30) is the "real but never declared" one.
     if (spec.ticket === '7700481') missingDeclaredPositionId = created.id;
+    // The NAS100 position (proof #1, daysAgo 40) anchors the `mismatch` gap —
+    // capture its concrete fields so the DECLARED side can be built to match
+    // (same instrument/side/day, only the volume diverging).
+    if (spec.ticket === '8809932') {
+      mismatchPosition = {
+        id: created.id,
+        symbol: spec.symbol,
+        side: spec.side,
+        openTime,
+        entryPrice,
+        exitPrice,
+        volume,
+        daysAgo: spec.daysAgo,
+      };
+    }
   }
 
   // A representative declared trade (already in DB) to hang a `mismatch` /
@@ -290,6 +327,55 @@ export async function seedVerification(ctx: SeedCtx): Promise<Record<string, num
     take: 4,
     select: { id: true },
   });
+
+  // The `mismatch` gap's DECLARED side is created explicitly to MATCH the
+  // extracted NAS100 position (same instrument, same side, same day, entry a
+  // few minutes earlier) with ONLY the volume diverging — the card's copy says
+  // « correspondent, mais les volumes divergent » and borrowing an arbitrary
+  // old trade made both columns show unrelated trades (runtime 2026-07-08).
+  let mismatchDeclaredTradeId: string | null = null;
+  if (mismatchPosition) {
+    const declaredLot = round(clamp(mismatchPosition.volume - 0.12, 0.05, 5), 2);
+    const enteredAt = new Date(mismatchPosition.openTime.getTime() - 3 * 60_000);
+    const closedAt = new Date(mismatchPosition.openTime.getTime() + 55 * 60_000);
+    const created = await db.trade.create({
+      data: {
+        userId: memberId,
+        pair: mismatchPosition.symbol,
+        direction: mismatchPosition.side,
+        session: 'newyork',
+        enteredAt,
+        entryPrice: mismatchPosition.entryPrice,
+        lotSize: declaredLot,
+        stopLossPrice: round(
+          mismatchPosition.entryPrice * (mismatchPosition.side === 'long' ? 0.99 : 1.01),
+          priceDecimals(mismatchPosition.symbol),
+        ),
+        plannedRR: 2,
+        riskPct: 1,
+        tradeQuality: 'B',
+        emotionBefore: ['focused'],
+        emotionDuring: [],
+        emotionAfter: ['calm'],
+        tags: [],
+        planRespected: true,
+        hedgeRespected: null,
+        slPerRule: true,
+        movedToBe: false,
+        partialAtTarget: false,
+        processComplete: true,
+        notes: null,
+        exitedAt: closedAt,
+        closedAt,
+        exitPrice: mismatchPosition.exitPrice,
+        outcome: 'win',
+        realizedR: 1.2,
+        realizedRSource: 'computed',
+      },
+      select: { id: true },
+    });
+    mismatchDeclaredTradeId = created.id;
+  }
 
   // ---------------------------------------------------------------------------
   // 4. Discrepancies — the improvement arc. Older gaps are RESOLVED/ACKNOWLEDGED
@@ -340,12 +426,14 @@ export async function seedVerification(ctx: SeedCtx): Promise<Record<string, num
     },
     {
       type: 'mismatch',
-      daysAgo: 58,
+      // Detected the day AFTER the matching NAS100 position (daysAgo 40) — the
+      // old hard-coded 58 put the detection 18 days BEFORE the position existed.
+      daysAgo: mismatchPosition ? mismatchPosition.daysAgo - 1 : 58,
       severity: 1,
       status: 'acknowledged',
       withReason: true,
-      declaredTradeId: oldDeclaredTrades[1]?.id ?? null,
-      extractedPositionId: extractedIds[2] ?? null,
+      declaredTradeId: mismatchDeclaredTradeId ?? oldDeclaredTrades[1]?.id ?? null,
+      extractedPositionId: mismatchPosition?.id ?? extractedIds[2] ?? null,
       reasoning: REASONING.mismatch,
       trackingRef: null,
     },

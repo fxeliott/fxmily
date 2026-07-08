@@ -16,6 +16,14 @@
                                       -SkipWatchdog -LogonType Interactive
                   - wrong LogonType (e.g. S4U) -> re-register the 6 the same
                                       way (tour 17; was SIGNAL-only before)
+                  - trigger cadence drift -> re-register the same way. When a
+                                      pipeline's SCHEDULE changes in git (e.g.
+                                      calendar weekly -> daily, 2026-07-08) the
+                                      registered task keeps the OLD trigger
+                                      forever; comparing each task's trigger
+                                      CIM class against the expected one makes
+                                      a schedule fix DEPLOY ITSELF on the next
+                                      watchdog tick after git pull.
                 REPAIR IS SKIPPED while any pipeline task is Running (a
                 re-register could kill an in-flight claude batch) and after
                 3 consecutive repair attempts that did not restore health
@@ -48,11 +56,27 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$WatchdogVersion = '1.0.0'
+$WatchdogVersion = '1.1.0'
 $TaskPath = '\Fxmily\'
 $TaskPrefix = 'Fxmily-worker-'
 $PipelineNames = @('onboarding', 'verification', 'calendar', 'weekly', 'monthly', 'profile')
 $MaxRepairStreak = 3
+# Expected trigger CIM class per pipeline — MUST mirror install-worker.ps1's
+# $Pipelines Kind column. Verified at runtime 2026-07-08: minutes/hours ->
+# MSFT_TaskTimeTrigger, daily -> MSFT_TaskDailyTrigger, weekly ->
+# MSFT_TaskWeeklyTrigger. monthly/profile are registered from XML
+# (ScheduleByMonth) which Get-ScheduledTask surfaces as the BASE class
+# MSFT_TaskTrigger (some Windows builds report MSFT_TaskMonthlyTrigger) —
+# both are accepted. A mismatch means the registered task predates a schedule
+# change in git -> re-register (same guards as a missing task).
+$ExpectedTriggerClass = @{
+  onboarding   = @('MSFT_TaskTimeTrigger')
+  verification = @('MSFT_TaskTimeTrigger')
+  calendar     = @('MSFT_TaskDailyTrigger')
+  weekly       = @('MSFT_TaskWeeklyTrigger')
+  monthly      = @('MSFT_TaskTrigger', 'MSFT_TaskMonthlyTrigger')
+  profile      = @('MSFT_TaskTrigger', 'MSFT_TaskMonthlyTrigger')
+}
 # Tour 17 — auth/quota are MACHINE-WIDE LIVE states. Only honor an authOk:false /
 # exitCode:75 signal from a status.json fresher than this many minutes: a monthly
 # pipeline's status.json can sit for weeks carrying a STALE authOk:false from a
@@ -114,6 +138,10 @@ $missingTasks = New-Object System.Collections.Generic.List[string]
 # `claude --print` fails (S4U cannot read the Claude OAuth). Auto-repaired via the
 # SAME re-register path as missing tasks (guarded by anyRunning + repairStreak).
 $logonMismatchTasks = New-Object System.Collections.Generic.List[string]
+# 2026-07-08 — tasks whose registered trigger class no longer matches the
+# schedule declared in install-worker.ps1 (schedule changed in git after the
+# task was registered). Repaired via the same re-register path.
+$triggerDriftTasks = New-Object System.Collections.Generic.List[string]
 $anyRunning = $false
 # Logged-out and quota-cap are MACHINE-wide states (one account per box, one
 # shared cooldown stamp), so each label is raised at most once across all
@@ -169,6 +197,26 @@ foreach ($name in $PipelineNames) {
   if ($logonType -and $logonType -ne 'Interactive') {
     $errorLabels.Add("task_logon_type:$name`:$logonType")
     $logonMismatchTasks.Add($name)
+  }
+
+  # Trigger cadence drift (2026-07-08): the task was registered with a schedule
+  # that git has since changed (e.g. calendar Monday-weekly -> daily 05:10).
+  # Re-registering is the ONLY way a schedule fix reaches the box, so this
+  # check makes the fix deploy itself on the next tick after git pull. Only a
+  # READABLE class that mismatches raises the flag — an unreadable trigger
+  # (null/empty, exotic build) is never treated as drift (no false-positive
+  # re-register loops).
+  $expectedClasses = $ExpectedTriggerClass[$name]
+  $triggerClass = $null
+  if ($null -ne $task.Triggers -and @($task.Triggers).Count -gt 0) {
+    $firstTrigger = @($task.Triggers)[0]
+    if ($null -ne $firstTrigger -and $null -ne $firstTrigger.CimClass) {
+      $triggerClass = [string]$firstTrigger.CimClass.CimClassName
+    }
+  }
+  if ($null -ne $expectedClasses -and $triggerClass -and (@($expectedClasses) -notcontains $triggerClass)) {
+    $errorLabels.Add("task_trigger_drift:$name`:$triggerClass")
+    $triggerDriftTasks.Add($name)
   }
 
   if ($task.State -eq 'Running') { $anyRunning = $true }
@@ -252,6 +300,18 @@ foreach ($name in $PipelineNames) {
             $quotaCappedSeen = $true
           }
         }
+        # 2026-07-08 — a FRESH genuine batch failure (ok:false; exitCode is
+        # neither 0 nor the benign quota cap 75) now reaches the heartbeat.
+        # Task Scheduler only exposes it as an opaque "Last Run Result"; the
+        # status.json carries the real exit code, and before this label the
+        # board could stay green while a pipeline failed every tick.
+        if (($st.PSObject.Properties.Name -contains 'ok') -and ($st.ok -eq $false) -and
+            ($st.PSObject.Properties.Name -contains 'exitCode')) {
+          $failCode = [int]$st.exitCode
+          if ($failCode -ne 0 -and $failCode -ne 75) {
+            $errorLabels.Add("batch_failed:$name`:$failCode")
+          }
+        }
       }
     }
   }
@@ -293,11 +353,12 @@ if (Test-Path $StateFile) {
 # install-worker.ps1 re-registers each task with `Register-ScheduledTask -Force`,
 # overwriting its Principal with Interactive, so one pass restores a missing task
 # AND corrects an S4U registration.
-$needsReregister = ($missingTasks.Count -gt 0) -or ($logonMismatchTasks.Count -gt 0)
+$needsReregister = ($missingTasks.Count -gt 0) -or ($logonMismatchTasks.Count -gt 0) -or ($triggerDriftTasks.Count -gt 0)
 if ($needsReregister) {
   $repairReasons = New-Object System.Collections.Generic.List[string]
   if ($missingTasks.Count -gt 0) { $repairReasons.Add("missing: $($missingTasks -join ', ')") }
   if ($logonMismatchTasks.Count -gt 0) { $repairReasons.Add("logon-type: $($logonMismatchTasks -join ', ')") }
+  if ($triggerDriftTasks.Count -gt 0) { $repairReasons.Add("trigger-drift: $($triggerDriftTasks -join ', ')") }
   $repairSummary = $repairReasons -join '; '
 
   if ($anyRunning) {
@@ -316,7 +377,7 @@ if ($needsReregister) {
         # overwriting the Principal, so this both restores a MISSING task and
         # corrects a wrong (S4U) LogonType in the same pass.
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -SkipWatchdog -LogonType Interactive | Out-Null
-        $repaired += ($missingTasks.Count + $logonMismatchTasks.Count)
+        $repaired += ($missingTasks.Count + $logonMismatchTasks.Count + $triggerDriftTasks.Count)
         $state.repairStreak = [int]$state.repairStreak + 1
         $state.lastRepairAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         Write-Log "REPAIR done (streak $($state.repairStreak)/$MaxRepairStreak)."

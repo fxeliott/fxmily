@@ -7,6 +7,7 @@ import {
   LearningStageSection,
   WeakSignalsSection,
 } from '@/components/admin/deep-dimension-sections';
+import { modelDisplay } from '@/lib/calendar/format';
 import type {
   SerializedMemberProfile,
   SerializedOnboardingInterview,
@@ -195,7 +196,9 @@ export function MemberProfileViewerAdmin({
           {/* 6e site EU AI Act 50(1) bannière obligatoire avant 2026-08-02. */}
           <AIGeneratedBanner
             variant="inline"
-            {...(profile.claudeModelVersion ? { modelName: profile.claudeModelVersion } : {})}
+            {...(profile.claudeModelVersion
+              ? { modelName: modelDisplay(profile.claudeModelVersion) }
+              : {})}
           />
 
           <section
@@ -207,7 +210,9 @@ export function MemberProfileViewerAdmin({
                 Synthèse comportementale
               </h2>
               <span className="t-cap text-[var(--t-3)]">
-                Instrument v{profile.instrumentVersion}
+                {/* instrumentVersion already carries its "v" prefix ("v1") —
+                    a literal "v" here rendered "vv1" (runtime 2026-07-08). */}
+                Instrument {profile.instrumentVersion}
               </span>
             </header>
             <p className="t-body leading-relaxed text-[var(--t-2)]">{profile.summary}</p>

@@ -26,6 +26,8 @@ import {
   chance,
   clamp,
   clampInt,
+  priceDecimals,
+  priceForInstrument,
   round,
 } from './_shared.js';
 
@@ -63,16 +65,19 @@ export async function seedTrades(ctx: SeedCtx): Promise<Record<string, number>> 
     const session = pick(rand, SESSIONS);
     const direction = chance(rand, 0.5) ? 'long' : 'short';
 
-    const entryPrice = round(1.0 + rand() * 0.6, 5);
+    // Instrument-realistic prices (runtime finding 2026-07-08): SL/exit stay
+    // RELATIVE to entry, so the R math is unchanged whatever the magnitude.
+    const entryPrice = priceForInstrument(rand, pair);
+    const decimals = priceDecimals(pair);
     const lotSize = round(0.1 + rand() * 0.5, 2);
     const stopLossPrice = isEstimated
       ? null
-      : round(entryPrice * (direction === 'long' ? 0.99 : 1.01), 5);
+      : round(entryPrice * (direction === 'long' ? 0.99 : 1.01), decimals);
     const plannedRR = round(1.6 + rand() * 1.4 + p * 0.4, 2);
     const exitDelta = realizedR * Math.abs(entryPrice * 0.01);
     const exitPrice = round(
       direction === 'long' ? entryPrice + exitDelta : entryPrice - exitDelta,
-      5,
+      decimals,
     );
 
     // Risk tightens (variance shrinks) as the member matures.

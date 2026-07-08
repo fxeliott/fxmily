@@ -66,6 +66,7 @@ function discrepancy(over: Partial<DiscrepancyView> = {}): DiscrepancyView {
       openTime: new Date('2026-06-10T09:05:00.000Z'),
       pnl: 120,
     },
+    offDayNeutralized: false,
     ...over,
   };
 }

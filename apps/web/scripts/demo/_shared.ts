@@ -186,6 +186,41 @@ export function progress(daysAgo: number, window = WINDOW_DAYS): number {
 export const PAIRS = ['EURUSD', 'GBPUSD', 'XAUUSD', 'NAS100', 'US30', 'USDJPY'] as const;
 export const SESSIONS = ['asia', 'london', 'newyork', 'overlap'] as const;
 
+/**
+ * Realistic price bands per seeded instrument (2026 orders of magnitude). The
+ * demo account is a SHOWCASE read by real traders — a « US30 entrée 1.27833 »
+ * screams fake data instantly (runtime finding 2026-07-08; the old seed drew a
+ * uniform 1.0-1.6 for EVERY instrument). Bands are deliberately wide:
+ * plausibility is the goal, not market accuracy. `decimals` mirrors each
+ * instrument's usual quote precision.
+ */
+export const INSTRUMENT_PRICE_BANDS: Record<
+  (typeof PAIRS)[number],
+  { min: number; max: number; decimals: number }
+> = {
+  EURUSD: { min: 1.05, max: 1.15, decimals: 5 },
+  GBPUSD: { min: 1.25, max: 1.35, decimals: 5 },
+  XAUUSD: { min: 2800, max: 3400, decimals: 2 },
+  NAS100: { min: 18000, max: 22000, decimals: 1 },
+  US30: { min: 38000, max: 45000, decimals: 1 },
+  USDJPY: { min: 140, max: 155, decimals: 3 },
+};
+
+/** Quote precision for an instrument (fallback: forex-style 5 decimals). */
+export function priceDecimals(pair: string): number {
+  return INSTRUMENT_PRICE_BANDS[pair as (typeof PAIRS)[number]]?.decimals ?? 5;
+}
+
+/** A plausible price inside the instrument's band (fallback: old 1.0-1.6). */
+export function priceForInstrument(rand: () => number, pair: string): number {
+  const band = INSTRUMENT_PRICE_BANDS[pair as (typeof PAIRS)[number]] ?? {
+    min: 1.0,
+    max: 1.6,
+    decimals: 5,
+  };
+  return round(band.min + rand() * (band.max - band.min), band.decimals);
+}
+
 export const POSITIVE_TRADE_TAGS = ['calm', 'focused', 'confident', 'disciplined'] as const;
 export const NEGATIVE_TRADE_TAGS = ['fomo', 'fear-loss', 'fear-wrong', 'frustrated'] as const;
 

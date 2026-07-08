@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Avatar } from '@/components/ui/avatar';
+import { convertHeicToJpeg, isHeicFile } from '@/lib/uploads/heic.client';
 
 import { AvatarCropEditor } from './avatar-crop-editor';
 
@@ -55,6 +56,10 @@ export function AvatarSettings({
   // createObjectURL during render, and a revoke effect would fire on Strict
   // Mode's simulated unmount and kill the live blob).
   const [editing, setEditing] = useState<string | null>(null);
+  // True while an iPhone HEIC photo is being decoded to JPEG on-device (lazy
+  // libheif WASM). It gates the picker button and shows a spinner so the ~1-3 s
+  // conversion never looks frozen or double-fires.
+  const [converting, setConverting] = useState(false);
   const editingUrlRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,15 +81,34 @@ export function AvatarSettings({
     setEditing(null);
   }
 
-  /** Open the crop/zoom editor for a freshly picked file (after a sanity cap). */
-  function openEditor(file: File): void {
+  /** Open the crop/zoom editor for a freshly picked file (after a sanity cap).
+   *  iPhone HEIC/HEIF is transparently converted to JPEG first so the browser
+   *  can actually display it in the editor. */
+  async function openEditor(file: File): Promise<void> {
     reset();
     if (file.size > INPUT_MAX_BYTES) {
       setError('Fichier trop lourd (40 Mo maximum). Choisis une image plus légère.');
       return;
     }
+    let framed = file;
+    try {
+      if (await isHeicFile(file)) {
+        // Browsers (except Safari) can't decode HEIC in <img>/<canvas>, so the
+        // crop editor would fail. Convert on-device first; the ~3 MB libheif
+        // WASM is lazy-loaded ONLY here, only for HEIC picks.
+        setConverting(true);
+        framed = await convertHeicToJpeg(file);
+      }
+    } catch {
+      setConverting(false);
+      setError(
+        'Cette photo iPhone (HEIC) n’a pas pu être convertie. Réessaie, ou exporte-la en JPEG (Réglages > Appareil photo > Le plus compatible).',
+      );
+      return;
+    }
+    setConverting(false);
     if (editingUrlRef.current) URL.revokeObjectURL(editingUrlRef.current);
-    const nextUrl = URL.createObjectURL(file);
+    const nextUrl = URL.createObjectURL(framed);
     editingUrlRef.current = nextUrl;
     setEditing(nextUrl);
   }
@@ -177,10 +201,10 @@ export function AvatarSettings({
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={busy || editing !== null}
+              disabled={busy || converting || editing !== null}
               className="rounded-control inline-flex h-10 items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3.5 text-[13px] font-medium text-[var(--acc-hi)] transition hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] disabled:opacity-60"
             >
-              {busy ? (
+              {busy || converting ? (
                 <Loader2
                   className="h-4 w-4 animate-spin motion-reduce:animate-none"
                   aria-hidden="true"
@@ -194,7 +218,7 @@ export function AvatarSettings({
               <button
                 type="button"
                 onClick={() => void remove()}
-                disabled={busy || editing !== null}
+                disabled={busy || converting || editing !== null}
                 className="rounded-control inline-flex h-10 items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-3.5 text-[13px] font-medium text-[var(--t-2)] transition hover:border-[var(--b-danger)] hover:text-[var(--bad)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -223,19 +247,31 @@ export function AvatarSettings({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        // Explicit `.heic,.heif` in addition to `image/*`: some OS file pickers
+        // grey out HEIC under a bare `image/*` because the platform has no
+        // registered MIME for it, so the member literally can't select their
+        // iPhone photo without the extension hint.
+        accept="image/*,.heic,.heif"
         className="sr-only"
         aria-label="Choisir une photo de profil"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) openEditor(file);
+          if (file) void openEditor(file);
           // Reset so re-picking the same file fires onChange again.
           e.target.value = '';
         }}
       />
 
       <div aria-live="polite" className="min-h-5">
-        {saved && !busy ? (
+        {converting ? (
+          <p className="inline-flex items-center gap-1.5 text-[13px] text-[var(--t-3)]">
+            <Loader2
+              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            Conversion de la photo iPhone en cours…
+          </p>
+        ) : saved && !busy ? (
           <p className="inline-flex items-center gap-1.5 text-[13px] text-[var(--ok)]">
             <Check className="h-4 w-4" aria-hidden="true" />
             Photo enregistrée. Elle apparaît dans le classement.

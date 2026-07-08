@@ -276,7 +276,7 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
     });
 
     // Assert 4 — exactly one calendar persisted, nothing skipped/errored.
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
 
     // Act + Assert 5 — the calendar is now readable for u1, absent for u2.
     const u1Calendar = await getCalendarForUser('u1', WEEK_START);
@@ -322,7 +322,7 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
       weekStart: WEEK_START,
       results: [{ userId: 'u1', output: generation.output }],
     });
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
 
     // Assert — after regeneration `generatedAt` is refreshed past `updatedAt`
     // (persistAdaptiveCalendar bumps it), so the next pull excludes u1 again.
@@ -359,7 +359,7 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
       snapshotTakenAt: envelope.ranAt,
       results: [{ userId: 'u1', output: generation.output }],
     });
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
 
     // Assert — `generatedAt` was stamped at the SNAPSHOT instant (09:00), NOT the
     // persist instant, so the 09:15 re-submit (> 09:00) RE-INCLUDES u1 next run.
@@ -471,7 +471,7 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
       weekStart: WEEK_START,
       results: [{ userId: 'u1', output: conflictingOutput }],
     });
-    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0, generationFailures: 0 });
 
     const cal = await getCalendarForUser('u1', WEEK_START);
     expect(cal).not.toBeNull();

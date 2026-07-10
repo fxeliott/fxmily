@@ -51,7 +51,10 @@ for sig in \
   "rate_limit_error from API" \
   "resource_exhausted" \
   "please try again later" \
-  "weekly usage cap hit"; do
+  "weekly usage cap hit" \
+  "You've hit your session limit · resets 12:50am (Europe/Paris)" \
+  "You’ve hit your session limit · resets 1:40pm (Europe/Paris)" \
+  "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models with /model."; do
   printf '%s\n' "$sig" >"$ERRORS_LOG"
   check_eq "signature '${sig:0:26}…' → rate_limited" "rate_limited" "$(core_classify_failure)"
 done
@@ -205,6 +208,36 @@ check_eq "current member's own rate-limit still detected past the mark" "rate_li
 core_reset_failure_state
 printf 'usage limit reached\n' >"$ERRORS_LOG"
 check_eq "mark 0 → whole-file classification (first call)" "rate_limited" "$(core_classify_failure)"
+
+# ---------------------------------------------------------------------------
+echo "[9] R18 cap-detection fix — cap notice on STDOUT only (empty stderr)"
+# Root cause of the 2026-07-09 20:01→22:49 UTC loop : a capped `claude --print`
+# exits 1 with an EMPTY stderr and prints the cap notice on stdout, so the
+# stderr-only classifier said "generic" → no latch → no exit 75 → no cooldown
+# → the 5-min tick hammered the capped account for 3 hours (~100 sessions).
+core_reset_failure_state
+: >"$ERRORS_LOG"
+CAP_RESP="$TMP/cap-resp.txt"
+printf "You've hit your session limit · resets 1:40pm (Europe/Paris)\n" >"$CAP_RESP"
+CORE_LAST_RESPONSE_FILE="$CAP_RESP"
+check_eq "cap in response file + empty stderr → rate_limited" "rate_limited" "$(core_classify_failure)"
+core_note_failure
+check_eq "response-file cap latches the run" "1" "$CORE_RATE_LIMITED"
+check_eq "latched run exits 75 (cooldown signal)" "75" "$(core_run_exit_code)"
+# Non-regression : a NORMAL JSON response + a pure network stderr stays generic.
+core_reset_failure_state
+printf '%s\n' '{"summary":"ok","confidence":0.9}' >"$CAP_RESP"
+CORE_LAST_RESPONSE_FILE="$CAP_RESP"
+printf 'ECONNRESET socket hang up\n' >"$ERRORS_LOG"
+check_eq "normal JSON response + network stderr → generic" "generic" "$(core_classify_failure)"
+# reset clears the pointer so a stale response can never bleed into a fresh run.
+core_reset_failure_state
+check_eq "reset clears CORE_LAST_RESPONSE_FILE" "" "${CORE_LAST_RESPONSE_FILE:-}"
+# core_invoke_claude_print records the response file it wrote (wiring proof).
+export MOCK_CLAUDE_MODE=ok
+FXMILY_CLAUDE_TIMEOUT_S=0
+core_invoke_claude_print "$PROMPT_FILE" "$RESP" >/dev/null 2>&1
+check_eq "invoke records CORE_LAST_RESPONSE_FILE" "$RESP" "$CORE_LAST_RESPONSE_FILE"
 
 # ---------------------------------------------------------------------------
 echo ""

@@ -107,6 +107,10 @@ CORE_TIMEOUT_WARNED=0
 # even successful, member would be misattributed to a later failure and trip a
 # spurious rate-limit halt). 0 = classify the whole file (first call / tests).
 CORE_ERRLOG_MARK=0
+# Path of the CURRENT call's captured stdout (set by core_invoke_claude_print).
+# Subscription-cap notices land on STDOUT with an empty stderr (R18 fix), so
+# core_classify_failure scans this file too. "" = no call yet this run.
+CORE_LAST_RESPONSE_FILE=""
 
 # --- Validations --------------------------------------------------------------
 
@@ -387,6 +391,14 @@ core_invoke_claude_print() {
     CORE_ERRLOG_MARK=$(wc -c <"$ERRORS_LOG" 2>/dev/null | tr -dc '0-9')
     [ -n "$CORE_ERRLOG_MARK" ] || CORE_ERRLOG_MARK=0
   fi
+  # R18 cap-detection fix — remember THIS call's response file so
+  # core_classify_failure can scan it too : a capped `claude --print` exits 1
+  # with an EMPTY stderr and prints the cap notice on STDOUT (proved on the
+  # 2026-07-09 20:01→22:49 UTC cap loop : claude-errors.log stayed 0 bytes
+  # while ~100 worker transcripts carried « You've hit your session limit »
+  # as assistant text). One response file per member → per-call by
+  # construction, no cross-member bleed.
+  CORE_LAST_RESPONSE_FILE="$response_file"
   # S3 — vision opt-in: `--allowedTools` is appended ONLY when the caller set
   # CLAUDE_ALLOWED_TOOLS (e.g. "Read" for the verification pipeline). The
   # empty default keeps the 4 text pipelines byte-identical (no flag at all).
@@ -493,6 +505,7 @@ core_reset_failure_state() {
   CORE_CONSECUTIVE_FAILURES=0
   CORE_RATE_LIMITED=0
   CORE_ERRLOG_MARK=0
+  CORE_LAST_RESPONSE_FILE=""
 }
 
 # Classify the LAST claude failure by scanning the tail of $ERRORS_LOG for a
@@ -512,8 +525,25 @@ core_classify_failure() {
     # call / direct-call tests).
     tail_txt=$(tail -c +"$(( ${CORE_ERRLOG_MARK:-0} + 1 ))" "$ERRORS_LOG" 2>/dev/null | tail -c 4000 || true)
   fi
+  # R18 cap-detection fix — ALSO scan the current call's captured stdout
+  # (CORE_LAST_RESPONSE_FILE, set by core_invoke_claude_print) : subscription
+  # caps arrive as assistant text on STDOUT with an empty stderr, so a
+  # stderr-only classifier can never see them (root cause of the 2026-07-09
+  # 3-hour cap-hammering loop : every tick halted "generic", exit 0, no
+  # cooldown). The response file is per-member, so no cross-member bleed.
+  if [ -n "${CORE_LAST_RESPONSE_FILE:-}" ] && [ -f "${CORE_LAST_RESPONSE_FILE:-}" ]; then
+    tail_txt="$tail_txt
+$(tail -c 4000 "$CORE_LAST_RESPONSE_FILE" 2>/dev/null || true)"
+  fi
+  # `session[ _-]?limit` + `(hit|reached) your` cover the real Max-plan cap
+  # wordings (« You've hit your session limit · resets… », « You've reached
+  # your Fable 5 limit… ») — deliberately WITHOUT matching the apostrophe
+  # (typographic ' is multi-byte; `.?` under a C locale matches one BYTE and
+  # would silently fail). Broad-match is the documented contract here : this
+  # only runs on an already-failed call, and a false positive costs a safe
+  # halt + idempotent re-run.
   if printf '%s' "$tail_txt" | grep -qiE \
-       'rate[ _-]?limit|usage[ _-]?limit|too many requests|(^|[^0-9])429([^0-9]|$)|quota|resource[ _-]?exhausted|overloaded|limit reached|usage cap|try again later'; then
+       'rate[ _-]?limit|usage[ _-]?limit|session[ _-]?limit|(hit|reached) your|too many requests|(^|[^0-9])429([^0-9]|$)|quota|resource[ _-]?exhausted|overloaded|limit reached|usage cap|try again later'; then
     echo "rate_limited"
   else
     echo "generic"

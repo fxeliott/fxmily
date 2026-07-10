@@ -31,6 +31,9 @@ const m = vi.hoisted(() => ({
   // storage adapter, then stamps filePurgedAt. Mocked so the unit tests stay on
   // the branching logic (real delete would touch the FS).
   storageDelete: vi.fn(),
+  // P1 2026-07-10 — the invalid-output attempt cap counts prior
+  // `verification.batch.invalid_output` audit rows via db.auditLog.count.
+  auditCount: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => {
@@ -44,6 +47,9 @@ vi.mock('@/lib/db', () => {
       count: m.accountCount,
     },
     extractedPosition: { findMany: m.positionFindMany, createMany: m.positionCreateMany },
+    // P1 2026-07-10 — countInvalidOutputAttempts reads prior invalid_output
+    // audit rows for the same proofId (7-day window) to drive the retry cap.
+    auditLog: { count: m.auditCount },
     // TXN-1 (RC#8) — materialiseProofExtraction now wraps read + insert +
     // proof-flip in an interactive transaction guarded by a tx-scoped advisory
     // lock (`pg_advisory_xact_lock`). The mock runs the callback synchronously
@@ -95,7 +101,12 @@ vi.mock('@/lib/notifications/enqueue', () => ({
   enqueueProofAnalyzedNotification: m.enqueueProofAnalyzed,
 }));
 
-import { persistVisionResults } from './batch';
+import {
+  ACCOUNT_LOGIN_UNREADABLE_REASON,
+  INVALID_OUTPUT_MAX_ATTEMPTS,
+  persistVisionResults,
+} from './batch';
+import { verificationVisionOutputSchema } from '@/lib/schemas/verification';
 import type { VerificationVisionOutput } from '@/lib/schemas/verification';
 
 const MEMBER = 'clxmember0001';
@@ -165,6 +176,10 @@ function seedHappyMocks() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // P1 2026-07-10 — default: no prior invalid_output rows (attempt = 1). Cap
+  // tests override with mockResolvedValue(N). NEVER leave this unseeded: an
+  // undefined resolve makes `prior + 1` NaN and silently disarms the cap.
+  m.auditCount.mockResolvedValue(0);
 });
 
 describe('persistVisionResults — event-driven alert scan (S4 §30 «sans délai»)', () => {
@@ -758,5 +773,250 @@ describe('persistVisionResults — Tour 14 verdict push (analyse prête)', () =>
     });
 
     expect(m.enqueueProofAnalyzed).not.toHaveBeenCalled();
+  });
+});
+
+describe('null-login terminal skip + attempt cap (P1 MT5 mobile, 2026-07-10)', () => {
+  /** Account slice with an unreadable login (MT5 mobile history layout). */
+  function accountWithLogin(login: string | null) {
+    return {
+      login,
+      broker: 'FTMO S.R.O.',
+      currency: 'USD',
+      label: null,
+      accountTypeGuess: 'prop_firm' as const,
+    };
+  }
+
+  /** Entry whose output fails the strict union (confidence must be 0-1). */
+  function malformedEntry() {
+    return {
+      proofId: PROOF,
+      userId: MEMBER,
+      output: { ...probeOutput(), confidence: 42 },
+    };
+  }
+
+  // — A. Schema: an honest « login not visible » extraction must PARSE, so the
+  //   pipeline can terminate the proof instead of burning retries on Zod.
+
+  it('accepts account.login: null (MT5 mobile history shows no account header)', () => {
+    const parsed = verificationVisionOutputSchema.safeParse(
+      probeOutput({ account: accountWithLogin(null) }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.account.login).toBeNull();
+  });
+
+  it('normalises account.login: "" to null BEFORE the regex (2 of the 4 real rejected payloads)', () => {
+    const parsed = verificationVisionOutputSchema.safeParse(
+      probeOutput({ account: accountWithLogin('') }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.account.login).toBeNull();
+  });
+
+  it('still rejects a garbage login (nullable did not loosen the regex)', () => {
+    const parsed = verificationVisionOutputSchema.safeParse(
+      probeOutput({ account: accountWithLogin('not a login!') }),
+    );
+
+    expect(parsed.success).toBe(false);
+  });
+
+  // — B. Persist: login null is a CONTENT verdict (same family as
+  //   not_mt5_history) → terminal failed + purge, never a silent retry loop.
+
+  it('flips a pending proof to failed, purges the file and audits the reason on login: null', async () => {
+    seedHappyMocks();
+
+    const result = await persistVisionResults({
+      results: [
+        {
+          proofId: PROOF,
+          userId: MEMBER,
+          output: probeOutput({
+            account: accountWithLogin(null),
+            screenObservation: 'Liste de positions MT5 mobile sans en-tête de compte visible.',
+          }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.storageDelete).toHaveBeenCalledWith(`proofs/${MEMBER}/abcdefghijklmnop.jpg`);
+    const purgeStamp = m.proofUpdate.mock.calls.find(
+      (c) => c[0]?.data?.filePurgedAt instanceof Date,
+    );
+    expect(purgeStamp).toBeDefined();
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.skipped',
+        userId: MEMBER,
+        metadata: expect.objectContaining({
+          proofId: PROOF,
+          reason: ACCOUNT_LOGIN_UNREADABLE_REASON,
+          observed: expect.stringContaining('MT5 mobile'),
+        }),
+      }),
+    );
+    expect(m.positionCreateMany).not.toHaveBeenCalled();
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledWith(MEMBER, {
+      analyzedCount: 0,
+      failedCount: 1,
+    });
+  });
+
+  it('routes login: "" through the same terminal path (preprocess runs before the check)', async () => {
+    seedHappyMocks();
+
+    const result = await persistVisionResults({
+      results: [
+        { proofId: PROOF, userId: MEMBER, output: probeOutput({ account: accountWithLogin('') }) },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.skipped',
+        metadata: expect.objectContaining({
+          proofId: PROOF,
+          reason: ACCOUNT_LOGIN_UNREADABLE_REASON,
+        }),
+      }),
+    );
+    expect(m.positionCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not re-flip nor re-purge an already-failed proof (idempotent skip)', async () => {
+    seedHappyMocks();
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'failed',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
+      },
+    ]);
+
+    const result = await persistVisionResults({
+      results: [
+        {
+          proofId: PROOF,
+          userId: MEMBER,
+          output: probeOutput({ account: accountWithLogin(null) }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(m.proofUpdate).not.toHaveBeenCalled();
+    expect(m.storageDelete).not.toHaveBeenCalled();
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.skipped',
+        metadata: expect.objectContaining({
+          proofId: PROOF,
+          reason: ACCOUNT_LOGIN_UNREADABLE_REASON,
+        }),
+      }),
+    );
+    expect(m.enqueueProofAnalyzed).not.toHaveBeenCalled();
+  });
+
+  // — C. Gate 0 attempt cap: a proof whose output NEVER parses must stop being
+  //   re-served (and re-paid) after INVALID_OUTPUT_MAX_ATTEMPTS runs.
+
+  it('audits gate entry_union with attempt 1 below the cap (proof stays pending)', async () => {
+    seedHappyMocks();
+
+    const result = await persistVisionResults({ results: [malformedEntry()] });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.invalid_output',
+        userId: MEMBER,
+        metadata: expect.objectContaining({ proofId: PROOF, gate: 'entry_union', attempt: 1 }),
+      }),
+    );
+    expect(m.proofUpdate).not.toHaveBeenCalled();
+    expect(m.storageDelete).not.toHaveBeenCalled();
+  });
+
+  it('flips the proof to failed once the attempt cap is reached', async () => {
+    seedHappyMocks();
+    // Prior audit rows in the window → THIS attempt is the cap.
+    m.auditCount.mockResolvedValue(INVALID_OUTPUT_MAX_ATTEMPTS - 1);
+
+    const result = await persistVisionResults({ results: [malformedEntry()] });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.storageDelete).toHaveBeenCalledWith(`proofs/${MEMBER}/abcdefghijklmnop.jpg`);
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.skipped',
+        userId: MEMBER,
+        metadata: expect.objectContaining({
+          proofId: PROOF,
+          reason: 'invalid_output_attempts_exhausted',
+          attempts: INVALID_OUTPUT_MAX_ATTEMPTS,
+        }),
+      }),
+    );
+  });
+
+  it("never flips someone else's proof at the cap (forged-userId ownership re-check)", async () => {
+    seedHappyMocks();
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: 'clxsomeoneelse',
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/clxsomeoneelse/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
+      },
+    ]);
+    m.auditCount.mockResolvedValue(INVALID_OUTPUT_MAX_ATTEMPTS - 1);
+
+    const result = await persistVisionResults({ results: [malformedEntry()] });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.invalid_output',
+        metadata: expect.objectContaining({ gate: 'entry_union' }),
+      }),
+    );
+    expect(m.proofUpdate).not.toHaveBeenCalled();
+    expect(m.storageDelete).not.toHaveBeenCalled();
+  });
+
+  it('fails open to attempt 1 when the attempt count itself errors (never terminal on uncertain data)', async () => {
+    seedHappyMocks();
+    m.auditCount.mockRejectedValue(new Error('db down'));
+
+    const result = await persistVisionResults({ results: [malformedEntry()] });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'verification.batch.invalid_output',
+        metadata: expect.objectContaining({ proofId: PROOF, attempt: 1 }),
+      }),
+    );
+    expect(m.proofUpdate).not.toHaveBeenCalled();
+    expect(m.storageDelete).not.toHaveBeenCalled();
   });
 });

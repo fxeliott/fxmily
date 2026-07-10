@@ -106,7 +106,25 @@ const isoDateTimeSchema = z
 
 const visionAccountSchema = z
   .object({
-    login: z.string().regex(ACCOUNT_LOGIN_REGEX, 'Login MT5 invalide.'),
+    /**
+     * `null` when NO account number is visible on the screen (the MT5 MOBILE
+     * history layout omits the header). Before 2026-07-10 this was
+     * non-nullable while the prompt said « si une valeur est illisible, mets
+     * null » — every mobile screenshot failed Gate 0/4 forever and the proof
+     * was re-served each worker tick (7h+ quota-burn loop, 5 proofs).
+     * A null login is handled as a terminal soft-failure by `batch.ts`
+     * (unreconciliable extraction), never persisted.
+     *
+     * `''` is normalised to `null` BEFORE validation: 2 of the 4 real rejected
+     * payloads (2026-07-10 worker forensics) carried `login: ""` — the model
+     * expresses « not visible » both ways, and both mean the same terminal
+     * outcome. Without this preprocess an empty string would still fail the
+     * `{1,32}` regex and burn retry attempts before the cap.
+     */
+    login: z.preprocess(
+      (v) => (v === '' ? null : v),
+      z.string().regex(ACCOUNT_LOGIN_REGEX, 'Login MT5 invalide.').nullable(),
+    ),
     broker: z.string().max(120).nullable(),
     currency: z.string().max(8).nullable(),
     label: z.string().max(120).nullable(),

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import type { ZodError } from 'zod';
+
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { selectStorage } from '@/lib/storage';
@@ -209,6 +211,50 @@ export async function loadPendingProofsEnvelope(
 export const NOT_MT5_HISTORY_ERROR = 'not_mt5_history';
 
 /**
+ * Anti-loop cap (2026-07-10 quota-burn incident): a proof whose entry keeps
+ * failing Zod (Gate 0/4) stays `pending`, so `loadPendingProofsEnvelope`
+ * re-serves it and the worker re-pays the same `claude --print` every tick —
+ * 7h+ straight before anyone noticed. After this many `invalid_output`
+ * audits inside the window below, the proof is terminally failed (the
+ * member re-shoots a fresh capture).
+ */
+export const INVALID_OUTPUT_MAX_ATTEMPTS = 3;
+const INVALID_OUTPUT_ATTEMPT_WINDOW_MS = 7 * 86_400_000;
+
+/** Terminal skip reason when the extraction carries `account.login: null`
+ *  (MT5 MOBILE layout shows no account header — nothing to reconcile on). */
+export const ACCOUNT_LOGIN_UNREADABLE_REASON = 'account_login_unreadable';
+
+/**
+ * Compact per-entry Zod failure summary for `invalid_output` audit rows.
+ * A top-level union failure always reports `issuesCount: 1` (one
+ * `invalid_union` issue) — which is exactly how the 2026-07-10 login-null
+ * loop stayed opaque for hours. Walking union branches yields deduped
+ * `path: code` strings so the audit says WHICH field broke. Bounded to 8.
+ */
+function summarizeZodIssues(error: ZodError): string[] {
+  const paths = new Set<string>();
+  const walk = (issues: readonly unknown[]): void => {
+    for (const raw of issues) {
+      if (paths.size >= 8) return;
+      if (typeof raw !== 'object' || raw === null) continue;
+      const issue = raw as { code?: unknown; path?: unknown; errors?: unknown };
+      if (issue.code === 'invalid_union' && Array.isArray(issue.errors)) {
+        for (const branch of issue.errors) {
+          if (Array.isArray(branch)) walk(branch);
+        }
+        continue;
+      }
+      const path = Array.isArray(issue.path) ? issue.path.map(String).join('.') : '';
+      const code = typeof issue.code === 'string' ? issue.code : 'unknown';
+      paths.add(`${path || '(root)'}: ${code}`);
+    }
+  };
+  walk(error.issues);
+  return [...paths];
+}
+
+/**
  * Tour 13 — purge a proof's stored screen once it reaches a TERMINAL state.
  * The verification screens exist « QU'À la vérification, traités à la volée et
  * jamais conservés » : the second a proof is analysed (`done`) or terminally
@@ -329,6 +375,49 @@ export async function persistVisionResults(
     verdictByMember.set(userId, current);
   };
 
+  // Terminal soft-failure sequence — flip to `failed`, count toward the
+  // member's verdict push, purge the stored screen. Exactly what the
+  // `not_mt5_history` wire-error path has always done; factored out
+  // (2026-07-10) because the null-login skip and the invalid-output attempt
+  // cap now share it. Order matters: flip THEN purge (the purge stamps
+  // `filePurgedAt` on the already-terminal row).
+  const flipProofToFailedAndPurge = async (
+    proofRow: { id: string; fileKey: string; filePurgedAt: Date | null },
+    userId: string,
+  ): Promise<void> => {
+    await db.mt5AccountProof.update({
+      where: { id: proofRow.id },
+      data: { ocrStatus: 'failed', claudeRunId: ranAt },
+    });
+    bumpVerdict(userId, 'failed');
+    await purgeProofFile({
+      proofId: proofRow.id,
+      fileKey: proofRow.fileKey,
+      alreadyPurged: proofRow.filePurgedAt !== null,
+      ranAt,
+      userId,
+    });
+  };
+
+  // Ordinal of THIS invalid-output attempt for a proof: prior audit rows in
+  // the 7-day window + 1. Fails open to 1 on a count error — never
+  // terminal-fail a proof on uncertain data.
+  const countInvalidOutputAttempts = async (proofId: string): Promise<number> => {
+    try {
+      const prior = await db.auditLog.count({
+        where: {
+          action: 'verification.batch.invalid_output',
+          createdAt: { gt: new Date(Date.now() - INVALID_OUTPUT_ATTEMPT_WINDOW_MS) },
+          metadata: { path: ['proofId'], equals: proofId },
+        },
+      });
+      return prior + 1;
+    } catch {
+      reportWarning('verification.batch', 'invalid_output_attempt_count_failed', { proofId });
+      return 1;
+    }
+  };
+
   for (const rawEntry of request.results) {
     // Gate 0 — strict per-entry union re-parse. This validation used to live
     // at the route envelope; moved here (2026-07-02, mirror onboarding) so
@@ -338,6 +427,7 @@ export async function persistVisionResults(
     const entryParsed = verificationBatchResultEntrySchema.safeParse(rawEntry);
     if (!entryParsed.success) {
       errors += 1;
+      const attempt = await countInvalidOutputAttempts(rawEntry.proofId);
       await logAudit({
         action: 'verification.batch.invalid_output',
         userId: rawEntry.userId,
@@ -345,9 +435,34 @@ export async function persistVisionResults(
           ranAt,
           proofId: rawEntry.proofId,
           issuesCount: entryParsed.error.issues.length,
+          issuePaths: summarizeZodIssues(entryParsed.error),
+          attempt,
           gate: 'entry_union',
         },
       });
+      // Attempt cap — the proof would otherwise be re-served (and re-paid)
+      // forever. Ownership is re-checked inline: Gates 1-2 have not run on
+      // this branch, so a forged userId must never flip someone else's proof.
+      if (attempt >= INVALID_OUTPUT_MAX_ATTEMPTS) {
+        const proofForCap = proofById.get(rawEntry.proofId);
+        if (
+          proofForCap &&
+          proofForCap.memberId === rawEntry.userId &&
+          proofForCap.ocrStatus === 'pending'
+        ) {
+          await flipProofToFailedAndPurge(proofForCap, rawEntry.userId);
+          await logAudit({
+            action: 'verification.batch.skipped',
+            userId: rawEntry.userId,
+            metadata: {
+              ranAt,
+              proofId: rawEntry.proofId,
+              reason: 'invalid_output_attempts_exhausted',
+              attempts: attempt,
+            },
+          });
+        }
+      }
       continue;
     }
     const entry: VerificationBatchResultEntry = entryParsed.data;
@@ -391,23 +506,10 @@ export async function persistVisionResults(
       // must never flip an already-analysed (`done`) proof back to `failed`
       // while its positions remain — the verdict only applies pre-analysis.
       if (entry.error === NOT_MT5_HISTORY_ERROR && proof.ocrStatus === 'pending') {
-        await db.mt5AccountProof.update({
-          where: { id: entry.proofId },
-          data: { ocrStatus: 'failed', claudeRunId: ranAt },
-        });
-        // Terminal `failed` → the member should learn the capture could not be
-        // read (so they can re-shoot); count it toward this run's verdict push.
-        bumpVerdict(entry.userId, 'failed');
-        // Terminal `failed` → the screen has served its (unsuccessful) purpose;
-        // purge it now. The member re-shoots via a fresh upload, never a stored
-        // retry of THIS one.
-        await purgeProofFile({
-          proofId: entry.proofId,
-          fileKey: proof.fileKey,
-          alreadyPurged: proof.filePurgedAt !== null,
-          ranAt,
-          userId: entry.userId,
-        });
+        // Terminal `failed` → the member learns the capture could not be read
+        // (they re-shoot via a fresh upload — the screen is purged, never
+        // retried from storage); counted toward this run's verdict push.
+        await flipProofToFailedAndPurge(proof, entry.userId);
       }
       await logAudit({
         action: 'verification.batch.skipped',
@@ -440,14 +542,63 @@ export async function persistVisionResults(
     const parsed = verificationVisionOutputSchema.safeParse(entry.output);
     if (!parsed.success) {
       errors += 1;
+      const attempt = await countInvalidOutputAttempts(entry.proofId);
       await logAudit({
         action: 'verification.batch.invalid_output',
         userId: entry.userId,
-        metadata: { ranAt, proofId: entry.proofId, issuesCount: parsed.error.issues.length },
+        metadata: {
+          ranAt,
+          proofId: entry.proofId,
+          issuesCount: parsed.error.issues.length,
+          issuePaths: summarizeZodIssues(parsed.error),
+          attempt,
+        },
       });
+      // Attempt cap — mirror of Gate 0 (ownership already proven by Gate 2,
+      // `done` already excluded by Gate 3, so only `pending` needs checking).
+      if (attempt >= INVALID_OUTPUT_MAX_ATTEMPTS && proof.ocrStatus === 'pending') {
+        await flipProofToFailedAndPurge(proof, entry.userId);
+        await logAudit({
+          action: 'verification.batch.skipped',
+          userId: entry.userId,
+          metadata: {
+            ranAt,
+            proofId: entry.proofId,
+            reason: 'invalid_output_attempts_exhausted',
+            attempts: attempt,
+          },
+        });
+      }
       continue;
     }
     const output = parsed.data;
+
+    // Null-login terminal skip (2026-07-10) — the MT5 MOBILE history layout
+    // shows no account number, so an honest extraction can carry
+    // `account.login: null` (the prompt now says so explicitly). Without the
+    // header there is NOTHING to reconcile on: the login is THE account
+    // resolution key (§33.3 « réalité vs déclaré »), and the looping members'
+    // declared rows all had `accountLogin: null` too. Persisting would
+    // corrupt that signal, so this is the same CONTENT verdict as
+    // `not_mt5_history`: terminal `failed`, nothing persisted, the member
+    // re-shoots a capture that includes the account header.
+    if (output.account.login === null) {
+      skipped += 1;
+      if (proof.ocrStatus === 'pending') {
+        await flipProofToFailedAndPurge(proof, entry.userId);
+      }
+      await logAudit({
+        action: 'verification.batch.skipped',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          proofId: entry.proofId,
+          reason: ACCOUNT_LOGIN_UNREADABLE_REASON,
+          ...(output.screenObservation ? { observed: output.screenObservation.slice(0, 300) } : {}),
+        },
+      });
+      continue;
+    }
 
     // Gate 5 — crisis + AMF on every text field (§5.3 invariant: ALL AI
     // output passes the gates — a screenshot can carry burned-in text that
@@ -661,7 +812,12 @@ interface MaterialiseResult {
  */
 async function materialiseProofExtraction(args: MaterialiseArgs): Promise<MaterialiseResult> {
   const { memberId, proofId, output } = args;
-  const login = safeFreeText(output.account.login);
+  // Invariant: the null-login terminal skip in `persistVisionResults` runs
+  // BEFORE materialisation — a null login has no resolution key and must
+  // never reach this point.
+  const rawLogin = output.account.login;
+  if (rawLogin === null) throw new Error('login_null_output_is_not_materialisable');
+  const login = safeFreeText(rawLogin);
   const brokerName = output.account.broker
     ? safeFreeText(output.account.broker).slice(0, 80)
     : null;

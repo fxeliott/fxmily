@@ -259,12 +259,21 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     continue
   fi
 
+  # screenObservation is part of the wire contract (optional, server caps it at
+  # 300 chars) — it feeds the null-login skip audit (`observed`). Truncate here
+  # so an over-long model note can never fail the whole entry server-side.
   jq -nc \
     --arg pid "$PROOF_ID" \
     --arg uid "$USER_ID" \
     --slurpfile output "$PARSED_FILE" \
     --arg model "$CLAUDE_MODEL" \
-    '{proofId: $pid, userId: $uid, output: ($output[0] | {account, positions, confidence}), model: $model}' \
+    '{proofId: $pid, userId: $uid,
+      output: ($output[0]
+        | {account, positions, confidence}
+        + (if (.screenObservation | type) == "string"
+           then {screenObservation: .screenObservation[0:300]}
+           else {} end)),
+      model: $model}' \
     >> "$RESULTS_NDJSON"
 
   echo "[verification-batch] Captured extraction for $PSEUDONYM"

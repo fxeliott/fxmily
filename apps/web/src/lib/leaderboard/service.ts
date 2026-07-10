@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { avatarUrlOf, initialsOf } from '@/lib/avatar/read-url';
 import {
   localDateOf,
   parseLocalDate,
@@ -11,7 +12,6 @@ import {
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
-import { selectStorage } from '@/lib/storage';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 
@@ -25,6 +25,7 @@ import {
   type RankDirection,
   type RankMovement,
 } from './ranking';
+import { LEADERBOARD_EXCLUDED_EMAILS } from './showcase';
 import {
   asLeaderboardInputJson,
   type LeaderboardComponentsJson,
@@ -159,8 +160,10 @@ interface ComputedEntry extends RankableEntry {
  * Recompute + persist the leaderboard for every active member. Anchored on
  * yesterday-local (matching the behavioral snapshot the cron just refreshed).
  * Opted-out members ARE computed (so they can see their own rank privately);
- * the READ layer hides them from other members. Idempotent: upsert on
- * (userId, date) — a re-run overwrites rather than stacks.
+ * the READ layer hides them from other members. Showcase/demo accounts
+ * (`LEADERBOARD_EXCLUDED_EMAILS`) are excluded entirely — never gathered and
+ * their rows purged. Idempotent: upsert on (userId, date) — a re-run overwrites
+ * rather than stacks.
  */
 export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecomputeResult> {
   const instant = now ?? new Date();
@@ -172,8 +175,18 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
   const anchorUtc = parseLocalDate(anchor);
   const windowStartUtc = parseLocalDate(shiftLocalDate(anchor, -(LEADERBOARD_WINDOW_DAYS - 1)));
 
+  // Showcase/demo accounts (the shared `demo@fxmily.local` vitrine) are never
+  // real members — exclude them from the gather so they never get a snapshot
+  // row, and purge any row written before this exclusion existed. The recompute
+  // is the single writer of this table, so it owns keeping showcase accounts
+  // out of it entirely (defense that survives a re-run, unlike a read filter).
+  const excludedEmails = [...LEADERBOARD_EXCLUDED_EMAILS];
+  await db.leaderboardSnapshot.deleteMany({
+    where: { user: { email: { in: excludedEmails } } },
+  });
+
   const users = await db.user.findMany({
-    where: { status: 'active' },
+    where: { status: 'active', email: { notIn: excludedEmails } },
     select: { id: true, joinedAt: true },
   });
 
@@ -310,24 +323,6 @@ interface SnapshotUserRow {
     image: string | null;
     leaderboardOptOut: boolean;
   };
-}
-
-function initialsOf(firstName: string | null, lastName: string | null): string {
-  const a = firstName?.trim().charAt(0) ?? '';
-  const b = lastName?.trim().charAt(0) ?? '';
-  const s = `${a}${b}`.toUpperCase();
-  return s.length > 0 ? s : '?';
-}
-
-function avatarUrlOf(avatarKey: string | null, image: string | null): string | null {
-  if (avatarKey) {
-    try {
-      return selectStorage().getReadUrl(avatarKey);
-    } catch {
-      // Malformed key never breaks the board — fall through to initials.
-    }
-  }
-  return image ?? null;
 }
 
 function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {

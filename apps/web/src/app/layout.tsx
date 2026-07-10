@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AppShell } from '@/components/nav/app-shell';
 import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getSessionAvatar } from '@/lib/avatar/read-url';
 import './globals.css';
 
 const inter = Inter({
@@ -110,11 +111,23 @@ export default async function RootLayout({
   // fermée, robots noindex). L'AppShell se retire de lui-même sur les routes
   // publiques / hors session (il rend alors uniquement `children`).
   const session = await auth();
+  // Avatar for the nav-shell chip (sidebar desktop + mobile drawer), resolvable
+  // for ANY authenticated user — member OR admin — so the face shows next to the
+  // first name immediately, independent of the nightly leaderboard snapshot.
+  // `getSessionAvatar` is React.cache()-wrapped, so this is a single PK lookup
+  // shared with any other server surface that reads it in the same render.
+  const shellAvatar = session?.user?.id ? await getSessionAvatar(session.user.id) : null;
   const sessionLite = session?.user
     ? {
         name: session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre',
         email: session.user.email ?? '',
         isAdmin: session.user.role === 'admin',
+        avatarUrl: shellAvatar?.url ?? null,
+        firstName:
+          shellAvatar?.firstName ||
+          session.user.name?.trim() ||
+          session.user.email?.split('@')[0] ||
+          'Membre',
       }
     : null;
 

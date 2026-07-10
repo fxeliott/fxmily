@@ -7,8 +7,8 @@ import { auth } from '@/auth';
 import { AvatarSettings } from '@/components/account/avatar-settings';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
+import { avatarUrlOf, initialsOf } from '@/lib/avatar/read-url';
 import { db } from '@/lib/db';
-import { selectStorage } from '@/lib/storage';
 
 /**
  * `/account/photo` — member profile-photo settings.
@@ -26,24 +26,6 @@ export const metadata: Metadata = {
     'Ajoute ou change ta photo de profil Fxmily. Elle apparaît sur le classement des membres, à côté de ton prénom.',
 };
 export const dynamic = 'force-dynamic';
-
-function initialsOf(firstName: string | null, lastName: string | null): string {
-  const a = firstName?.trim().charAt(0) ?? '';
-  const b = lastName?.trim().charAt(0) ?? '';
-  const s = `${a}${b}`.toUpperCase();
-  return s.length > 0 ? s : '?';
-}
-
-function avatarUrlOf(avatarKey: string | null, image: string | null): string | null {
-  if (avatarKey) {
-    try {
-      return selectStorage().getReadUrl(avatarKey);
-    } catch {
-      // Malformed key never breaks the page, fall back to initials.
-    }
-  }
-  return image ?? null;
-}
 
 export default async function AccountPhotoPage(): Promise<React.ReactElement> {
   const session = await auth();

@@ -7,6 +7,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 import { Spinner } from '@/components/spinner';
 import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
 import { compressProofImage } from '@/lib/uploads/compress-proof-client';
+import { convertHeicToJpeg, isHeicFile } from '@/lib/uploads/heic.client';
 import { cn } from '@/lib/utils';
 
 interface ProofUploaderAccountOption {
@@ -22,8 +23,8 @@ interface ProofUploaderProps {
 /**
  * Tour 13 — a proof accepts any common phone/desktop capture format: it is
  * normalised to JPEG server-side. 20 MiB raw ceiling (a HEIC-exported PNG can
- * be heavy before normalisation). HEIC itself is undecodable → a dedicated,
- * actionable message.
+ * be heavy before normalisation). HEIC itself is undecodable server-side →
+ * converted to JPEG in the browser (same lazy WASM path as the avatar).
  */
 const ACCEPTED_INPUT_MIME = [
   'image/jpeg',
@@ -46,7 +47,7 @@ const ERROR_LABELS = {
   invalid_mime: 'Format non supporté. Utilise JPG, PNG, WebP, GIF ou AVIF.',
   invalid_bytes: 'Le fichier ne ressemble pas à une vraie image.',
   heic_unsupported:
-    'Format HEIC non pris en charge. Sur iPhone : Réglages > Appareil photo > Formats > Le plus compatible, ou exporte en JPEG.',
+    'Cette capture iPhone (HEIC) n’a pas pu être convertie. Réessaie, ou exporte-la en JPEG (Réglages > Appareil photo > Formats > Le plus compatible).',
   duplicate_proof: 'Cette capture a déjà été envoyée, pas besoin de la renvoyer.',
   rate_limited: 'Trop d’envois d’un coup, attends quelques secondes.',
   storage_failed: "Échec de l'enregistrement, réessaie.",
@@ -57,7 +58,9 @@ function errorLabel(code: string | undefined): string {
   return 'Échec de l’envoi.';
 }
 
-const ACCEPT = ACCEPTED_INPUT_MIME.join(',');
+// HEIC/HEIF are offered by the picker (iOS default capture format) and
+// converted to JPEG in the browser before the POST.
+const ACCEPT = [...ACCEPTED_INPUT_MIME, 'image/heic', 'image/heif'].join(',');
 
 const ACCOUNT_TYPE_LABELS: Record<ProofAccountType, string> = {
   prop_firm: 'Prop firm',
@@ -108,16 +111,16 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
         setMessage(errorLabel('too_large'));
         return;
       }
-      // HEIC often surfaces as `image/heic`/`image/heif` (or an empty type from
-      // the OS picker) — give the actionable message up front instead of a
-      // generic "format non supporté".
-      if (file.type === 'image/heic' || file.type === 'image/heif') {
-        setStatus('error');
-        setMessage(errorLabel('heic_unsupported'));
-        return;
-      }
+      // HEIC often surfaces as `image/heic`/`image/heif` (or an empty type
+      // from the OS picker) — it is converted to JPEG in the browser below
+      // instead of being rejected.
+      const isHeicType = file.type === 'image/heic' || file.type === 'image/heif';
       // Empty type (some pickers) is tolerated — the server sniffs magic bytes.
-      if (file.type !== '' && !(ACCEPTED_INPUT_MIME as readonly string[]).includes(file.type)) {
+      if (
+        !isHeicType &&
+        file.type !== '' &&
+        !(ACCEPTED_INPUT_MIME as readonly string[]).includes(file.type)
+      ) {
         setStatus('error');
         setMessage(errorLabel('invalid_mime'));
         return;
@@ -127,13 +130,31 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       setMessage(null);
       setUploadingSize(file.size);
 
+      // Convert an iPhone HEIC capture to JPEG in the browser (same lazy WASM
+      // path as the avatar) so the member uploads without touching any phone
+      // setting. `isHeicFile` sniffs the ftyp box, so an empty-MIME HEIC from
+      // the OS picker converts too. The server still rejects raw HEIC
+      // (defense-in-depth).
+      let source = file;
+      try {
+        if (isHeicType || (await isHeicFile(file))) {
+          source = await convertHeicToJpeg(file);
+          setUploadingSize(source.size);
+        }
+      } catch {
+        setStatus('error');
+        setMessage(errorLabel('heic_unsupported'));
+        setUploadingSize(null);
+        return;
+      }
+
       // Tour 14 — shrink a heavy capture in the browser before the transfer so
       // the slow part (mobile uplink) sends a few hundred KB instead of several
       // MB. Best-effort: returns the raw file untouched on any failure or for a
       // small capture. The server re-normalises regardless, so this only speeds
       // the wire. Reflect the actually-sent size in the copy.
-      const toSend = await compressProofImage(file);
-      if (toSend.size !== file.size) setUploadingSize(toSend.size);
+      const toSend = await compressProofImage(source);
+      if (toSend.size !== source.size) setUploadingSize(toSend.size);
 
       const fd = new FormData();
       fd.append('file', toSend);
@@ -275,7 +296,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
                 {isDragOver ? 'Lâche pour envoyer' : 'Ajoute une capture de ton historique MT5'}
               </span>
               <span id={hintId} className="t-cap text-[var(--t-4)]">
-                Onglet « Historique » de MT5 · JPG, PNG, WebP, GIF ou AVIF, 20 Mo max
+                Onglet « Historique » de MT5 · JPG, PNG, WebP, GIF, AVIF ou HEIC (iPhone), 20 Mo max
               </span>
             </div>
           </>

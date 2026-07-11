@@ -44,9 +44,20 @@ import { getAxisLabel } from '@/lib/tracking/axes';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
+// V1.8 REFLECT — the member's OWN weekly review (Sunday recap, 5 free-text
+// answers). Real-edge REFLECT read (member reflection on their REAL week — NOT
+// training), outside the §21.5 firewall like scoring/meeting/verification above.
+// Member free-text → the loader caps/truncates only; the builder re-hardens
+// (safeFreeText) and the prompt wraps it untrusted.
+import { getWeeklyReview } from '@/lib/weekly-review/service';
 
 import type { MemberToneRef } from './prompt';
-import type { BehavioralScoreSnapshot, BuilderInput, MemberScreenNote } from './types';
+import type {
+  BehavioralScoreSnapshot,
+  BuilderInput,
+  MemberScreenNote,
+  MemberWeeklyReviewAnswers,
+} from './types';
 import {
   computePreviousFullWeekWindow,
   computeReportingWeek,
@@ -154,6 +165,7 @@ export async function loadWeeklySliceForUser(
     coaching,
     memberProfileRow,
     offCtx,
+    memberWeeklyReview,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -225,6 +237,12 @@ export async function loadWeeklySliceForUser(
     // `weekendsOff` flag (React-cached). Feeds `offDaysInWindow` so the report
     // reads a jour off as a choice of process, never a missing check-in (§31.2).
     getOffDaySet(userId, window.weekStartLocal, window.weekEndLocal),
+    // V1.8 REFLECT — the member's own weekly review for THIS report week
+    // (keyed `(userId, weekStart)` on the civil local Monday — same `@db.Date`
+    // convention as the ConstancyScore read above, so `weekStartLocal`, never
+    // the TZ-shifted `weekStartUtc`). Loader caps/truncates each answer; the
+    // builder re-hardens + the prompt wraps untrusted. `null` = no review.
+    loadMemberWeeklyReview(userId, window.weekStartLocal),
   ]);
 
   // DOD3-01 / DoD#2 S6 — a single report week has ≤1 ConstancyScore; take it (or
@@ -299,6 +317,10 @@ export async function loadWeeklySliceForUser(
     // S5 §32-C/D — coaching psychologique structuré (le builder le rend en bloc
     // Markdown dans le snapshot ; `null` → slice omis). §2-safe (copie curée).
     coaching,
+    // V1.8 REFLECT — the member's own words about their week (weekly review).
+    // Member free-text → re-hardened by the builder (safeFreeText), wrapped
+    // untrusted at the prompt boundary. `null` when no review was submitted.
+    memberWeeklyReview,
   };
 
   return {
@@ -593,6 +615,49 @@ async function loadMemberScreenNotes(
     }
   }
   return notes;
+}
+
+// V1.8 REFLECT — per-answer truncation applied at the loader boundary so the
+// payload crossing into the builder stays bounded even though the wizard
+// accepts up to 4000 chars per answer (`REVIEW_TEXT_MAX_CHARS`). The builder
+// re-hardens (trim + 400-char ceiling + `safeFreeText`) — this cap only keeps
+// the slice lean; it is NOT the sanitization layer.
+const MEMBER_WEEKLY_REVIEW_LOADER_MAX_CHARS = 300;
+
+/**
+ * V1.8 REFLECT — the member's OWN completed weekly review for the report week.
+ *
+ * DEFENSIVE by design: `getWeeklyReview` returns `null` when the member never
+ * submitted a review for this `weekStart` → the report generates exactly as
+ * before (the builder omits the slice, honest empty state). The service layer
+ * guarantees the row shape (typed Text columns, `bestPractice` the only
+ * nullable answer), so no Json-snapshot parsing is needed here — but every
+ * answer is still trimmed + truncated so a legacy oversized row can never
+ * balloon the prompt payload.
+ *
+ * `weekStartLocal` is the civil local Monday (`YYYY-MM-DD`) — the same
+ * `@db.Date` convention `getWeeklyReview` pins via `parseLocalDate`, so the
+ * lookup never drifts a day across timezones (J8 BLOCKER #1 lesson).
+ *
+ * MEMBER free-text — the builder re-hardens (`safeFreeText`) and the prompt
+ * wraps it untrusted; this loader only shapes + bounds.
+ */
+async function loadMemberWeeklyReview(
+  userId: string,
+  weekStartLocal: string,
+): Promise<MemberWeeklyReviewAnswers | null> {
+  const review = await getWeeklyReview(userId, weekStartLocal);
+  if (review === null) return null;
+  const cap = (s: string): string => s.trim().slice(0, MEMBER_WEEKLY_REVIEW_LOADER_MAX_CHARS);
+  return {
+    biggestWin: cap(review.biggestWin),
+    biggestMistake: cap(review.biggestMistake),
+    // Honest optional: the wizard's only optional answer stays `null` (never a
+    // fake empty string) so the builder/prompt can omit the bullet entirely.
+    bestPractice: review.bestPractice === null ? null : cap(review.bestPractice),
+    lessonLearned: cap(review.lessonLearned),
+    nextWeekFocus: cap(review.nextWeekFocus),
+  };
 }
 
 // =============================================================================

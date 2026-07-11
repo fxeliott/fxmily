@@ -73,11 +73,18 @@ vi.mock('@/lib/verification/service', () => ({ countOpenDiscrepancies: vi.fn(asy
 vi.mock('@/lib/coaching/service', () => ({
   getCoachingReportContext: vi.fn(async () => null),
 }));
+// V1.8 REFLECT — the member's own weekly review. Default `null` (no review
+// submitted) = the DEFENSIVE path: every pre-existing assertion stays
+// byte-identical and the report builds exactly as before the wiring.
+vi.mock('@/lib/weekly-review/service', () => ({
+  getWeeklyReview: vi.fn(async () => null),
+}));
 
 import { db } from '@/lib/db';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
+import { getWeeklyReview } from '@/lib/weekly-review/service';
 
 import { loadWeeklySliceForUser } from './loader';
 import { computeReportingWeek } from './week-window';
@@ -168,6 +175,60 @@ describe('loadWeeklySliceForUser — Session-3 verification injection (DoD §32 
       constancy: { value: 72, honesty: 90, regularity: 60, discipline: 66 },
       openDiscrepancyCount: 1,
       alertCount: 2,
+    });
+  });
+});
+
+describe('loadWeeklySliceForUser — V1.8 member weekly review injection', () => {
+  it('should_pass_null_memberWeeklyReview_when_the_member_submitted_no_review', async () => {
+    // Act — the default mock returns null (no review for this week).
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — DEFENSIVE read: absent review → honest null, report unchanged.
+    expect(getWeeklyReview).toHaveBeenCalledTimes(1);
+    expect(slice?.builderInput.memberWeeklyReview).toBeNull();
+  });
+
+  it('should_key_the_review_lookup_on_the_civil_local_monday_of_the_report_week', async () => {
+    // Arrange — the loader must use weekStartLocal (YYYY-MM-DD civil Monday),
+    // never the TZ-shifted weekStartUtc instant (J8 BLOCKER #1 lesson).
+    const window = computeReportingWeek(CRON_NOW, TZ);
+
+    // Act
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert
+    expect(getWeeklyReview).toHaveBeenCalledWith('user-1', window.weekStartLocal);
+  });
+
+  it('should_shape_and_truncate_the_answers_when_the_member_submitted_a_review', async () => {
+    // Arrange — a completed review; one answer overshoots the 300-char loader
+    // cap, `bestPractice` is the honest optional null.
+    vi.mocked(getWeeklyReview).mockResolvedValue({
+      id: 'rev-1',
+      userId: 'user-1',
+      weekStart: '2026-06-01',
+      weekEnd: '2026-06-07',
+      biggestWin: '  Respecté mon plan toute la semaine.  ',
+      biggestMistake: 'x'.repeat(500),
+      bestPractice: null,
+      lessonLearned: 'Attendre mon setup.',
+      nextWeekFocus: 'Une seule session par jour.',
+      submittedAt: '2026-06-07T18:00:00.000Z',
+      createdAt: '2026-06-07T18:00:00.000Z',
+      updatedAt: '2026-06-07T18:00:00.000Z',
+    });
+
+    // Act
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — trimmed, truncated to the loader cap, null preserved.
+    expect(slice?.builderInput.memberWeeklyReview).toEqual({
+      biggestWin: 'Respecté mon plan toute la semaine.',
+      biggestMistake: 'x'.repeat(300),
+      bestPractice: null,
+      lessonLearned: 'Attendre mon setup.',
+      nextWeekFocus: 'Une seule session par jour.',
     });
   });
 });

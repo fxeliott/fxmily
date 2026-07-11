@@ -191,6 +191,13 @@ export type AuditAction =
   // /admin/system AND /api/cron/health — a self-healer nobody watches is the
   // exact blind spot the worker layer had before its own watchdog.
   | 'cron.autoheal.heartbeat'
+  // Nightly Postgres backup heartbeat (/usr/local/bin/fxmily-backup, 02:30 Paris
+  // on the Hetzner host, POSTs after the R2 offsite upload + rotation).
+  // Counts-only metadata (dumpBytes/durationSecs/offsiteUploaded), NEVER a
+  // filename, bucket name or token. Monitored in EXPECTATIONS so a backup
+  // chain that dies silently surfaces red on /admin/system within 48h —
+  // instead of being discovered the day a restore is needed.
+  | 'cron.backup.heartbeat'
   // V2.0 — TRACK module (master plan A2-A5 must-have habit logging).
   // `habit_log.upserted` carries `kind` + `wasNew` in metadata so the
   // analytics pipeline (V2.1 D-features) can distinguish create vs update.

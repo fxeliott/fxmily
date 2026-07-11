@@ -12,6 +12,7 @@ import { DeleteProofButton } from '@/components/verification/delete-proof-button
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { DriftAlertsCard } from '@/components/verification/drift-alerts-card';
 import { ProofAnalysisPoller } from '@/components/verification/proof-analysis-poller';
+import { ProofThumbnail } from '@/components/verification/proof-thumbnail';
 import { ProofUploader } from '@/components/verification/proof-uploader';
 import { RealityVsDeclared } from '@/components/verification/reality-vs-declared';
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
@@ -483,21 +484,11 @@ export default async function VerificationPage() {
                 return (
                   <li key={proof.id}>
                     <Card className="wow-hover-glow flex flex-wrap items-center gap-3 p-4">
-                      <a
-                        href={proof.readUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Ouvrir la capture du ${formatDate(proof.uploadedAt, timezone)} en grand (nouvel onglet)`}
-                        className="rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={proof.readUrl}
-                          alt="Capture d'historique MT5"
-                          loading="lazy"
-                          className="rounded-card h-16 w-24 border border-[var(--b-default)] object-cover"
-                        />
-                      </a>
+                      <ProofThumbnail
+                        purged={proof.filePurgedAt !== null}
+                        readUrl={proof.readUrl}
+                        openAriaLabel={`Ouvrir la capture du ${formatDate(proof.uploadedAt, timezone)} en grand (nouvel onglet)`}
+                      />
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <span className="t-cap text-[var(--t-3)]">
                           {formatDate(proof.uploadedAt, timezone)}
@@ -509,6 +500,15 @@ export default async function VerificationPage() {
                         <span>
                           <Pill tone={statusMeta.tone}>{statusMeta.label}</Pill>
                         </span>
+                        {proof.filePurgedAt !== null ? (
+                          /* Tour 13 — le fichier a été purgé du stockage après
+                             analyse : la vignette est un placeholder et cette
+                             ligne porte l'explication (visible + lue par les
+                             lecteurs d'écran, la vignette étant décorative). */
+                          <span className="t-cap text-[var(--t-4)]">
+                            Capture analysée puis supprimée (confidentialité)
+                          </span>
+                        ) : null}
                         {/* Empreinte SHA-256 (DoD §33 « horodatage ET empreinte,
                             audit trail inaltérable ») : trace de non-altération
                             posée à côté de l'horodatage. Tronquée à l'écran, hash

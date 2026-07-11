@@ -69,6 +69,14 @@ export interface VerificationProofView {
   readonly accountType: 'prop_firm' | 'personal' | null;
   readonly ocrStatus: 'pending' | 'done' | 'failed';
   readonly uploadedAt: Date;
+  /**
+   * Tour 13 confidentiality purge — set when the capture file was deleted
+   * from storage after reaching a terminal analysis state (`purgeProofFile`,
+   * lib/verification/batch.ts). The DB row survives, so when non-null the
+   * `readUrl` points at a file that no longer exists: the member UI must
+   * render a placeholder instead of an <img>/link (no network 404).
+   */
+  readonly filePurgedAt: Date | null;
   readonly brokerAccountId: string | null;
   readonly extractedPositionsCount: number;
   /**
@@ -133,6 +141,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
         accountType: true,
         ocrStatus: true,
         uploadedAt: true,
+        filePurgedAt: true,
         brokerAccountId: true,
       },
     }),
@@ -174,6 +183,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
       accountType: p.accountType,
       ocrStatus: p.ocrStatus,
       uploadedAt: p.uploadedAt,
+      filePurgedAt: p.filePurgedAt,
       brokerAccountId: p.brokerAccountId,
       extractedPositionsCount: positionsCountByProof.get(p.id) ?? 0,
       fileHash: p.fileHash,

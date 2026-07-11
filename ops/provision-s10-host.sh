@@ -3,10 +3,11 @@
 # does NOT carry (crontab schedule + uploads volume). Run from YOUR machine:
 #   Git Bash :   bash /d/Fxmily/ops/provision-s10-host.sh
 #   PowerShell:  & 'C:\Program Files\Git\bin\bash.exe' D:\Fxmily\ops\provision-s10-host.sh
-# It SSHes to `hetzner-dieu` (root) using your existing SSH config. Idempotent.
+# It SSHes to the host named by PROVISION_HOST (root) using your existing SSH
+# config. Idempotent.
 set -uo pipefail
 
-HOST=hetzner-dieu
+HOST="${PROVISION_HOST:?Set PROVISION_HOST to your prod SSH alias before running (see private ops notes)}"
 COMPOSE_LOCAL=/d/Fxmily/ops/docker/docker-compose.prod.yml
 
 echo "===================================================================="

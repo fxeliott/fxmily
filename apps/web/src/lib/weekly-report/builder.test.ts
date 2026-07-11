@@ -1076,6 +1076,74 @@ describe('buildWeeklySnapshot — memberScreenNotes', () => {
   });
 });
 
+// =============================================================================
+// Member weekly review relayed into the snapshot (V1.8 REFLECT — REFLECT wire)
+// =============================================================================
+
+describe('buildWeeklySnapshot — freeText.memberWeeklyReview', () => {
+  it('omits the slice entirely when the loader wired no review', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.freeText.memberWeeklyReview).toBeUndefined();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+    const nullInput = emptyInput();
+    nullInput.memberWeeklyReview = null;
+    expect(buildWeeklySnapshot(nullInput).freeText.memberWeeklyReview).toBeUndefined();
+  });
+
+  it('relays the answers re-hardened, with bestPractice honest null preserved', () => {
+    const input = emptyInput();
+    input.memberWeeklyReview = {
+      biggestWin: '  Respect du plan sur toutes les entrées.  ',
+      biggestMistake: 'Sur-trading mercredi après deux pertes.',
+      bestPractice: null,
+      lessonLearned: 'Attendre la confirmation avant d’entrer.',
+      nextWeekFocus: 'Une seule session par jour.',
+    };
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.freeText.memberWeeklyReview).toEqual({
+      biggestWin: 'Respect du plan sur toutes les entrées.',
+      biggestMistake: 'Sur-trading mercredi après deux pertes.',
+      bestPractice: null,
+      lessonLearned: 'Attendre la confirmation avant d’entrer.',
+      nextWeekFocus: 'Une seule session par jour.',
+    });
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('strips bidi / zero-width control chars and normalizes an emptied bestPractice to null', () => {
+    const input = emptyInput();
+    // U+202E bidi override + U+200B zero-width space smuggled into the answers.
+    input.memberWeeklyReview = {
+      biggestWin: 'win‮INJECT​',
+      biggestMistake: 'erreur',
+      bestPractice: '​​', // zero-width-only → sanitizes to '' → honest null
+      lessonLearned: 'leçon',
+      nextWeekFocus: 'focus',
+    };
+    const snap = buildWeeklySnapshot(input);
+    const relayed = snap.freeText.memberWeeklyReview;
+    expect(relayed).toBeDefined();
+    expect(relayed!.biggestWin).not.toContain('‮');
+    expect(relayed!.biggestWin).not.toContain('​');
+    expect(relayed!.bestPractice).toBeNull();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('omits the slice when every answer sanitizes to empty (bidi/zero-width-only review)', () => {
+    const input = emptyInput();
+    input.memberWeeklyReview = {
+      biggestWin: '​',
+      biggestMistake: '‮',
+      bestPractice: null,
+      lessonLearned: '​​',
+      nextWeekFocus: '‮​',
+    };
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.freeText.memberWeeklyReview).toBeUndefined();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
 describe('buildWeeklySnapshot — patternSignals (S15 #7)', () => {
   it('omits patternSignals entirely when nothing clears its threshold', () => {
     const snap = buildWeeklySnapshot(emptyInput());

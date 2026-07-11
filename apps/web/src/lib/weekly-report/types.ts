@@ -36,6 +36,26 @@ export interface MemberScreenNote {
   note: string;
 }
 
+/**
+ * V1.8 REFLECT — the member's OWN weekly review (the Sunday recap wizard they
+ * fill themselves : 5 free-text answers about their week). REFERENCE CONTEXT
+ * for the prompt TEXT only (the AI compares the member's self-assessment to
+ * the observed data), NEVER scoring/edge — posture §2. The loader truncates
+ * each answer (~300 chars, trim + slice) ; the builder re-hardens
+ * (`safeFreeText` + the schema's bidi refine) defense-in-depth. MEMBER
+ * free-text → wrapped untrusted at the prompt boundary. `bestPractice` is the
+ * wizard's only optional answer → honest `null` when left empty.
+ * 🚨 §21.5 — REAL side ONLY : the review is the member's reflection on their
+ * REAL week (REFLECT surface), not training data.
+ */
+export interface MemberWeeklyReviewAnswers {
+  biggestWin: string;
+  biggestMistake: string;
+  bestPractice: string | null;
+  lessonLearned: string;
+  nextWeekFocus: string;
+}
+
 /// Behavioral score snapshot mirror — pure type, decoupled from Prisma.
 /// Service layer (Phase B) will translate `BehavioralScore` Prisma rows into
 /// this shape before passing them to the builder. Null fields = `insufficient_data`.
@@ -158,6 +178,16 @@ export interface BuilderInput {
   /// régression pour les fixtures existantes). §2-safe : copie curée, jamais de
   /// marché ni de P&L (invariant porté par le moteur).
   coaching?: CoachingReportContext | null;
+  /**
+   * V1.8 REFLECT — the member's own weekly review for the report week (keyed
+   * `(userId, weekStart)` on the civil local Monday). Pre-truncated by the
+   * loader (~300 chars/answer, trim + slice) ; the builder re-hardens
+   * (`safeFreeText`) and the prompt wraps it untrusted. Optional : absent or
+   * `null` when the member submitted no review → the builder omits the slice
+   * (honest empty state, existing fixtures stay valid).
+   * 🚨 §21.5 — REAL side ONLY (member reflection on their REAL week).
+   */
+  memberWeeklyReview?: MemberWeeklyReviewAnswers | null;
 }
 
 export type { WeeklySnapshot, WeeklyReportOutput } from '@/lib/schemas/weekly-report';

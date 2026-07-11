@@ -300,6 +300,22 @@ const freeTextSliceSchema = z
     /// instructions (wrapped untrusted at the prompt boundary). Empty when no
     /// morning intention. Mark Douglas material (intention vs execution).
     morningIntentions: z.array(safePatternValueSchema).max(5),
+    /// V1.8 REFLECT — the member's own weekly-review answers (their words about
+    /// their week), builder re-hardened (trim + truncate + safeFreeText) then
+    /// re-validated here (`safePatternValueSchema` = bidi refine + safeFreeText
+    /// + typography). `bestPractice` is the wizard's only optional answer →
+    /// honest `null`. Optional: absent when the member submitted no review
+    /// (honest empty state — historical snapshots re-parse unchanged).
+    memberWeeklyReview: z
+      .object({
+        biggestWin: safePatternValueSchema,
+        biggestMistake: safePatternValueSchema,
+        bestPractice: safePatternValueSchema.nullable(),
+        lessonLearned: safePatternValueSchema,
+        nextWeekFocus: safePatternValueSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

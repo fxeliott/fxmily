@@ -68,6 +68,11 @@ const COACH_CORRECTION_ITEM_MAX_CHARS = 900;
 // coach-corrections path). 900 is the schema's per-string ceiling.
 const MEMBER_SCREEN_NOTES_MAX = 20;
 const MEMBER_SCREEN_NOTE_ITEM_MAX_CHARS = 900;
+// V1.8 REFLECT — per-answer re-harden truncation for the member's own weekly
+// review, twin of the coach-corrections / screen-notes re-hardens. The loader
+// already truncated (~300); the builder re-hardens defense-in-depth. 400 is
+// the schema's per-string ceiling (PATTERN_VALUE_MAX_CHARS).
+const MEMBER_WEEKLY_REVIEW_FIELD_MAX_CHARS = 400;
 
 // =============================================================================
 // Pseudonymization (V1.5 — prompt boundary defense)
@@ -239,6 +244,53 @@ function buildMemberScreenNotes(input: BuilderInput): WeeklySnapshot['memberScre
       note: safeFreeText(truncated),
     };
   });
+}
+
+/// V1.8 REFLECT — relay the loader-loaded member weekly-review answers (the
+/// member's OWN words about their week) re-hardened defense-in-depth (trim +
+/// truncate + safeFreeText, twin of the screen-notes re-harden — the loader
+/// already truncated ~300 and the schema re-refines bidi). Returns `undefined`
+/// when the loader wired no review OR when every answer sanitizes to empty
+/// (bidi-only smuggle) so the builder omits the slice entirely (honest empty
+/// state — never a shell of empty strings in the prompt). `bestPractice` is
+/// the wizard's only optional answer: `''` after hardening normalizes back to
+/// honest `null`. MEMBER free-text — wrapped untrusted at the prompt boundary.
+function buildMemberWeeklyReview(
+  input: BuilderInput,
+): NonNullable<WeeklySnapshot['freeText']['memberWeeklyReview']> | undefined {
+  const review = input.memberWeeklyReview;
+  if (review === null || review === undefined) return undefined;
+  const harden = (s: string): string => {
+    const trimmed = s.trim();
+    const truncated =
+      trimmed.length > MEMBER_WEEKLY_REVIEW_FIELD_MAX_CHARS
+        ? trimmed.slice(0, MEMBER_WEEKLY_REVIEW_FIELD_MAX_CHARS)
+        : trimmed;
+    return safeFreeText(truncated);
+  };
+  const biggestWin = harden(review.biggestWin);
+  const biggestMistake = harden(review.biggestMistake);
+  const bestPractice = review.bestPractice === null ? '' : harden(review.bestPractice);
+  const lessonLearned = harden(review.lessonLearned);
+  const nextWeekFocus = harden(review.nextWeekFocus);
+  // A review whose every answer sanitizes to empty carries no member words —
+  // omit the slice (never a shell of empty strings in the prompt).
+  if (
+    biggestWin.length === 0 &&
+    biggestMistake.length === 0 &&
+    bestPractice.length === 0 &&
+    lessonLearned.length === 0 &&
+    nextWeekFocus.length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    biggestWin,
+    biggestMistake,
+    bestPractice: bestPractice.length === 0 ? null : bestPractice,
+    lessonLearned,
+    nextWeekFocus,
+  };
 }
 
 // =============================================================================
@@ -571,6 +623,10 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
 // =============================================================================
 
 function buildFreeText(input: BuilderInput): WeeklySnapshot['freeText'] {
+  // V1.8 REFLECT — undefined when the member submitted no review OR every
+  // answer sanitized to empty → the conditional spread omits the key entirely
+  // (honest empty state + exactOptionalPropertyTypes-safe).
+  const memberWeeklyReview = buildMemberWeeklyReview(input);
   return {
     emotionTags: collectEmotionTags(input),
     // D3-01 — declared cognitive-bias tags (LESSOR/Steenbarger). Psycho
@@ -585,6 +641,7 @@ function buildFreeText(input: BuilderInput): WeeklySnapshot['freeText'] {
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
     // untrusted at the prompt boundary.
     morningIntentions: collectMorningIntentions(input),
+    ...(memberWeeklyReview ? { memberWeeklyReview } : {}),
   };
 }
 

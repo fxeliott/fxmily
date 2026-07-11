@@ -215,12 +215,18 @@ describe('getCronHealthReport', () => {
         action: 'cron.admin_daily_brief.scan',
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
+      {
+        // Backup heartbeat (period DAY, age 12h ≤ 1.5×DAY → green). Same
+        // age-based classification note as the admin brief above.
+        action: 'cron.backup.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
     ]);
 
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(21);
+    expect(report.entries).toHaveLength(22);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -417,11 +423,13 @@ describe('getCronHealthReport', () => {
     // the nightly ranking recompute carries `expectedSince` (2026-07-08) as well:
     // its crontab line + audit action are brand new, so a rolling redeploy would
     // otherwise read the lone missing row as `never_ran` and 503 the health route.
-    // Assert the split.
+    // Backup — the nightly pg-backup heartbeat carries `expectedSince`
+    // (2026-07-11) for the same anti-503 reason. Assert the split.
     const PENDING_BY_DESIGN = [
       'cron.autoheal.heartbeat',
       'cron.admin_daily_brief.scan',
       'cron.recompute_leaderboard.scan',
+      'cron.backup.heartbeat',
     ];
     const dated = report.entries.filter((e) => !PENDING_BY_DESIGN.includes(e.action));
     expect(dated.every((e) => e.status === 'never_ran')).toBe(true);
@@ -730,11 +738,14 @@ describe('getCronHealthReport', () => {
    * heartbeats every run, so a silently broken brief cron surfaces red).
    * Leaderboard raised it 20 → 21 (the nightly ranking recompute — a silent
    * failure quietly freezes /classement on a stale day, so it is monitored too).
+   * Backup raised it 21 → 22 (the nightly Postgres → R2 backup heartbeat — a
+   * backup chain that dies silently is only discovered the day a restore is
+   * needed, so it is monitored too).
    */
-  it('always returns exactly 21 entries (leaderboard — added the ranking recompute)', async () => {
+  it('always returns exactly 22 entries (backup — added the nightly pg backup heartbeat)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(21);
+    expect(report.entries).toHaveLength(22);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -761,6 +772,8 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.admin_daily_brief.scan');
     // Leaderboard — nightly ranking recompute heartbeat (02:20 Paris).
     expect(report.entries.map((e) => e.action)).toContain('cron.recompute_leaderboard.scan');
+    // Backup — nightly Postgres → R2 backup heartbeat (02:30 UTC).
+    expect(report.entries.map((e) => e.action)).toContain('cron.backup.heartbeat');
   });
 
   /**
@@ -855,6 +868,10 @@ describe('getCronHealthReport', () => {
       },
       {
         action: 'cron.admin_daily_brief.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        action: 'cron.backup.heartbeat',
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
     ]);

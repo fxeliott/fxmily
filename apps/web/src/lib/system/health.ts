@@ -117,7 +117,12 @@ type CronAction =
   // on the always-on Hetzner host, POSTs hourly). Lives in the SERVER cron
   // report (not the worker report) because the host never sleeps: a missing
   // heartbeat means the watchdog itself is dead, an incident on prod infra.
-  | 'cron.autoheal.heartbeat';
+  | 'cron.autoheal.heartbeat'
+  // Nightly Postgres backup heartbeat (fxmily-backup, 02:30 Paris on the host —
+  // POSTs after the R2 offsite upload + rotation). A backup chain that dies
+  // silently is the one failure mode backups cannot tolerate — monitored here
+  // so it surfaces red on /admin/system within 48h, not on restore day.
+  | 'cron.backup.heartbeat';
 
 type CronExpectation = HeartbeatExpectation<CronAction>;
 
@@ -354,6 +359,24 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     periodMs: HOUR,
     toleranceMultiplier: 2, // red past 2h of silence on an always-on host
     expectedSince: '2026-07-05T00:00:00Z',
+  },
+  {
+    // Nightly Postgres backup heartbeat. `fxmily-backup` runs at 02:30 Paris on
+    // the host (pg_dump → gzip → GPG → R2 offsite → rotation) and POSTs a
+    // counts-only heartbeat as its LAST step — every failure path before the
+    // POST already exited non-zero and never reaches it, so a missing row IS
+    // the alarm: green ≤ 36h, amber ≤ 48h, red past 48h (two missed nights on
+    // a backup is an incident, not noise). A fresh row with
+    // `offsiteUploaded: false` carries metadata.errors = 1 (mapped by the
+    // route) and escalates green → amber: the dump exists locally but is not
+    // disaster-proof. `expectedSince` keeps it `pending` until the first
+    // post-deploy nightly has had a chance to run, instead of shouting
+    // "Jamais exécuté" the moment this expectation lands.
+    action: 'cron.backup.heartbeat',
+    label: 'Backup Postgres → R2 (hôte)',
+    periodMs: DAY,
+    toleranceMultiplier: 2, // red past 48h — two missed nightly backups
+    expectedSince: '2026-07-11T00:00:00Z',
   },
 ] as const;
 
@@ -906,6 +929,12 @@ const HOST_ACTION_REMEDIATION: Record<
       "Le watchdog autoheal de l'hôte n'envoie plus son heartbeat horaire : le cron racine fxmily-sync-cron n'a pas reconvergé l'hôte.",
     command: 'sudo -u fxmily sudo /usr/local/bin/fxmily-sync-cron',
     reference: 'ops/cron/README.md',
+  },
+  'cron.backup.heartbeat': {
+    detail:
+      "Le backup nightly Postgres → R2 n'envoie plus son heartbeat quotidien : le dump chiffré n'est plus prouvé (script mort, ligne cron retirée, ou échec avant l'upload off-site).",
+    command: 'sudo -u fxmily /usr/local/bin/fxmily-backup',
+    reference: 'docs/runbook-backup-restore.md',
   },
   'worker.watchdog.heartbeat': {
     detail:

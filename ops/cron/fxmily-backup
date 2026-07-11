@@ -24,6 +24,10 @@ TS=$(date -u +%Y%m%d-%H%M)
 DUMP_FILE="${BACKUP_DIR}/fxmily-${TS}.sql.gz"
 ENCRYPTED_FILE="${DUMP_FILE}.gpg"
 
+# Version travels in the app heartbeat (step 4b) for fleet drift visibility.
+SCRIPT_VERSION="1.1.0"
+SCRIPT_START_SECS=$(date +%s)
+
 mkdir -p "$BACKUP_DIR"
 mkdir -p "$(dirname "$CRON_LOG")"
 
@@ -95,6 +99,9 @@ R2_BUCKET="${R2_BUCKET:-}"
 # green cron silently hiding a non-durable backup. Default 0 keeps pre-R2
 # environments working but emits a LOUD warning every run.
 REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE:-0}"
+# Tracked for the app heartbeat (step 4b): offsiteUploaded=false → the board
+# escalates a fresh-but-local-only backup green → amber.
+OFFSITE_OK=0
 offsite_missing() {
   local reason="$1"
   if [[ "$REQUIRE_OFFSITE" == "1" ]]; then
@@ -114,6 +121,7 @@ elif ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FIL
   log "FAIL R2 upload ; encrypted dump preserved locally for retry"
   exit 3
 else
+  OFFSITE_OK=1
   log "upload OK → s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")"
 fi
 
@@ -121,6 +129,53 @@ fi
 # 7 days local. Older files were already on R2 (30-day lifecycle there).
 find "$BACKUP_DIR" -name 'fxmily-*.sql.gz.gpg' -mtime +7 -delete
 log "rotation OK (kept 7 days local)"
+
+# ---- 4b. App heartbeat (best-effort) ---------------------------------------
+# POST a counts-only heartbeat to the app AFTER the offsite upload + rotation,
+# so the `cron.backup.heartbeat` EXPECTATION (lib/system/health.ts) watches
+# this pipeline on /admin/system. Every failure path above already exited
+# non-zero and never reaches this block — a missing row IS the alarm. Payload
+# is COUNTS ONLY: dump size + duration + offsite flag + version — never a
+# filename, a bucket name or a token. Reuses the admin token the autoheal
+# watchdog already ships in cron.env (AUTOHEAL_ADMIN_TOKEN, FXMILY_ADMIN_TOKEN
+# fallback). Best-effort by design (pattern ops/scripts/fxmily-autoheal
+# send_heartbeat): a heartbeat hiccup never fails an otherwise-good backup —
+# the external Healthchecks ping below stays the dead-man-switch.
+APP_URL="${APP_URL:-}"
+ADMIN_TOKEN="${AUTOHEAL_ADMIN_TOKEN:-${FXMILY_ADMIN_TOKEN:-}}"
+if [[ -n "$APP_URL" && -n "$ADMIN_TOKEN" ]]; then
+  HB_DUMP_BYTES=$(stat -c%s "$ENCRYPTED_FILE" 2>/dev/null || echo 0)
+  HB_DURATION_SECS=$(( $(date +%s) - SCRIPT_START_SECS ))
+  [[ "$HB_DUMP_BYTES" =~ ^[0-9]+$ ]] || HB_DUMP_BYTES=0
+  [[ "$HB_DURATION_SECS" =~ ^[0-9]+$ ]] || HB_DURATION_SECS=0
+  if [[ "$OFFSITE_OK" == "1" ]]; then
+    hb_offsite_json=true
+  else
+    hb_offsite_json=false
+  fi
+  hb_url="${APP_URL%/}/api/admin/backup/heartbeat"
+  hb_body=$(printf '{"dumpBytes":%d,"durationSecs":%d,"offsiteUploaded":%s,"scriptVersion":"%s"}' \
+    "$HB_DUMP_BYTES" "$HB_DURATION_SECS" "$hb_offsite_json" "$SCRIPT_VERSION")
+  hb_ok=0
+  for attempt in 1 2; do
+    if curl -fsS -m 15 \
+        -X POST \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$hb_body" \
+        "$hb_url" >/dev/null 2>&1; then
+      hb_ok=1
+      log "heartbeat delivered (attempt ${attempt})"
+      break
+    fi
+    [[ "$attempt" -eq 1 ]] && sleep 5
+  done
+  if [[ "$hb_ok" != "1" ]]; then
+    log "WARNING heartbeat POST failed (both attempts) — a missing row is the dead-backup signal (backup itself succeeded)"
+  fi
+else
+  log "WARNING app heartbeat skipped (APP_URL or admin token unset in cron.env)"
+fi
 
 # ---- 5. Dead-man-switch success ping (opt-in, env-gated) ------------------
 # Ping a Healthchecks.io URL (provision via ops/scripts/healthchecks-setup.sh)

@@ -1,6 +1,16 @@
 import { nanoid } from 'nanoid';
 
-import { ALLOWED_IMAGE_MIME_TYPES, type AllowedImageMime, StorageError } from './types';
+import {
+  ALLOWED_IMAGE_MIME_TYPES,
+  type AllowedImageMime,
+  type UploadKind,
+  StorageError,
+  isAvatarUploadKind,
+  isProofUploadKind,
+  isTradeUploadKind,
+  isTrainingAnnotationUploadKind,
+  isTrainingUploadKind,
+} from './types';
 
 /**
  * Storage-key helpers (J2 + J4).
@@ -185,6 +195,33 @@ export function generateAvatarKey(userId: string, mime: AllowedImageMime): strin
   }
   const id = nanoid(32);
   return `avatars/${userId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
+/**
+ * J1 (R2 offsite) — single dispatch from an upload kind to its key generator.
+ * Extracted from the inline ternary in `LocalStorageAdapter.put` so BOTH the
+ * local and R2 adapters mint identical keys (a prefix drift between the two
+ * stores would silently break the dual-write mirror AND the §21.5 statistical
+ * isolation that the distinct prefixes guarantee).
+ *
+ *   - trade kinds            → `trades/{userId}/…`
+ *   - training kinds         → `training/{userId}/…` (NEVER `trades/` — §21.5)
+ *   - training annotations   → `training_annotations/{trainingTradeId}/…`
+ *   - MT5 proofs             → `proofs/{userId}/…` (SPEC §33.3)
+ *   - avatars                → `avatars/{userId}/…`
+ *   - annotation kinds       → `annotations/{tradeId}/…` (fallback branch)
+ */
+export function generateKeyForUpload(
+  kind: UploadKind,
+  pathOwner: string,
+  mime: AllowedImageMime,
+): string {
+  if (isTradeUploadKind(kind)) return generateTradeKey(pathOwner, mime);
+  if (isTrainingUploadKind(kind)) return generateTrainingKey(pathOwner, mime);
+  if (isTrainingAnnotationUploadKind(kind)) return generateTrainingAnnotationKey(pathOwner, mime);
+  if (isProofUploadKind(kind)) return generateProofKey(pathOwner, mime);
+  if (isAvatarUploadKind(kind)) return generateAvatarKey(pathOwner, mime);
+  return generateAnnotationKey(pathOwner, mime);
 }
 
 export interface ParsedTradeKey {

@@ -2,26 +2,30 @@ import 'server-only';
 
 import { env } from '@/lib/env';
 
+import { DualWriteStorageAdapter } from './dual';
 import { LocalStorageAdapter } from './local';
-import { R2StorageAdapter } from './r2';
 import type { StorageAdapter } from './types';
 
 /**
- * Storage adapter selection (J2).
+ * Storage adapter selection (J2, revised J1 offsite — ADR-006).
  *
  * The selection is deterministic and synchronous — same process, same adapter
- * for the lifetime of the runtime. We pick R2 if and only if all four R2 env
- * vars are set; otherwise we fall back to the local-filesystem adapter.
- *
- * Note: at J2 the R2 implementation is a stub that throws on every call.
- * Until Eliott provisions the keys, the selection will always resolve to
- * local. This is intentional — see `lib/storage/r2.ts` for the migration
- * checklist.
+ * for the lifetime of the runtime. When all four R2 env vars are set we pick
+ * the DUAL-WRITE adapter (local disk primary + R2 offsite mirror); otherwise
+ * we fall back to the local-filesystem adapter, byte-identical to pre-R2
+ * behaviour. Pure R2 (`R2StorageAdapter`) is deliberately never selected:
+ * the local volume stays the hot path, R2 exists for redundancy.
  */
 
 let cached: StorageAdapter | null = null;
 
-function isR2Configured(): boolean {
+/**
+ * True iff the four R2 credentials/bucket vars are all present. Exported for
+ * the GET route handlers (R2 read-fallback gate). MUST stay in lockstep with
+ * `isR2MirrorConfigured()` in `lib/system/health.ts`, which duplicates the
+ * check on `process.env` because health.ts avoids importing storage modules.
+ */
+export function isR2Configured(): boolean {
   return Boolean(
     env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET,
   );
@@ -44,7 +48,7 @@ export function selectStorage(): StorageAdapter {
         'or none.',
     );
   }
-  cached = isR2Configured() ? new R2StorageAdapter() : new LocalStorageAdapter();
+  cached = isR2Configured() ? new DualWriteStorageAdapter() : new LocalStorageAdapter();
   return cached;
 }
 
@@ -82,6 +86,7 @@ export {
   AVATAR_KEY_PATTERN,
   generateAnnotationKey,
   generateAvatarKey,
+  generateKeyForUpload,
   generateTradeKey,
   generateTrainingKey,
   generateTrainingAnnotationKey,
@@ -99,3 +104,11 @@ export {
   openLocalReadStream,
   trainingKeyBelongsTo,
 } from './local';
+export { DualWriteStorageAdapter } from './dual';
+export {
+  R2StorageAdapter,
+  deleteObjectFromR2,
+  openR2ReadStream,
+  putObjectToR2,
+  resetR2ClientForTests,
+} from './r2';

@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireVerificationAdminToken } from '@/lib/auth/admin-token';
 import { openLocalReadStream } from '@/lib/storage/local';
-import { selectStorage, StorageError } from '@/lib/storage';
+import { isR2Configured, openR2ReadStream, StorageError } from '@/lib/storage';
 
 /**
  * S3 §33.4 — token-gated proof-image download for the local vision script.
@@ -18,8 +18,9 @@ import { selectStorage, StorageError } from '@/lib/storage';
  * same `X-Admin-Token` as pull/persist (the session-cookie route
  * `/api/uploads/[...key]` can't serve a headless curl).
  *
- * Streaming mirror of `app/api/uploads/[...key]/route.ts` (local adapter;
- * 501 if a future remote adapter lands without a read path — same contract).
+ * Streaming mirror of `app/api/uploads/[...key]/route.ts`: local disk is the
+ * PRIMARY store; when the file is missing locally and the R2 mirror is
+ * configured, the offsite copy serves the bytes (J1, ADR-006 — same contract).
  */
 
 export const runtime = 'nodejs';
@@ -60,32 +61,53 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'proof_purged' }, { status: 410 });
   }
 
-  const storage = selectStorage();
-  if (storage.id !== 'local') {
-    return NextResponse.json({ error: 'remote_read_not_wired' }, { status: 501 });
-  }
-
   try {
     const { stream, size, ext } = await openLocalReadStream(proof.fileKey);
     const webStream = Readable.toWeb(stream) as unknown as ReadableStream;
-    return new Response(webStream, {
-      status: 200,
-      headers: {
-        'Content-Type': EXT_MIME[ext],
-        'Content-Length': String(size),
-        'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'none'",
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+    return imageResponse(webStream, ext, size);
   } catch (err) {
     if (err instanceof StorageError) {
       if (err.code === 'invalid_key')
         return NextResponse.json({ error: 'bad_key' }, { status: 400 });
-      if (err.code === 'not_found')
+      if (err.code === 'not_found') {
+        // J1 (ADR-006) — the local volume is the PRIMARY store; when the file
+        // is missing locally (volume lost, host migration) and the R2 mirror
+        // is configured, serve the offsite copy before giving up.
+        if (isR2Configured()) return serveFromR2(proof.fileKey);
         return NextResponse.json({ error: 'file_missing' }, { status: 404 });
+      }
     }
     console.error('[verification.proof-image] failed', err);
+    return NextResponse.json({ error: 'internal' }, { status: 500 });
+  }
+}
+
+function imageResponse(
+  body: ReadableStream,
+  ext: keyof typeof EXT_MIME,
+  size: number | null,
+): Response {
+  const headers: Record<string, string> = {
+    'Content-Type': EXT_MIME[ext],
+    'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'",
+    'X-Content-Type-Options': 'nosniff',
+  };
+  // R2 may omit Content-Length — stream without the header rather than lie.
+  if (size !== null) headers['Content-Length'] = String(size);
+  return new Response(body, { status: 200, headers });
+}
+
+/** R2 fallback read — `openR2ReadStream` already yields a web stream. */
+async function serveFromR2(key: string): Promise<Response> {
+  try {
+    const { stream, size, ext } = await openR2ReadStream(key);
+    return imageResponse(stream, ext, size);
+  } catch (err) {
+    if (err instanceof StorageError && err.code === 'not_found') {
+      return NextResponse.json({ error: 'file_missing' }, { status: 404 });
+    }
+    console.error('[verification.proof-image] R2 fallback failed', err);
     return NextResponse.json({ error: 'internal' }, { status: 500 });
   }
 }

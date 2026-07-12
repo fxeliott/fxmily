@@ -3,14 +3,14 @@ import { Readable } from 'node:stream';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { openLocalReadStream } from '@/lib/storage/local';
-import { selectStorage, StorageError, parseStorageKey } from '@/lib/storage';
+import { isR2Configured, openR2ReadStream, StorageError, parseStorageKey } from '@/lib/storage';
 
 /**
  * GET /api/uploads/[...key]
  *
  * Serve a stored asset (J2 trade screenshots, J4 annotation media). Streaming
- * endpoint backed by the local storage adapter in dev / pre-R2; in prod
- * (when R2 is wired) this same path will 302-redirect to the CDN.
+ * endpoint backed by the local disk (PRIMARY store); when the file is missing
+ * locally and R2 is configured, falls back to the offsite mirror (J1, ADR-006).
  *
  * Auth gates:
  *   1. Authenticated session, status='active'.
@@ -113,34 +113,55 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
     }
   }
 
-  const storage = selectStorage();
-  if (storage.id !== 'local') {
-    // R2 path: 302-redirect to the CDN (or to a presigned URL). Stub for J2.
-    return new Response('R2 read path not wired yet.', { status: 501 });
-  }
-
   try {
     const { stream, size, ext } = await openLocalReadStream(key);
     // Convert node Readable → web ReadableStream so Next.js can fetch-stream it.
     // Node 22 ships `Readable.toWeb()`; the cast bypasses a Web/Node type
     // overlap inconsistency without affecting the runtime contract.
     const webStream = Readable.toWeb(stream) as unknown as ReadableStream;
-    return new Response(webStream, {
-      status: 200,
-      headers: {
-        'Content-Type': EXT_MIME[ext],
-        'Content-Length': String(size),
-        'Cache-Control': 'private, max-age=86400, immutable',
-        'Content-Security-Policy': "default-src 'none'", // sandbox image bytes
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+    return imageResponse(webStream, ext, size);
   } catch (err) {
     if (err instanceof StorageError) {
       if (err.code === 'invalid_key') return new Response('Bad request', { status: 400 });
-      if (err.code === 'not_found') return new Response('Not found', { status: 404 });
+      if (err.code === 'not_found') {
+        // J1 (ADR-006) — the local volume is the PRIMARY store; when the file
+        // is missing locally (volume lost, host migration) and the R2 mirror
+        // is configured, serve the offsite copy before giving up.
+        if (isR2Configured()) return serveFromR2(key);
+        return new Response('Not found', { status: 404 });
+      }
     }
     console.error('[uploads.GET] failed', err);
+    return new Response('Internal error', { status: 500 });
+  }
+}
+
+function imageResponse(
+  body: ReadableStream,
+  ext: keyof typeof EXT_MIME,
+  size: number | null,
+): Response {
+  const headers: Record<string, string> = {
+    'Content-Type': EXT_MIME[ext],
+    'Cache-Control': 'private, max-age=86400, immutable',
+    'Content-Security-Policy': "default-src 'none'", // sandbox image bytes
+    'X-Content-Type-Options': 'nosniff',
+  };
+  // R2 may omit Content-Length — stream without the header rather than lie.
+  if (size !== null) headers['Content-Length'] = String(size);
+  return new Response(body, { status: 200, headers });
+}
+
+/** R2 fallback read — `openR2ReadStream` already yields a web stream. */
+async function serveFromR2(key: string): Promise<Response> {
+  try {
+    const { stream, size, ext } = await openR2ReadStream(key);
+    return imageResponse(stream, ext, size);
+  } catch (err) {
+    if (err instanceof StorageError && err.code === 'not_found') {
+      return new Response('Not found', { status: 404 });
+    }
+    console.error('[uploads.GET] R2 fallback failed', err);
     return new Response('Internal error', { status: 500 });
   }
 }

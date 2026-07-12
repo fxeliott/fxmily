@@ -103,6 +103,10 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_PUBLIC_URL: z.string().url().optional(),
+  /// Endpoint S3 override (MinIO/dev, or a jurisdiction-scoped R2 endpoint).
+  /// When unset, the account-scoped endpoint is derived from R2_ACCOUNT_ID:
+  /// `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`.
+  R2_ENDPOINT: z.string().url().optional(),
 
   // Jalon 2 — local upload root (used only when R2 is not configured).
   // Resolved relative to `process.cwd()` if non-absolute.

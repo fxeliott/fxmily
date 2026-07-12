@@ -42,6 +42,13 @@ export type AuditAction =
   | 'trade.closed'
   | 'trade.deleted'
   | 'trade.screenshot.uploaded'
+  // J1 (R2 offsite, ADR-006) — dual-write mirror trace. PII-FREE: metadata
+  // carries only `{key, stage: 'put' | 'delete'}` — the storage key is already
+  // journaled by the upload slugs above; never the bytes nor an error echo
+  // (the error goes to Sentry as a warning). /admin/system reads the latest
+  // of these two slugs to surface offsite-mirror health.
+  | 'storage.r2_mirror.succeeded'
+  | 'storage.r2_mirror.failed'
   | 'admin.members.listed'
   | 'admin.member.viewed'
   // F5 (overhaul) — admin member moderation. PII-FREE: metadata carries only

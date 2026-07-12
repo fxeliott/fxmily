@@ -4,12 +4,7 @@ import { promises as fs, createReadStream, type ReadStream } from 'node:fs';
 import path from 'node:path';
 
 import {
-  generateAnnotationKey,
-  generateAvatarKey,
-  generateProofKey,
-  generateTradeKey,
-  generateTrainingAnnotationKey,
-  generateTrainingKey,
+  generateKeyForUpload,
   parseAvatarKey,
   parseProofKey,
   parseStorageKey,
@@ -21,11 +16,6 @@ import {
   type UploadInput,
   StorageError,
   type AllowedImageMime,
-  isAvatarUploadKind,
-  isProofUploadKind,
-  isTradeUploadKind,
-  isTrainingAnnotationUploadKind,
-  isTrainingUploadKind,
 } from './types';
 
 /**
@@ -81,21 +71,9 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async put(input: UploadInput): Promise<{ key: string; readUrl: string }> {
     const mime = input.contentType as AllowedImageMime;
-    const key = isTradeUploadKind(input.kind)
-      ? generateTradeKey(input.pathOwner, mime)
-      : isTrainingUploadKind(input.kind)
-        ? generateTrainingKey(input.pathOwner, mime)
-        : isTrainingAnnotationUploadKind(input.kind)
-          ? // J-T3: path-owner is the parent trainingTradeId → the
-            // `training_annotations/` prefix (NEVER `annotations/` — §21.5).
-            generateTrainingAnnotationKey(input.pathOwner, mime)
-          : isProofUploadKind(input.kind)
-            ? // S3: MT5 proof — member-owned `proofs/{userId}/…` (SPEC §33.3).
-              generateProofKey(input.pathOwner, mime)
-            : isAvatarUploadKind(input.kind)
-              ? // Leaderboard/profile: avatar — member-owned `avatars/{userId}/…`.
-                generateAvatarKey(input.pathOwner, mime)
-              : generateAnnotationKey(input.pathOwner, mime);
+    // Kind → prefix dispatch lives in `generateKeyForUpload` (shared with the
+    // R2 adapter so the two stores can never drift on key shapes — §21.5).
+    const key = generateKeyForUpload(input.kind, input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic

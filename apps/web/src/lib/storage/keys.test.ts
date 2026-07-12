@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ANNOTATION_KEY_PATTERN,
+  AVATAR_KEY_PATTERN,
   PROOF_KEY_PATTERN,
   TRAINING_ANNOTATION_KEY_PATTERN,
   TRAINING_KEY_PATTERN,
   extensionForMime,
   generateAnnotationKey,
+  generateKeyForUpload,
   generateProofKey,
   generateTradeKey,
   generateTrainingAnnotationKey,
@@ -491,5 +493,46 @@ describe('proofKeyBelongsTo (S3 BOLA gate)', () => {
   it('keyBelongsTo never cross-accepts a proof key (reverse isolation)', () => {
     const proofKey = generateProofKey('clx0member1', 'image/png');
     expect(keyBelongsTo(proofKey, 'clx0member1')).toBe(false);
+  });
+});
+
+describe('generateKeyForUpload (J1 — shared kind→prefix dispatch, local/R2 lockstep)', () => {
+  it.each([
+    ['trade-entry', /^trades\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['trade-exit', /^trades\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['annotation-image', /^annotations\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['training-entry', /^training\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['training-annotation-image', /^training_annotations\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['mt5-proof', /^proofs\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+    ['avatar-image', /^avatars\/clx0member1\/[a-zA-Z0-9_-]{32}\.jpg$/],
+  ] as const)('routes %s to its canonical prefix', (kind, pattern) => {
+    expect(generateKeyForUpload(kind, 'clx0member1', 'image/jpeg')).toMatch(pattern);
+  });
+
+  it('mints avatar keys matching AVATAR_KEY_PATTERN', () => {
+    expect(generateKeyForUpload('avatar-image', 'clx0member1', 'image/webp')).toMatch(
+      AVATAR_KEY_PATTERN,
+    );
+  });
+
+  it('every dispatched key round-trips through parseStorageKey (R2 mirror gate)', () => {
+    const kinds = [
+      'trade-entry',
+      'trade-exit',
+      'annotation-image',
+      'training-entry',
+      'training-annotation-image',
+      'mt5-proof',
+      'avatar-image',
+    ] as const;
+    for (const kind of kinds) {
+      const key = generateKeyForUpload(kind, 'clx0member1', 'image/png');
+      expect(() => parseStorageKey(key)).not.toThrow();
+    }
+  });
+
+  it('throws on an unsafe owner regardless of kind', () => {
+    expect(() => generateKeyForUpload('trade-entry', 'clx0../', 'image/jpeg')).toThrow();
+    expect(() => generateKeyForUpload('avatar-image', 'UPPER', 'image/jpeg')).toThrow();
   });
 });

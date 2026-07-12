@@ -162,9 +162,10 @@ export interface StorageAdapter {
   delete(key: string): Promise<void>;
 
   /**
-   * Identify the implementation in logs / health checks.
+   * Identify the implementation in logs / health checks. `dual` = local
+   * primary + R2 offsite mirror (ADR-006).
    */
-  readonly id: 'local' | 'r2';
+  readonly id: 'local' | 'r2' | 'dual';
 }
 
 /** Allowlisted image MIME types accepted at the upload boundary. */

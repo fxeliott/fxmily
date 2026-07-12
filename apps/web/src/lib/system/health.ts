@@ -1437,3 +1437,81 @@ export async function getVerificationBacklogHealth(
     redMs: VERIFICATION_BACKLOG_RED_MS,
   };
 }
+
+/**
+ * J1 (ADR-006 §6) — offsite mirror health for /admin/system.
+ *
+ * EVENT-DRIVEN probe, NOT a heartbeat: the dual-write adapter emits one audit
+ * row per mirror attempt (`storage.r2_mirror.succeeded` / `.failed`, written
+ * by `lib/storage/dual.ts`). A quiet mirror is a HEALTHY mirror — members
+ * simply have not uploaded anything — so "configured but no row yet" reads
+ * green, not amber. Only a most-recent FAILED event turns the probe red: the
+ * mirror is best-effort by design (uploads never block on R2), so a failure
+ * means the offsite copy silently drifts behind the local PRIMARY until the
+ * next successful write or a manual `migrate-uploads-to-r2.sh` catch-up run.
+ */
+
+/**
+ * Whether the R2 offsite mirror is configured, read straight from
+ * `process.env`.
+ *
+ * MUST stay in lockstep with `isR2Configured()` in `lib/storage/index.ts:28`,
+ * which derives the same answer from the Zod-validated `env` object. health.ts
+ * deliberately avoids importing `@/lib/env` or the storage modules (this file
+ * only depends on `db` + `node:fs`), so the four-variable check is duplicated
+ * here on raw `process.env` — the JSDoc on the storage side points back at
+ * this function.
+ */
+export function isR2MirrorConfigured(): boolean {
+  return Boolean(
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY &&
+    process.env.R2_BUCKET,
+  );
+}
+
+export type OffsiteMirrorStatus = 'green' | 'red' | 'not_configured';
+
+export interface OffsiteMirrorHealth {
+  status: OffsiteMirrorStatus;
+  /** Action slug of the most recent mirror event, `null` when none exists. */
+  lastEventAction: string | null;
+  /** ISO timestamp of the most recent mirror event, `null` when none exists. */
+  lastEventAt: string | null;
+}
+
+/** Audit actions written by the dual-write adapter (`lib/storage/dual.ts`). */
+const R2_MIRROR_AUDIT_ACTIONS = ['storage.r2_mirror.succeeded', 'storage.r2_mirror.failed'];
+
+/**
+ * Classify the offsite mirror from its most recent audit event.
+ *
+ *   - `not_configured` — any of the four `R2_*` env vars is missing; the
+ *     dual-write adapter never engages, so there is nothing to monitor.
+ *   - `red`   — the LAST mirror attempt failed: the offsite copy is drifting
+ *     behind the local PRIMARY until a successful write replaces the event.
+ *   - `green` — the last attempt succeeded, or no upload has happened yet
+ *     (configured-but-quiet is healthy calm, not an incident).
+ */
+export async function getOffsiteMirrorHealth(): Promise<OffsiteMirrorHealth> {
+  if (!isR2MirrorConfigured()) {
+    return { status: 'not_configured', lastEventAction: null, lastEventAt: null };
+  }
+
+  const lastEvent = await db.auditLog.findFirst({
+    where: { action: { in: R2_MIRROR_AUDIT_ACTIONS } },
+    orderBy: { createdAt: 'desc' },
+    select: { action: true, createdAt: true },
+  });
+
+  if (!lastEvent) {
+    return { status: 'green', lastEventAction: null, lastEventAt: null };
+  }
+
+  return {
+    status: lastEvent.action === 'storage.r2_mirror.failed' ? 'red' : 'green',
+    lastEventAction: lastEvent.action,
+    lastEventAt: lastEvent.createdAt.toISOString(),
+  };
+}

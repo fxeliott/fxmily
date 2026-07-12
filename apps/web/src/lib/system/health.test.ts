@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auditGroupByMock = vi.fn<(...args: unknown[]) => unknown>();
 const auditFindManyMock = vi.fn<(...args: unknown[]) => unknown>();
@@ -14,10 +14,18 @@ const readFileSyncMock = vi.fn<(...args: unknown[]) => unknown>();
 // Tour 13 — verification backlog probe reads mt5AccountProof.count + findFirst.
 const proofCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const proofFindFirstMock = vi.fn<(...args: unknown[]) => unknown>();
+// J1 (ADR-006 §6) — offsite mirror probe reads the latest storage.r2_mirror.*
+// audit row via auditLog.findFirst.
+const auditFindFirstMock = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock('@/lib/db', () => ({
   db: {
-    auditLog: { groupBy: auditGroupByMock, findMany: auditFindManyMock, count: auditCountMock },
+    auditLog: {
+      groupBy: auditGroupByMock,
+      findMany: auditFindManyMock,
+      count: auditCountMock,
+      findFirst: auditFindFirstMock,
+    },
     user: { count: userCountMock },
     pushSubscription: { count: pushCountMock },
     mt5AccountProof: { count: proofCountMock, findFirst: proofFindFirstMock },
@@ -36,6 +44,7 @@ const {
   getWorkerHealthReport,
   getVerificationBacklogHealth,
   getUploadsPersistenceHealth,
+  getOffsiteMirrorHealth,
   buildHostActionsReport,
   parseProcMounts,
   mountForPath,
@@ -102,6 +111,7 @@ beforeEach(() => {
   readFileSyncMock.mockReset();
   proofCountMock.mockReset();
   proofFindFirstMock.mockReset();
+  auditFindFirstMock.mockReset();
 });
 
 describe('getCronHealthReport', () => {
@@ -1543,6 +1553,123 @@ describe('getVerificationBacklogHealth', () => {
       where: { ocrStatus: 'pending', member: { status: 'active' } },
       orderBy: { uploadedAt: 'asc' },
       select: { uploadedAt: true },
+    });
+  });
+});
+
+describe('getOffsiteMirrorHealth', () => {
+  const R2_ENV_KEYS = [
+    'R2_ACCOUNT_ID',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'R2_BUCKET',
+  ] as const;
+
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of R2_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+      process.env[key] = `test-${key.toLowerCase()}`;
+    }
+  });
+
+  afterEach(() => {
+    for (const key of R2_ENV_KEYS) {
+      const saved = savedEnv[key];
+      if (saved === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = saved;
+      }
+    }
+  });
+
+  /**
+   * Why this matters: without the four R2_* env vars the dual-write adapter
+   * never engages, so the probe must read "not configured" instead of red —
+   * and must not touch the database at all.
+   */
+  it('returns not_configured without querying when any R2 env var is missing', async () => {
+    delete process.env.R2_BUCKET;
+
+    await expect(getOffsiteMirrorHealth()).resolves.toEqual({
+      status: 'not_configured',
+      lastEventAction: null,
+      lastEventAt: null,
+    });
+    expect(auditFindFirstMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Why this matters: the probe is event-driven, not a heartbeat. A configured
+   * mirror with zero storage.r2_mirror.* rows just means no upload happened
+   * yet — healthy quiet, never an incident.
+   */
+  it('returns green with null event fields when configured but no mirror event exists', async () => {
+    auditFindFirstMock.mockResolvedValue(null);
+
+    await expect(getOffsiteMirrorHealth()).resolves.toEqual({
+      status: 'green',
+      lastEventAction: null,
+      lastEventAt: null,
+    });
+  });
+
+  /**
+   * Why this matters: a succeeded latest event proves the offsite copy kept up
+   * with the local primary; the probe must echo the audit row (action + time)
+   * so the operator can correlate with the audit log.
+   */
+  it('returns green echoing the last event when the latest mirror write succeeded', async () => {
+    const at = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditFindFirstMock.mockResolvedValue({
+      action: 'storage.r2_mirror.succeeded',
+      createdAt: at,
+    });
+
+    await expect(getOffsiteMirrorHealth()).resolves.toEqual({
+      status: 'green',
+      lastEventAction: 'storage.r2_mirror.succeeded',
+      lastEventAt: at.toISOString(),
+    });
+  });
+
+  /**
+   * Why this matters: red is the only signal the operator gets that the
+   * offsite copy is drifting behind the local disk — a failed latest event
+   * must never be softened to green.
+   */
+  it('returns red when the latest mirror write failed', async () => {
+    const at = new Date('2026-07-11T08:30:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditFindFirstMock.mockResolvedValue({
+      action: 'storage.r2_mirror.failed',
+      createdAt: at,
+    });
+
+    await expect(getOffsiteMirrorHealth()).resolves.toEqual({
+      status: 'red',
+      lastEventAction: 'storage.r2_mirror.failed',
+      lastEventAt: at.toISOString(),
+    });
+  });
+
+  /**
+   * Why this matters: pins the exact Prisma query (action filter, newest-first
+   * order, minimal select) so a refactor cannot silently widen the scan or
+   * start reading stale events.
+   */
+  it('queries only the r2_mirror audit actions, newest first', async () => {
+    auditFindFirstMock.mockResolvedValue(null);
+
+    await getOffsiteMirrorHealth();
+
+    expect(auditFindFirstMock.mock.calls[0]?.[0]).toEqual({
+      where: {
+        action: { in: ['storage.r2_mirror.succeeded', 'storage.r2_mirror.failed'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { action: true, createdAt: true },
     });
   });
 });

@@ -2,6 +2,7 @@ import {
   Activity,
   ArrowLeft,
   Bot,
+  Cloud,
   Database,
   HardDrive,
   Image as ImageIcon,
@@ -22,6 +23,7 @@ import {
   buildHostActionsReport,
   getCronHealthReport,
   getDiskHealth,
+  getOffsiteMirrorHealth,
   getSystemSnapshot,
   getUploadsPersistenceHealth,
   getVerificationBacklogHealth,
@@ -31,6 +33,8 @@ import {
   type DiskStatus,
   type HeartbeatHealthEntry,
   type HostActionItem,
+  type OffsiteMirrorHealth,
+  type OffsiteMirrorStatus,
   type UploadsPersistenceHealth,
   type UploadsPersistenceStatus,
   type VerificationBacklogHealth,
@@ -67,11 +71,12 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
     redirect('/login?redirect=/admin/system');
   }
 
-  const [report, workerReport, snapshot, verificationBacklog] = await Promise.all([
+  const [report, workerReport, snapshot, verificationBacklog, offsiteMirror] = await Promise.all([
     getCronHealthReport(),
     getWorkerHealthReport(),
     getSystemSnapshot(),
     getVerificationBacklogHealth(),
+    getOffsiteMirrorHealth(),
   ]);
 
   // Tour 13 — live disk probe (sync, cheap). Read AFTER the awaits so the
@@ -95,10 +100,13 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   // living on the ephemeral layer — is still an incident for the operator.
   const overall = worstStatus(
     worstStatus(
-      worstStatus(report.overall, workerReport.overall),
-      backlogToCronStatus(verificationBacklog.status),
+      worstStatus(
+        worstStatus(report.overall, workerReport.overall),
+        backlogToCronStatus(verificationBacklog.status),
+      ),
+      uploadsToCronStatus(uploads.status),
     ),
-    uploadsToCronStatus(uploads.status),
+    offsiteToCronStatus(offsiteMirror.status),
   );
 
   await logAudit({
@@ -208,6 +216,42 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         </div>
 
         <UploadsPersistenceDetail uploads={uploads} />
+      </section>
+
+      <section
+        aria-labelledby="offsite-mirror-heading"
+        className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <Cloud className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="offsite-mirror-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              Miroir hors-site (R2)
+              <OffsiteMirrorPill status={offsiteMirror.status} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              Chaque upload membre est recopié en temps réel vers Cloudflare R2 (copie hors-site,
+              jamais bloquante pour le membre). Sonde pilotée par les événements : elle lit le
+              dernier audit{' '}
+              <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
+                storage.r2_mirror.*
+              </code>{' '}
+              : un miroir silencieux est un miroir sain (aucun upload récent). Vert = dernier essai
+              réussi ou calme · Rouge = dernier essai échoué (la copie hors-site dérive derrière le
+              disque local).
+            </p>
+          </div>
+        </div>
+
+        <OffsiteMirrorDetail mirror={offsiteMirror} />
       </section>
 
       <section
@@ -1009,6 +1053,87 @@ function UploadsPersistenceDetail({
  */
 function uploadsToCronStatus(status: UploadsPersistenceStatus): CronStatus {
   return status === 'red' ? 'red' : status === 'amber' ? 'amber' : 'green'; // green + unknown both fold to healthy
+}
+
+/**
+ * J1 (ADR-006 §6) — offsite mirror pill. `not_configured` reads neutral (the
+ * dual-write adapter never engages without the four `R2_*` env vars); `red` =
+ * the LAST mirror attempt failed, so the offsite copy is drifting behind the
+ * local primary until the next successful write.
+ */
+function OffsiteMirrorPill({ status }: { status: OffsiteMirrorStatus }): React.ReactElement {
+  const tone = status === 'green' ? 'ok' : status === 'red' ? 'bad' : 'mute';
+  const label =
+    status === 'green' ? 'Miroir OK' : status === 'red' ? 'Échec miroir' : 'Non configuré';
+  return <Pill tone={tone}>{label}</Pill>;
+}
+
+/**
+ * Detail line under the offsite mirror pill. Echoes the last mirror audit
+ * event (action slug + timestamp) so the operator can correlate with the
+ * audit log. `not_configured` spells out the activation path; configured-but-
+ * quiet explains why silence is healthy (event-driven probe, not a heartbeat).
+ */
+function OffsiteMirrorDetail({ mirror }: { mirror: OffsiteMirrorHealth }): React.ReactElement {
+  if (mirror.status === 'not_configured') {
+    return (
+      <p className="mt-5 text-[11px] text-[var(--t-4)]">
+        Variables{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">R2_*</code>{' '}
+        absentes : le miroir hors-site est inactif. Provisionner les 4 variables R2 dans{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+          /etc/fxmily/web.env
+        </code>{' '}
+        puis redémarrer le conteneur web pour l&apos;activer.
+      </p>
+    );
+  }
+
+  if (mirror.lastEventAt === null || mirror.lastEventAction === null) {
+    return (
+      <p className="mt-5 text-sm text-[var(--t-2)]">
+        Miroir configuré, aucun upload depuis le déploiement : calme sain, rien à recopier pour
+        l&apos;instant.
+      </p>
+    );
+  }
+
+  const actionTone = mirror.status === 'red' ? 'text-[var(--bad)]' : 'text-[var(--t-1)]';
+
+  return (
+    <div className="mt-5 flex flex-col gap-2">
+      <p className="text-sm text-[var(--t-2)]">
+        Dernier événement :{' '}
+        <code
+          className={`rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px] ${actionTone}`}
+        >
+          {mirror.lastEventAction}
+        </code>
+        <span className="ml-2 text-[11px] text-[var(--t-4)]">
+          le {formatTimestamp(mirror.lastEventAt)}
+        </span>
+      </p>
+      {mirror.status === 'red' ? (
+        <p className="mt-1 text-[11px] font-medium text-[var(--bad)]">
+          Le dernier essai de copie vers R2 a échoué : la copie hors-site dérive derrière le disque
+          local jusqu&apos;au prochain upload réussi (ou un rattrapage via{' '}
+          <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+            migrate-uploads-to-r2.sh
+          </code>
+          ).
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Map the offsite-mirror probe onto the shared `CronStatus` ladder so the
+ * masthead `worstStatus` can fold it in. `not_configured` folds to green
+ * (mirror intentionally inactive = not an incident, same as `unknown` above).
+ */
+function offsiteToCronStatus(status: OffsiteMirrorStatus): CronStatus {
+  return status === 'red' ? 'red' : 'green'; // green + not_configured both fold to healthy
 }
 
 /** Coarse ms → "42 min" / "3 h" / "2 j" for the backlog age (own formatter so

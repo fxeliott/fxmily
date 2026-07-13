@@ -62,6 +62,22 @@ jobs:
             : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing — add it as a repo secret}"
             : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing — add it as a repo secret}"
 
+            # 0b. Normalize R2_ACCOUNT_ID. The app (r2.ts) builds the endpoint as
+            #     https://<id>.r2.cloudflarestorage.com, so a secret set to the
+            #     FULL endpoint URL would yield https://https://...  — a silent,
+            #     presence-passing break. Accept the bare id OR a pasted full URL
+            #     and reduce to the bare account id. POSIX parameter expansion
+            #     only (appleboy runs the remote script under /bin/sh).
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#http://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#https://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%.r2.cloudflarestorage.com*}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%/*}"
+            case "$R2_ACCOUNT_ID" in
+              ""|*[!0-9a-fA-F]*)
+                echo "::error::normalized R2_ACCOUNT_ID is not a bare hex account id — check the secret"; exit 1 ;;
+            esac
+            echo "R2_ACCOUNT_ID normalized to a bare account id (value hidden)."
+
             if [ ! -f "$ENV_FILE" ]; then
               echo "::error::$ENV_FILE not found on host"; exit 1
             fi
@@ -107,8 +123,24 @@ jobs:
               fi
             done
 
+            # 4b. End-to-end proof: the credentials + DERIVED endpoint actually
+            #     reach the bucket. Presence (step 4) is not enough — a malformed
+            #     R2_ACCOUNT_ID passes presence but breaks the endpoint the app
+            #     builds. head-bucket over the same endpoint fails loudly on that.
+            ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+            if docker run --rm \
+                 -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+                 -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+                 -e AWS_DEFAULT_REGION=auto \
+                 amazon/aws-cli:latest \
+                 s3api head-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT" >/dev/null 2>&1; then
+              echo "  [OK] R2 endpoint reachable + credentials valid (head-bucket $BUCKET)"
+            else
+              echo "::error::R2 head-bucket FAILED — endpoint/creds wrong (R2_ACCOUNT_ID must be the bare account id; check the token)"; exit 1
+            fi
+
             # 5. Report the container health the --wait gate already enforced.
             hs="$(docker inspect --format '{{ .State.Health.Status }}' fxmily-web 2>/dev/null || echo unknown)"
             echo "  container health: $hs"
 
-            echo "R2 media mirror ACTIVE — offsite dual-write live for new uploads."
+            echo "R2 media mirror ACTIVE + END-TO-END VERIFIED — offsite dual-write live for new uploads."

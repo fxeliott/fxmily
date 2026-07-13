@@ -4,25 +4,31 @@ name: Trigger R2 demo upload (prove J1 app-path live)
 # performing a REAL demo-account avatar upload through the running web
 # container: route -> auth() -> sharp -> storage.put() -> DualWriteStorageAdapter
 # -> putObjectToR2 -> logAudit('storage.r2_mirror.succeeded'). The read-only
-# diagnostic (verify-r2-app-path.yml, run 29265915424) proved 0 such audit
-# rows exist yet, so a trigger is required.
+# diagnostic (verify-r2-app-path.yml) proved 0 such audit rows exist yet, so a
+# trigger is required.
 #
-# The demo session cookie is MINTED SERVER-SIDE inside the container using the
-# container's own AUTH_SECRET (read via process.env, NEVER printed, NEVER seen
-# by CI). No password is ever typed. The forged JWT carries only { sub } for
-# the demo user -- the Node-side `refreshAndCheckToken` callback re-reads
-# tokenVersion/status/role/timezone from the DB on every auth() call, so a
-# minimal token is sufficient (demo tokenVersion=0, status=active confirmed).
+# HOW THE SESSION COOKIE IS MINTED (boundary-clean, no password typed):
+# The Next.js standalone runtime does NOT ship @auth/core as resolvable files
+# (bundled into webpack chunks), so we cannot import its jwt module in-place.
+# Instead we mint the Auth.js v5 session JWE in a THROWAWAY node:22-alpine
+# container that shares fxmily-web's network namespace (--network
+# container:fxmily-web, so 127.0.0.1:PORT reaches the app) and `npm i jose`.
+# We replicate @auth/core@0.41.2's encode EXACTLY (verified from source):
+#   enc=A256CBC-HS512, alg=dir, key = HKDF-SHA256(secret, salt=cookieName,
+#   info="Auth.js Generated Encryption Key ("+cookieName+")", len=64).
+# decode() uses the derived key directly when the JWE has no `kid`, so we omit
+# kid. The forged token carries only { sub } -- the Node revocation callback
+# re-reads tokenVersion/status/role/timezone from the DB (demo=active,
+# tokenVersion=0). AUTH_SECRET is read via `docker exec printenv` and PIPED
+# straight into the container's stdin (`read -r`); it is NEVER echoed, NEVER
+# printed to CI logs.
 #
-# mode=probe   (default) READ-ONLY: locate the bundled @auth/core/jwt module,
-#              mint + decode round-trip the cookie, then POST with no cookie
-#              (expect 401) and POST with cookie + NO file (expect 400
+# mode=probe   (default) READ-ONLY: mint + local decode round-trip, then POST
+#              with no cookie (expect 401) and POST cookie + NO file (expect 400
 #              missing_file => cookie accepted, ZERO storage mutation). Prints
 #              the 4-surface baseline. Mutates nothing.
-# mode=execute REAL upload: generate a minimal valid PNG, POST multipart
-#              field=file with the minted cookie, expect 201, then re-print the
-#              4 surfaces to show the deltas (audit row +1, R2 avatars/ +1,
-#              users.avatar_key null->set, uploads volume +1).
+# mode=execute REAL upload: additionally POST a minimal valid PNG (expect 201),
+#              then re-print the 4 surfaces to show the deltas.
 
 on:
   workflow_dispatch:
@@ -67,89 +73,84 @@ jobs:
 
             PSQL() { docker exec fxmily-postgres psql -U fxmily -d fxmily -tAc "$1"; }
             DEMO_EMAIL='demo@fxmily.local'
+            PORT="$(docker exec fxmily-web printenv PORT 2>/dev/null || echo 3000)"
+            PORT="${PORT:-3000}"
+            echo "app PORT (in-container): $PORT"
 
             echo
-            echo "### 0. Locate the bundled jwt module (import() by absolute path) ###"
-            CAND="$(docker exec fxmily-web sh -c "find /app -path '*@auth/core*' -name 'jwt.js' 2>/dev/null; find /app -path '*next-auth*' -name 'jwt.js' 2>/dev/null" | sort -u | tr '\n' ':' || true)"
-            echo "jwt candidate files: ${CAND:-<none>}"
+            echo "### 1. Write the mint script to host /tmp (jose, replicates Auth.js encode) ###"
+            cat > /tmp/fxmint.mjs <<'MJSEOF'
+            import { EncryptJWT, jwtDecrypt } from 'jose';
+            import { hkdfSync } from 'node:crypto';
 
-            echo
-            echo "### 1. Write the mint+POST script into the container (/tmp) ###"
-            docker exec -i fxmily-web sh -c 'cat > /tmp/fxtrigger.mjs' <<'MJSEOF'
-            const MODE = process.env.FX_MODE || 'probe';
-            const CAND = (process.env.FX_CAND || '').split(':').filter(Boolean);
             const DEMO_ID = 'cmrbzsyko0000mopcqwm57umy';
             const COOKIE = '__Secure-authjs.session-token';
             const secret = process.env.AUTH_SECRET;
-            const PORT = process.env.PORT || '3000';
+            const PORT = process.env.FX_PORT || '3000';
+            const MODE = process.env.FX_MODE || 'probe';
             const BASE = `http://127.0.0.1:${PORT}`;
+            const log = (...a) => console.log('[mint]', ...a);
 
-            const log = (...a) => console.log('[mjs]', ...a);
+            if (!secret) { log('FATAL: AUTH_SECRET empty in container'); process.exit(1); }
 
-            if (!secret) { log('FATAL: AUTH_SECRET absent from container env'); process.exit(1); }
+            // @auth/core@0.41.2 encode(): dir / A256CBC-HS512, HKDF-SHA256 len 64,
+            // info = `Auth.js Generated Encryption Key (${salt})`, salt = cookie name.
+            const info = `Auth.js Generated Encryption Key (${COOKIE})`;
+            const key = new Uint8Array(hkdfSync('sha256', secret, COOKIE, info, 64));
 
-            async function loadJwt() {
-              for (const spec of ['@auth/core/jwt', 'next-auth/jwt']) {
-                try {
-                  const m = await import(spec);
-                  if (typeof m.encode === 'function' && typeof m.decode === 'function') return [spec, m];
-                  log(`bare ${spec}: loaded but encode=${typeof m.encode} decode=${typeof m.decode}`);
-                } catch (e) { log(`bare ${spec}: ${e && (e.code || e.message)}`); }
-              }
-              for (const p of CAND) {
-                try {
-                  const m = await import('file://' + p);
-                  if (typeof m.encode === 'function' && typeof m.decode === 'function') return [p, m];
-                  log(`path ${p}: encode=${typeof m.encode} decode=${typeof m.decode}`);
-                } catch (e) { log(`path ${p}: ${e && (e.code || e.message)}`); }
-              }
-              return [null, null];
-            }
+            const now = Math.floor(Date.now() / 1000);
+            const jwe = await new EncryptJWT({ sub: DEMO_ID })
+              .setProtectedHeader({ alg: 'dir', enc: 'A256CBC-HS512' })
+              .setIssuedAt(now)
+              .setExpirationTime(now + 60 * 60 * 24 * 30)
+              .setJti(crypto.randomUUID())
+              .encrypt(key);
+            log('minted JWE len', jwe.length, 'prefix', jwe.slice(0, 8) + '...');
 
-            const [via, jwt] = await loadJwt();
-            if (!jwt) { log('FATAL: no importable jwt module with encode+decode'); process.exit(2); }
-            log(`jwt module via: ${via}`);
+            const { payload } = await jwtDecrypt(jwe, key);
+            log('local decode round-trip: sub=', payload.sub, 'MATCH=', payload.sub === DEMO_ID);
+            if (payload.sub !== DEMO_ID) { log('FATAL: local round-trip mismatch'); process.exit(3); }
 
-            const jwe = await jwt.encode({ token: { sub: DEMO_ID }, secret, salt: COOKIE, maxAge: 60 * 60 * 24 * 30 });
-            log(`minted JWE len=${jwe.length} prefix=${jwe.slice(0, 8)}...`);
+            const r1 = await fetch(`${BASE}/api/account/avatar`, { method: 'POST' });
+            log('POST no-cookie     ->', r1.status, '(expect 401 unauthorized)');
 
-            const back = await jwt.decode({ token: jwe, secret, salt: COOKIE });
-            const match = !!back && back.sub === DEMO_ID;
-            log(`decode round-trip: sub=${back && back.sub} MATCH=${match}`);
-            if (!match) { log('FATAL: mint/decode round-trip mismatch'); process.exit(3); }
+            const r2 = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` } });
+            const b2 = await r2.text();
+            log('POST cookie+nofile ->', r2.status, b2.slice(0, 160), '(expect 400 missing_file => cookie ACCEPTED)');
 
-            // Reachability + unauth gate (no mutation)
-            const rNo = await fetch(`${BASE}/api/account/avatar`, { method: 'POST' });
-            log(`POST no-cookie   -> HTTP ${rNo.status}  (expect 401 unauthorized)`);
+            if (MODE !== 'execute') { log('PROBE COMPLETE — no upload, nothing mutated.'); process.exit(0); }
 
-            // Authenticated but NO file -> 400 missing_file => cookie ACCEPTED, ZERO storage write
-            const rNoFile = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` } });
-            const bNoFile = await rNoFile.text();
-            log(`POST cookie+nofile -> HTTP ${rNoFile.status}  body=${bNoFile.slice(0, 200)}  (expect 400 missing_file => cookie ACCEPTED)`);
-
-            if (MODE !== 'execute') {
-              log('PROBE COMPLETE — no upload performed, no state mutated.');
-              process.exit(0);
-            }
-
-            // ---- execute: real avatar upload (minimal valid 1x1 PNG; route has no min-dimension check) ----
             const png = Buffer.from(
               'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
               'base64',
             );
             const fd = new FormData();
             fd.append('file', new Blob([png], { type: 'image/png' }), 'avatar.png');
-            const rUp = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` }, body: fd });
-            const bUp = await rUp.text();
-            log(`UPLOAD -> HTTP ${rUp.status}  body=${bUp.slice(0, 400)}`);
-            if (rUp.status !== 201) { log('FATAL: upload did not return 201'); process.exit(4); }
+            const r3 = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` }, body: fd });
+            const b3 = await r3.text();
+            log('UPLOAD ->', r3.status, b3.slice(0, 300));
+            if (r3.status !== 201) { log('FATAL: upload did not return 201'); process.exit(4); }
             log('EXECUTE COMPLETE — demo avatar uploaded through the real app path.');
             MJSEOF
 
             echo
-            echo "### 2. Run mint+POST inside the container (AUTH_SECRET stays in process.env) ###"
-            docker exec -e FX_MODE="$MODE" -e FX_CAND="$CAND" fxmily-web node /tmp/fxtrigger.mjs || echo "(node script exited non-zero)"
-            docker exec fxmily-web rm -f /tmp/fxtrigger.mjs || true
+            echo "### 2. Mint + POST in a throwaway node container (AUTH_SECRET piped, never logged) ###"
+            {
+              docker exec fxmily-web printenv AUTH_SECRET | docker run --rm -i \
+                --network "container:fxmily-web" \
+                -e FX_MODE="$MODE" \
+                -e FX_PORT="$PORT" \
+                -v /tmp/fxmint.mjs:/fxmint.mjs:ro \
+                node:22-alpine sh -c '
+                  read -r AUTH_SECRET
+                  export AUTH_SECRET
+                  cd /tmp
+                  npm init -y >/tmp/npm.log 2>&1
+                  npm install jose@5 --no-audit --no-fund --silent >>/tmp/npm.log 2>&1 || { echo "npm install failed:"; tail -20 /tmp/npm.log; exit 9; }
+                  node /fxmint.mjs
+                '
+            } || echo "(mint container exited non-zero)"
+            rm -f /tmp/fxmint.mjs || true
 
             echo
             echo "===================================================================="
@@ -191,7 +192,8 @@ jobs:
 
             echo
             echo "### S4. local uploads volume file count (PRIMARY store) ###"
-            docker run --rm -v fxmily-uploads:/data:ro alpine:3 sh -c 'find /data -type f 2>/dev/null | wc -l' || echo "(volume read failed)"
+            VOL="$(docker run --rm -v fxmily-uploads:/data:ro alpine:3 sh -c 'find /data -type f 2>/dev/null | wc -l' | tr -d '[:space:]' || echo '?')"
+            echo "uploads volume files: ${VOL:-?}"
 
             echo
             echo "===================================================================="

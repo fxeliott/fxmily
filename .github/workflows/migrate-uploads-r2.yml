@@ -62,6 +62,14 @@ jobs:
             : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing in web.env}"
             : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing in web.env}"
             : "${R2_BUCKET:?R2_BUCKET missing in web.env}"
+
+            # Normalize R2_ACCOUNT_ID (bare id OR a full endpoint URL -> bare id),
+            # mirroring activate-r2-prod so this workflow can't build a doubled
+            # https:// endpoint even if web.env still holds an un-normalized value.
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#http://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#https://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%.r2.cloudflarestorage.com*}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%/*}"
             ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
             VOL=fxmily-uploads
             MODE="${MODE:-dry-run}"

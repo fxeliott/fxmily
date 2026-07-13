@@ -1,0 +1,207 @@
+name: Trigger R2 demo upload (prove J1 app-path live)
+
+# Proves the J1 / ADR-006 dual-write mirror on the LIVE APPLICATION path by
+# performing a REAL demo-account avatar upload through the running web
+# container: route -> auth() -> sharp -> storage.put() -> DualWriteStorageAdapter
+# -> putObjectToR2 -> logAudit('storage.r2_mirror.succeeded'). The read-only
+# diagnostic (verify-r2-app-path.yml, run 29265915424) proved 0 such audit
+# rows exist yet, so a trigger is required.
+#
+# The demo session cookie is MINTED SERVER-SIDE inside the container using the
+# container's own AUTH_SECRET (read via process.env, NEVER printed, NEVER seen
+# by CI). No password is ever typed. The forged JWT carries only { sub } for
+# the demo user -- the Node-side `refreshAndCheckToken` callback re-reads
+# tokenVersion/status/role/timezone from the DB on every auth() call, so a
+# minimal token is sufficient (demo tokenVersion=0, status=active confirmed).
+#
+# mode=probe   (default) READ-ONLY: locate the bundled @auth/core/jwt module,
+#              mint + decode round-trip the cookie, then POST with no cookie
+#              (expect 401) and POST with cookie + NO file (expect 400
+#              missing_file => cookie accepted, ZERO storage mutation). Prints
+#              the 4-surface baseline. Mutates nothing.
+# mode=execute REAL upload: generate a minimal valid PNG, POST multipart
+#              field=file with the minted cookie, expect 201, then re-print the
+#              4 surfaces to show the deltas (audit row +1, R2 avatars/ +1,
+#              users.avatar_key null->set, uploads volume +1).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'probe (read-only, no upload) OR execute (real demo avatar upload)'
+        type: choice
+        default: probe
+        options:
+          - probe
+          - execute
+
+permissions: {}
+
+concurrency:
+  group: trigger-r2-demo-upload
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    name: Demo-account avatar trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> mint session cookie + POST avatar
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 15m
+          envs: MODE
+          script: |
+            set -euo pipefail
+            MODE="${MODE:-probe}"
+
+            echo "===================================================================="
+            echo "J1 / R2 APP-PATH TRIGGER  (mode=$MODE)"
+            echo "===================================================================="
+
+            PSQL() { docker exec fxmily-postgres psql -U fxmily -d fxmily -tAc "$1"; }
+            DEMO_EMAIL='demo@fxmily.local'
+
+            echo
+            echo "### 0. Locate the bundled jwt module (import() by absolute path) ###"
+            CAND="$(docker exec fxmily-web sh -c "find /app -path '*@auth/core*' -name 'jwt.js' 2>/dev/null; find /app -path '*next-auth*' -name 'jwt.js' 2>/dev/null" | sort -u | tr '\n' ':' || true)"
+            echo "jwt candidate files: ${CAND:-<none>}"
+
+            echo
+            echo "### 1. Write the mint+POST script into the container (/tmp) ###"
+            docker exec -i fxmily-web sh -c 'cat > /tmp/fxtrigger.mjs' <<'MJSEOF'
+            const MODE = process.env.FX_MODE || 'probe';
+            const CAND = (process.env.FX_CAND || '').split(':').filter(Boolean);
+            const DEMO_ID = 'cmrbzsyko0000mopcqwm57umy';
+            const COOKIE = '__Secure-authjs.session-token';
+            const secret = process.env.AUTH_SECRET;
+            const PORT = process.env.PORT || '3000';
+            const BASE = `http://127.0.0.1:${PORT}`;
+
+            const log = (...a) => console.log('[mjs]', ...a);
+
+            if (!secret) { log('FATAL: AUTH_SECRET absent from container env'); process.exit(1); }
+
+            async function loadJwt() {
+              for (const spec of ['@auth/core/jwt', 'next-auth/jwt']) {
+                try {
+                  const m = await import(spec);
+                  if (typeof m.encode === 'function' && typeof m.decode === 'function') return [spec, m];
+                  log(`bare ${spec}: loaded but encode=${typeof m.encode} decode=${typeof m.decode}`);
+                } catch (e) { log(`bare ${spec}: ${e && (e.code || e.message)}`); }
+              }
+              for (const p of CAND) {
+                try {
+                  const m = await import('file://' + p);
+                  if (typeof m.encode === 'function' && typeof m.decode === 'function') return [p, m];
+                  log(`path ${p}: encode=${typeof m.encode} decode=${typeof m.decode}`);
+                } catch (e) { log(`path ${p}: ${e && (e.code || e.message)}`); }
+              }
+              return [null, null];
+            }
+
+            const [via, jwt] = await loadJwt();
+            if (!jwt) { log('FATAL: no importable jwt module with encode+decode'); process.exit(2); }
+            log(`jwt module via: ${via}`);
+
+            const jwe = await jwt.encode({ token: { sub: DEMO_ID }, secret, salt: COOKIE, maxAge: 60 * 60 * 24 * 30 });
+            log(`minted JWE len=${jwe.length} prefix=${jwe.slice(0, 8)}...`);
+
+            const back = await jwt.decode({ token: jwe, secret, salt: COOKIE });
+            const match = !!back && back.sub === DEMO_ID;
+            log(`decode round-trip: sub=${back && back.sub} MATCH=${match}`);
+            if (!match) { log('FATAL: mint/decode round-trip mismatch'); process.exit(3); }
+
+            // Reachability + unauth gate (no mutation)
+            const rNo = await fetch(`${BASE}/api/account/avatar`, { method: 'POST' });
+            log(`POST no-cookie   -> HTTP ${rNo.status}  (expect 401 unauthorized)`);
+
+            // Authenticated but NO file -> 400 missing_file => cookie ACCEPTED, ZERO storage write
+            const rNoFile = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` } });
+            const bNoFile = await rNoFile.text();
+            log(`POST cookie+nofile -> HTTP ${rNoFile.status}  body=${bNoFile.slice(0, 200)}  (expect 400 missing_file => cookie ACCEPTED)`);
+
+            if (MODE !== 'execute') {
+              log('PROBE COMPLETE — no upload performed, no state mutated.');
+              process.exit(0);
+            }
+
+            // ---- execute: real avatar upload (minimal valid 1x1 PNG; route has no min-dimension check) ----
+            const png = Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              'base64',
+            );
+            const fd = new FormData();
+            fd.append('file', new Blob([png], { type: 'image/png' }), 'avatar.png');
+            const rUp = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: { cookie: `${COOKIE}=${jwe}` }, body: fd });
+            const bUp = await rUp.text();
+            log(`UPLOAD -> HTTP ${rUp.status}  body=${bUp.slice(0, 400)}`);
+            if (rUp.status !== 201) { log('FATAL: upload did not return 201'); process.exit(4); }
+            log('EXECUTE COMPLETE — demo avatar uploaded through the real app path.');
+            MJSEOF
+
+            echo
+            echo "### 2. Run mint+POST inside the container (AUTH_SECRET stays in process.env) ###"
+            docker exec -e FX_MODE="$MODE" -e FX_CAND="$CAND" fxmily-web node /tmp/fxtrigger.mjs || echo "(node script exited non-zero)"
+            docker exec fxmily-web rm -f /tmp/fxtrigger.mjs || true
+
+            echo
+            echo "===================================================================="
+            echo "4-SURFACE VERIFICATION (baseline in probe, deltas in execute)"
+            echo "===================================================================="
+
+            echo
+            echo "### S1. audit_logs storage.r2_mirror.* (THE governing J1 proof) ###"
+            PSQL "SELECT action || ' | ' || count(*) || ' | ' || COALESCE(max(created_at)::text,'-') FROM audit_logs WHERE action LIKE 'storage.r2_mirror%' GROUP BY action ORDER BY action;" || echo "(query failed)"
+            MIRROR_OK="$(PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.succeeded';" | tr -d '[:space:]' || true)"
+            echo "storage.r2_mirror.succeeded total: ${MIRROR_OK:-?}"
+            echo "-- last 3 r2_mirror rows --"
+            PSQL "SELECT action || '  ' || COALESCE(metadata::text,'{}') || '  ' || created_at FROM audit_logs WHERE action LIKE 'storage.r2_mirror%' ORDER BY created_at DESC LIMIT 3;" || true
+
+            echo
+            echo "### S2. demo users.avatar_key (null -> set on a real upload) ###"
+            PSQL "SELECT 'avatar_key='||COALESCE(avatar_key,'<null>')||' | account.avatar.updated_count='||(SELECT count(*) FROM audit_logs WHERE action='account.avatar.updated') FROM users WHERE email='${DEMO_EMAIL}';" || echo "(query failed)"
+
+            echo
+            echo "### S3. R2 object count (independent path, avatars/) ###"
+            while IFS= read -r line; do
+              case "$line" in
+                R2_ACCOUNT_ID=*|R2_ACCESS_KEY_ID=*|R2_SECRET_ACCESS_KEY=*|R2_BUCKET=*) export "$line" ;;
+              esac
+            done < /etc/fxmily/web.env
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#http://}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID#https://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%.r2.cloudflarestorage.com*}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%/*}"
+            ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+            awsr2() {
+              docker run --rm \
+                -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+                -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+                -e AWS_DEFAULT_REGION=auto \
+                amazon/aws-cli:latest "$@"
+            }
+            TOTAL="$(awsr2 s3 ls "s3://$R2_BUCKET" --recursive --endpoint-url "$ENDPOINT" | wc -l | tr -d '[:space:]' || true)"
+            AVATARS="$(awsr2 s3 ls "s3://$R2_BUCKET/avatars/" --recursive --endpoint-url "$ENDPOINT" | wc -l | tr -d '[:space:]' || true)"
+            echo "R2 objects total: ${TOTAL:-0}   under avatars/: ${AVATARS:-0}"
+
+            echo
+            echo "### S4. local uploads volume file count (PRIMARY store) ###"
+            docker run --rm -v fxmily-uploads:/data:ro alpine:3 sh -c 'find /data -type f 2>/dev/null | wc -l' || echo "(volume read failed)"
+
+            echo
+            echo "===================================================================="
+            if [ "$MODE" = "execute" ]; then
+              if [ "${MIRROR_OK:-0}" != "0" ] && [ -n "${MIRROR_OK:-}" ]; then
+                echo "  RESULT: storage.r2_mirror.succeeded now = ${MIRROR_OK}. J1 app-path PROVEN LIVE."
+              else
+                echo "  RESULT: upload ran but NO r2_mirror.succeeded row -- investigate mirror path."
+              fi
+            else
+              echo "  PROBE done. If cookie was ACCEPTED (400 missing_file above), re-run with mode=execute."
+            fi
+            echo "===================================================================="

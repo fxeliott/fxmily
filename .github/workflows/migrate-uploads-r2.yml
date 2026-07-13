@@ -1,0 +1,114 @@
+name: Migrate uploads to R2 (prod, one-shot)
+
+# One-shot manual backfill (J1, ADR-006 section 5): mirrors the HISTORICAL
+# member uploads (written before the dual-write adapter went live) from the
+# `fxmily-uploads` docker volume to the `fxmily-media` R2 bucket. New uploads
+# are already mirrored by DualWriteStorageAdapter; this closes the gap for the
+# pre-activation files.
+#
+# Reuses the R2 credentials already in /etc/fxmily/web.env (placed by the
+# activate-r2-prod workflow). Runs `aws s3 sync` from INSIDE a container that
+# mounts the volume read-only, so no host root is needed. Idempotent:
+# `aws s3 sync` transfers only the delta and re-runs are safe.
+#
+# Default is DRY-RUN. Set `mode=execute` to perform the real sync + verify.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (list only) or execute (real sync + verify)"
+        type: choice
+        options:
+          - dry-run
+          - execute
+        default: dry-run
+
+permissions: {}
+
+concurrency:
+  group: migrate-uploads-r2
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Sync historical uploads to R2
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> containerised aws s3 sync + verify
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 20m
+          envs: MODE
+          script: |
+            set -euo pipefail
+
+            # Load ONLY the R2 vars from web.env (avoid sourcing the whole file:
+            # other values may not be shell-safe). R2 values are hex/simple.
+            while IFS= read -r line; do
+              case "$line" in
+                R2_ACCOUNT_ID=*|R2_ACCESS_KEY_ID=*|R2_SECRET_ACCESS_KEY=*|R2_BUCKET=*)
+                  export "$line" ;;
+              esac
+            done < /etc/fxmily/web.env
+
+            : "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing in web.env — run activate-r2-prod first}"
+            : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing in web.env}"
+            : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing in web.env}"
+            : "${R2_BUCKET:?R2_BUCKET missing in web.env}"
+            ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+            VOL=fxmily-uploads
+            MODE="${MODE:-dry-run}"
+
+            # Containerised aws CLI: volume mounted read-only, creds via env.
+            # Runs as container-root so it can read the root-owned volume files.
+            awsr2() {
+              docker run --rm \
+                -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+                -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+                -e AWS_DEFAULT_REGION=auto \
+                -v "${VOL}:/data:ro" \
+                amazon/aws-cli:latest "$@"
+            }
+
+            echo "mode: $MODE   bucket: s3://$R2_BUCKET   endpoint: $ENDPOINT"
+
+            # Preflight — creds + bucket reachable (fails loudly on a bad token).
+            awsr2 s3api head-bucket --bucket "$R2_BUCKET" --endpoint-url "$ENDPOINT"
+            echo "bucket reachable."
+
+            # Local file count (container reads the root-owned volume).
+            LOCAL="$(docker run --rm -v "${VOL}:/data:ro" alpine:3 sh -c 'find /data -type f 2>/dev/null | wc -l' | tr -d '[:space:]')"
+            echo "local files in volume: $LOCAL"
+            if [ "$LOCAL" = "0" ]; then
+              echo "Nothing to migrate (volume empty). Done."
+              exit 0
+            fi
+
+            # Sync — dry-run lists; execute transfers the delta (idempotent).
+            if [ "$MODE" = "execute" ]; then
+              awsr2 s3 sync /data "s3://$R2_BUCKET" --endpoint-url "$ENDPOINT" --no-progress
+            else
+              awsr2 s3 sync /data "s3://$R2_BUCKET" --endpoint-url "$ENDPOINT" --no-progress --dryrun
+            fi
+
+            # Remote object count (wc runs on the host over the CLI output;
+            # `|| true` absorbs aws s3 ls exit 1 on an empty listing).
+            REMOTE="$(awsr2 s3 ls "s3://$R2_BUCKET" --recursive --endpoint-url "$ENDPOINT" | wc -l | tr -d '[:space:]' || true)"
+            echo "remote objects now: ${REMOTE:-0}"
+
+            if [ "$MODE" = "execute" ]; then
+              if [ "${REMOTE:-0}" -lt "$LOCAL" ]; then
+                echo "::error::remote (${REMOTE:-0}) < local ($LOCAL) — sync incomplete"; exit 1
+              fi
+              echo "counts OK: local=$LOCAL remote=${REMOTE:-0}"
+              echo "Historical uploads mirrored to R2."
+            else
+              echo "DRY-RUN complete — nothing uploaded. Re-run with mode=execute."
+            fi

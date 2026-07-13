@@ -140,14 +140,15 @@ jobs:
                 --network "container:fxmily-web" \
                 -e FX_MODE="$MODE" \
                 -e FX_PORT="$PORT" \
-                -v /tmp/fxmint.mjs:/fxmint.mjs:ro \
+                -v /tmp/fxmint.mjs:/tmp/fxmint.mjs:ro \
                 node:22-alpine sh -c '
                   read -r AUTH_SECRET
                   export AUTH_SECRET
-                  cd /tmp
+                  mkdir -p /work && cd /work
                   npm init -y >/tmp/npm.log 2>&1
                   npm install jose@5 --no-audit --no-fund --silent >>/tmp/npm.log 2>&1 || { echo "npm install failed:"; tail -20 /tmp/npm.log; exit 9; }
-                  node /fxmint.mjs
+                  cp /tmp/fxmint.mjs /work/fxmint.mjs
+                  node /work/fxmint.mjs
                 '
             } || echo "(mint container exited non-zero)"
             rm -f /tmp/fxmint.mjs || true

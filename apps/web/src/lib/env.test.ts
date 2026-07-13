@@ -279,3 +279,68 @@ describe('envSchemaWithRefines — batch AI tokens prod requirement (Tour 15 har
     expect(r.success).toBe(true);
   });
 });
+
+/**
+ * J1 hardening — R2 offsite mirror vars deployed all-or-none.
+ *
+ * Une config R2 partielle (1 à 3 vars sur 4) passe silencieusement en mode
+ * "local-only" (`isR2Configured()` === false) : le mirror offsite est
+ * désactivé sans erreur visible. Le refine bloque le boot pour forcer une
+ * config complète ou totalement absente. Truthiness volontaire : une chaîne
+ * vide compte comme absente (parité `isR2Configured()`).
+ */
+const FULL_R2_ENV = {
+  R2_ACCOUNT_ID: 'acc',
+  R2_ACCESS_KEY_ID: 'key',
+  R2_SECRET_ACCESS_KEY: 'secret',
+  R2_BUCKET: 'bucket',
+} as const;
+
+describe('envSchemaWithRefines — R2 mirror all-or-none (J1 hardening)', () => {
+  it('accepts the env when all 4 R2 vars are absent (local-only mode)', () => {
+    const r = envSchemaWithRefines.safeParse(BASE_VALID_ENV);
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts the env when all 4 R2 vars are set', () => {
+    const r = envSchemaWithRefines.safeParse({ ...BASE_VALID_ENV, ...FULL_R2_ENV });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects when only R2_ACCOUNT_ID is set (1/4)', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      R2_ACCOUNT_ID: 'acc',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(JSON.stringify(r.error.issues)).toContain('deployed together');
+      expect(r.error.issues.flatMap((i) => i.path)).toContain('R2_ACCOUNT_ID');
+    }
+  });
+
+  it('rejects when 3 of 4 R2 vars are set (missing R2_BUCKET)', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      R2_ACCOUNT_ID: 'acc',
+      R2_ACCESS_KEY_ID: 'key',
+      R2_SECRET_ACCESS_KEY: 'secret',
+      // R2_BUCKET missing → partial config must block the boot
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(JSON.stringify(r.error.issues)).toContain('deployed together');
+    }
+  });
+
+  it('treats empty strings as absent (all 4 empty → local-only, accepted)', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      R2_ACCOUNT_ID: '',
+      R2_ACCESS_KEY_ID: '',
+      R2_SECRET_ACCESS_KEY: '',
+      R2_BUCKET: '',
+    });
+    expect(r.success).toBe(true);
+  });
+});

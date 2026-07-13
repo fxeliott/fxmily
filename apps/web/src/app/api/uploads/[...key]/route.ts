@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
+import { reportError } from '@/lib/observability';
 import { openLocalReadStream } from '@/lib/storage/local';
 import { isR2Configured, openR2ReadStream, StorageError, parseStorageKey } from '@/lib/storage';
 
@@ -131,7 +132,7 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
         return new Response('Not found', { status: 404 });
       }
     }
-    console.error('[uploads.GET] failed', err);
+    reportError('uploads.get', err);
     return new Response('Internal error', { status: 500 });
   }
 }
@@ -161,7 +162,9 @@ async function serveFromR2(key: string): Promise<Response> {
     if (err instanceof StorageError && err.code === 'not_found') {
       return new Response('Not found', { status: 404 });
     }
-    console.error('[uploads.GET] R2 fallback failed', err);
+    // A failing R2 fallback means the file is gone from BOTH stores or the
+    // mirror transport is broken — page-worthy, not a console-only event.
+    reportError('uploads.get.r2_fallback', err);
     return new Response('Internal error', { status: 500 });
   }
 }

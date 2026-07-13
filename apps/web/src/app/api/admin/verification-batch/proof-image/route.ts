@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { reportError } from '@/lib/observability';
 import { requireVerificationAdminToken } from '@/lib/auth/admin-token';
 import { openLocalReadStream } from '@/lib/storage/local';
 import { isR2Configured, openR2ReadStream, StorageError } from '@/lib/storage';
@@ -77,7 +78,7 @@ export async function GET(req: Request): Promise<Response> {
         return NextResponse.json({ error: 'file_missing' }, { status: 404 });
       }
     }
-    console.error('[verification.proof-image] failed', err);
+    reportError('verification.proof_image', err);
     return NextResponse.json({ error: 'internal' }, { status: 500 });
   }
 }
@@ -107,7 +108,9 @@ async function serveFromR2(key: string): Promise<Response> {
     if (err instanceof StorageError && err.code === 'not_found') {
       return NextResponse.json({ error: 'file_missing' }, { status: 404 });
     }
-    console.error('[verification.proof-image] R2 fallback failed', err);
+    // A failing R2 fallback means the proof is gone from BOTH stores or the
+    // mirror transport is broken — page-worthy, not a console-only event.
+    reportError('verification.proof_image.r2_fallback', err);
     return NextResponse.json({ error: 'internal' }, { status: 500 });
   }
 }

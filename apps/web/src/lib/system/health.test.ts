@@ -1597,8 +1597,10 @@ describe('getOffsiteMirrorHealth', () => {
       status: 'not_configured',
       lastEventAction: null,
       lastEventAt: null,
+      recentFailures24h: 0,
     });
     expect(auditFindFirstMock).not.toHaveBeenCalled();
+    expect(auditCountMock).not.toHaveBeenCalled();
   });
 
   /**
@@ -1608,11 +1610,13 @@ describe('getOffsiteMirrorHealth', () => {
    */
   it('returns green with null event fields when configured but no mirror event exists', async () => {
     auditFindFirstMock.mockResolvedValue(null);
+    auditCountMock.mockResolvedValue(0);
 
     await expect(getOffsiteMirrorHealth()).resolves.toEqual({
       status: 'green',
       lastEventAction: null,
       lastEventAt: null,
+      recentFailures24h: 0,
     });
   });
 
@@ -1627,11 +1631,35 @@ describe('getOffsiteMirrorHealth', () => {
       action: 'storage.r2_mirror.succeeded',
       createdAt: at,
     });
+    auditCountMock.mockResolvedValue(0);
 
     await expect(getOffsiteMirrorHealth()).resolves.toEqual({
       status: 'green',
       lastEventAction: 'storage.r2_mirror.succeeded',
       lastEventAt: at.toISOString(),
+      recentFailures24h: 0,
+    });
+  });
+
+  /**
+   * Why this matters: the status classifies only the LATEST event, so a mirror
+   * that fails then recovers on retry looks permanently green. The 24h failure
+   * counter is the flapping detector — it must surface intermittent failures
+   * even when the latest write succeeded.
+   */
+  it('surfaces recent failures alongside a green status (flapping detector)', async () => {
+    const at = new Date('2026-07-10T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    auditFindFirstMock.mockResolvedValue({
+      action: 'storage.r2_mirror.succeeded',
+      createdAt: at,
+    });
+    auditCountMock.mockResolvedValue(4);
+
+    await expect(getOffsiteMirrorHealth()).resolves.toEqual({
+      status: 'green',
+      lastEventAction: 'storage.r2_mirror.succeeded',
+      lastEventAt: at.toISOString(),
+      recentFailures24h: 4,
     });
   });
 
@@ -1646,11 +1674,13 @@ describe('getOffsiteMirrorHealth', () => {
       action: 'storage.r2_mirror.failed',
       createdAt: at,
     });
+    auditCountMock.mockResolvedValue(3);
 
     await expect(getOffsiteMirrorHealth()).resolves.toEqual({
       status: 'red',
       lastEventAction: 'storage.r2_mirror.failed',
       lastEventAt: at.toISOString(),
+      recentFailures24h: 3,
     });
   });
 
@@ -1661,6 +1691,7 @@ describe('getOffsiteMirrorHealth', () => {
    */
   it('queries only the r2_mirror audit actions, newest first', async () => {
     auditFindFirstMock.mockResolvedValue(null);
+    auditCountMock.mockResolvedValue(0);
 
     await getOffsiteMirrorHealth();
 
@@ -1670,6 +1701,12 @@ describe('getOffsiteMirrorHealth', () => {
       },
       orderBy: { createdAt: 'desc' },
       select: { action: true, createdAt: true },
+    });
+    expect(auditCountMock.mock.calls[0]?.[0]).toEqual({
+      where: {
+        action: 'storage.r2_mirror.failed',
+        createdAt: { gt: expect.any(Date) },
+      },
     });
   });
 });

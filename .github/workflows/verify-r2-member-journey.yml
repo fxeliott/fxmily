@@ -1,0 +1,240 @@
+name: Verify R2 member journey (serve / failover / delete, prove ADR-006 durability)
+
+# Exercises the FULL member upload lifecycle for J1 / ADR-006 on the demo
+# account through the REAL running app, monitoring every surface:
+#   T1 serve       GET /api/uploads/<key> with cookie -> 200 image (member SEES it)
+#   T2 failover    remove the LOCAL file, GET again -> 200 served FROM R2
+#                  (the durability heart of ADR-006 -- local lost, data survives)
+#   T3 delete      DELETE /api/account/avatar -> mirror stage:delete + R2 object gone
+#   T4 restore     re-upload -> leaves demo consistent + re-proves put mirror
+#   T5 proof       POST /api/uploads kind=mt5-proof -> proves the mirror is
+#                  kind-agnostic on a SECOND storage kind (a real member gesture)
+#
+# Cookie is minted server-side (jose, HKDF-SHA256 dir/A256CBC-HS512) in a
+# throwaway node:22-alpine sharing fxmily-web's netns; AUTH_SECRET is piped via
+# stdin and never logged. No password is ever typed. Demo account only.
+#
+# mode=probe   READ-ONLY: baseline + T1 serve of the current avatar. No mutation.
+# mode=execute Full lifecycle T1..T5 (mutates the DEMO avatar; self-heals via T4).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'probe (serve only, read-only) OR execute (full lifecycle serve+failover+delete+restore+proof)'
+        type: choice
+        default: probe
+        options:
+          - probe
+          - execute
+
+permissions: {}
+
+concurrency:
+  group: verify-r2-member-journey
+  cancel-in-progress: false
+
+jobs:
+  journey:
+    name: Demo-account R2 member journey
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> member journey (serve / failover / delete)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 20m
+          envs: MODE
+          script: |
+            set -uo pipefail
+            MODE="${MODE:-probe}"
+            DEMO_EMAIL='demo@fxmily.local'
+            DEMO_ID='cmrbzsyko0000mopcqwm57umy'
+            PORT="$(docker exec fxmily-web printenv PORT 2>/dev/null || echo 3000)"; PORT="${PORT:-3000}"
+            PNG_B64='iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAFS0lEQVR4nO3csY3DMBQEUZezNbl2xZOoiavAlzLgA1iAMRpCIv+uP/s+FgK7VYPP8V9gITAbgAQIzBuABAjMJxAJEJgzAAkQmEMwCRCYWyASIDDXoCRAYOYAJEBgBmEkQGAmwSRAYKIQJEBgskAkQGDCcCRAYNKgJEBg4tAkQGD6ACRAYAoxJEBgGmEkQGAqkSRAYDrBJJhCtlI8CXb3NvCvEOefgTUbgAQIzBuABAjMJxAJEJgzAAkQmEMwCRCYWyASIDDXoCRAYOYAJEBgBmEkQGAmwSRAYKIQJEBgskAkQGDCcCRAYNKgJEBg4tAkQGD6ACRAYAoxJEBgGmEkQGAqkSRAYDrBJJg6slI8CXb3NvCvEOefgTUbgAQIzBuABAjMJxAJEJgzAAkQmEMwCRCYWyASIDDXoCRAYOYAJEBgBmEkQGAmwSRAYKIQJEBgskAkQGDCcCRAYNKgJEBg4tAkQGD6ACRAYAoxJEBgGmEkQGAqkSRAYDrBJJg6slI8CXb3NvCvEOefgTUbgAQIzBuABAjMJxAJEJgzAAkQmEMwCRCYWyASIDDXoCRAYOYAJEBgBmEkQGAmwSRAYKIQJEBgskAkQGDCcCRAYNKgJEBg4tAkQGD6ACRAYAoxJEBAI4wECDwqkSRA4NEJJgECSvEk+N6+DfwrxPlnYM0GIAEC8wYgAQLzCUQCBOYMQAIE5hBMAgTmFogECMw1KAkQmDkACRCYQRgJEJhJMAkQmCgECRCYLBAJEJgwHAkQmDQoCRCYODQJEJg+AAkQmEIMCRCYRhgJEJhKJAkQmE4wCaaOrBRPgt29DfwrxPlnYM0GIAEC8wYgAQLzCUQCBOYMQAIE5hBMAgTmFogECMw1KAkQmDkACRCYQRgJEJhJMAkQmCgECRCYLBAJEJgwHAkQmDQoCRCYODQJEJg+AAkQ2D+FmHotBLpVAxvg/DOwsgFIgEDeACRAIJ9AJEAgZwASIJBDMAkQyC0QCRDINSgJEMgcgAQIZBBGAgQyCSYBAolCkACBZIFIgEDCcCRAIGlQEiCQODQJEEgfgAQIpBBDAgTSCCMBAqlEkgCBdIJJkDqyUjwJunsb+FeI88/AygYgAQJ5A5AAgXwCkQCBnAFIgEAOwSRAILdAJEAg16AkQCBzABIgkEEYCRDIJJgECCQKQQIEkgUiAQIJw5EAgaRBSYBA4tAkQCB9ABIgkEIMCRBII4wECKQSSQIE0gkmQerISvEk6O5t4F8hzj8DKxuABAjkDUACBPIJRAIEcgYgAQI5BJMAgdwCkQCBXIOSAIHMAUiAQAZhJEAgk2ASIJAoBAkQSBaIBAgkDEcCBJIGJQECiUOTAIH0AUiAQAoxJEAgjTASIJBKJAkQSCeYBKkjK8WToLu3gX+FOP8MrGwAEiCQNwAJEMgnEAkQyBmABAjkEEwCBHILRAIEcg1KAgQyByABAhmEkQCBTIJJgECiECRAIFkgEiCQMBwJEEgalAQIJA5NAgTSByABAinEkAABjTASIPCqRJIAgVcnmAQIKMWToNu3gX+FOP8MrGwAEiCQNwAJEMgnEAkQyBmABAjkEEwCBHILRAIEcg1KAgQyByABAhmEkQCBTIJJgECiECRAIFkgEiCQMBwJEEgalAQIJA5NAgTSByABAinEkACBNMJIgEAqkSRAIJ1gEqSOrBRPgu7eBv4V4vwzsLIBSIBA3gAkQCCfQCRAIGcAEiCQQzAJEMgtEAkQyDUoCRDIHIAECGQQRgIEMgkmAQKJQpAAgWSBSIBAwnAkQCBpUBIgkDg0CRBIH4AECPR7G/wBI6OelyihmI8AAAAASUVORK5CYII='
+
+            echo "===================================================================="
+            echo "J1 / ADR-006 R2 MEMBER JOURNEY  (mode=$MODE)  port=$PORT"
+            echo "===================================================================="
+
+            PSQL() { docker exec fxmily-postgres psql -U fxmily -d fxmily -tAc "$1" 2>/dev/null; }
+            count() { PSQL "SELECT count(*) FROM audit_logs WHERE action='$1';" | tr -d '[:space:]'; }
+            mput()  { PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.succeeded' AND metadata->>'stage'='put';" | tr -d '[:space:]'; }
+            mdel()  { PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.succeeded' AND metadata->>'stage'='delete';" | tr -d '[:space:]'; }
+            mfail() { PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.failed';" | tr -d '[:space:]'; }
+            avkey() { PSQL "SELECT COALESCE(avatar_key,'') FROM users WHERE email='$DEMO_EMAIL';" | tr -d '[:space:]'; }
+
+            # ---- R2 creds (normalize account id: bare id OR full URL -> bare id) ----
+            while IFS= read -r line; do
+              case "$line" in
+                R2_ACCOUNT_ID=*|R2_ACCESS_KEY_ID=*|R2_SECRET_ACCESS_KEY=*|R2_BUCKET=*) export "$line" ;;
+              esac
+            done < /etc/fxmily/web.env
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#http://}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID#https://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%.r2.cloudflarestorage.com*}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%/*}"
+            ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+            awsr2() { docker run --rm -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" -e AWS_DEFAULT_REGION=auto amazon/aws-cli:latest "$@"; }
+            r2has() { if awsr2 s3api head-object --bucket "$R2_BUCKET" --key "$1" --endpoint-url "$ENDPOINT" >/dev/null 2>&1; then echo yes; else echo no; fi; }
+
+            # ---- write the journey node script (mint + HTTP phases, cookie persisted to /share) ----
+            cat > /tmp/fxjourney.mjs <<'MJSEOF'
+            import { hkdfSync } from 'node:crypto';
+            import { readFileSync, writeFileSync } from 'node:fs';
+            const DEMO_ID = 'cmrbzsyko0000mopcqwm57umy';
+            const COOKIE = '__Secure-authjs.session-token';
+            const PORT = process.env.FX_PORT || '3000';
+            const BASE = `http://127.0.0.1:${PORT}`;
+            const PHASE = process.env.FX_PHASE;
+            const log = (...a) => console.log('[journey]', ...a);
+
+            if (PHASE === 'mint') {
+              const secret = process.env.AUTH_SECRET;
+              if (!secret) { log('FATAL: AUTH_SECRET empty'); process.exit(1); }
+              const { EncryptJWT, jwtDecrypt } = await import('jose');
+              const info = `Auth.js Generated Encryption Key (${COOKIE})`;
+              const key = new Uint8Array(hkdfSync('sha256', secret, COOKIE, info, 64));
+              const now = Math.floor(Date.now() / 1000);
+              const jwe = await new EncryptJWT({ sub: DEMO_ID })
+                .setProtectedHeader({ alg: 'dir', enc: 'A256CBC-HS512' })
+                .setIssuedAt(now).setExpirationTime(now + 3600).setJti(crypto.randomUUID())
+                .encrypt(key);
+              const { payload } = await jwtDecrypt(jwe, key);
+              if (payload.sub !== DEMO_ID) { log('FATAL: roundtrip mismatch'); process.exit(3); }
+              writeFileSync('/share/cookie.txt', jwe);
+              log('minted JWE len', jwe.length, 'roundtrip OK');
+              process.exit(0);
+            }
+
+            const cookie = readFileSync('/share/cookie.txt', 'utf8').trim();
+            const H = { cookie: `${COOKIE}=${cookie}` };
+
+            if (PHASE === 'serve') {
+              const key = process.env.FX_KEY;
+              const label = process.env.FX_LABEL || 'serve';
+              const r = await fetch(`${BASE}/api/uploads/${key}`, { headers: H });
+              const buf = Buffer.from(await r.arrayBuffer());
+              log(`${label} -> ${r.status} ct=${r.headers.get('content-type')} bytes=${buf.length}`);
+              console.log(`FXRESULT ${label} status=${r.status} bytes=${buf.length}`);
+              process.exit(0);
+            }
+            if (PHASE === 'upload') {
+              const png = Buffer.from(process.env.FX_PNG_B64, 'base64');
+              const fd = new FormData();
+              fd.append('file', new Blob([png], { type: 'image/png' }), 'avatar.png');
+              const r = await fetch(`${BASE}/api/account/avatar`, { method: 'POST', headers: H, body: fd });
+              const b = await r.text();
+              log('UPLOAD avatar ->', r.status, b.slice(0, 200));
+              console.log(`FXRESULT upload status=${r.status}`);
+              try { const j = JSON.parse(b); if (j.key) writeFileSync('/share/key.txt', j.key); } catch {}
+              process.exit(0);
+            }
+            if (PHASE === 'delete') {
+              const r = await fetch(`${BASE}/api/account/avatar`, { method: 'DELETE', headers: H });
+              const b = await r.text();
+              log('DELETE avatar ->', r.status, b.slice(0, 200));
+              console.log(`FXRESULT delete status=${r.status}`);
+              process.exit(0);
+            }
+            if (PHASE === 'proof') {
+              const png = Buffer.from(process.env.FX_PNG_B64, 'base64');
+              const fd = new FormData();
+              fd.append('kind', 'mt5-proof');
+              fd.append('file', new Blob([png], { type: 'image/png' }), 'proof.png');
+              const r = await fetch(`${BASE}/api/uploads`, { method: 'POST', headers: H, body: fd });
+              const b = await r.text();
+              log('UPLOAD mt5-proof ->', r.status, b.slice(0, 240));
+              console.log(`FXRESULT proof status=${r.status}`);
+              try { const j = JSON.parse(b); if (j.key) writeFileSync('/share/proofkey.txt', j.key); } catch {}
+              process.exit(0);
+            }
+            log('unknown phase', PHASE); process.exit(2);
+            MJSEOF
+
+            mkdir -p /tmp/fxshare && rm -f /tmp/fxshare/* 2>/dev/null || true
+
+            echo
+            echo "### MINT session cookie (AUTH_SECRET piped, never logged) ###"
+            docker exec fxmily-web printenv AUTH_SECRET | docker run --rm -i \
+              --network "container:fxmily-web" \
+              -e FX_PHASE=mint -e FX_PORT="$PORT" \
+              -v /tmp/fxjourney.mjs:/app.mjs:ro -v /tmp/fxshare:/share \
+              node:22-alpine sh -c '
+                read -r AUTH_SECRET; export AUTH_SECRET
+                mkdir -p /work && cp /app.mjs /work/app.mjs && cd /work
+                npm init -y >/tmp/n.log 2>&1
+                npm i jose@5 --no-audit --no-fund --silent >>/tmp/n.log 2>&1 || { echo "npm install failed:"; tail -20 /tmp/n.log; exit 9; }
+                node /work/app.mjs
+              ' || echo "(mint failed)"
+
+            runphase() {
+              docker run --rm --network "container:fxmily-web" \
+                -e FX_PHASE="$1" -e FX_PORT="$PORT" -e FX_KEY="${FX_KEY:-}" -e FX_LABEL="${FX_LABEL:-}" -e FX_PNG_B64="$PNG_B64" \
+                -v /tmp/fxjourney.mjs:/app.mjs:ro -v /tmp/fxshare:/share \
+                node:22-alpine node /app.mjs
+            }
+
+            echo
+            echo "### BASELINE ###"
+            BASE_PUT="$(mput)"; BASE_DEL="$(mdel)"; BASE_UPD="$(count account.avatar.updated)"; BASE_REM="$(count account.avatar.removed)"; BASE_FAIL="$(mfail)"
+            AV_KEY="$(avkey)"
+            echo "avatar_key(before): '${AV_KEY:-<null>}'"
+            echo "counters: mirror.put=$BASE_PUT mirror.delete=$BASE_DEL mirror.failed=$BASE_FAIL avatar.updated=$BASE_UPD avatar.removed=$BASE_REM"
+
+            if [ -z "$AV_KEY" ] && [ "$MODE" = "execute" ]; then
+              echo "### (no avatar present) uploading one first ###"
+              runphase upload || echo "(upload failed)"
+              sleep 1; AV_KEY="$(avkey)"
+            fi
+            echo "avatar_key(active): '${AV_KEY:-<null>}'"
+
+            if [ -n "$AV_KEY" ]; then
+              echo
+              echo "### T1: SERVE current avatar (member sees photo) ###"
+              FX_KEY="$AV_KEY" FX_LABEL="T1-serve-normal" runphase serve || echo "(T1 failed)"
+              echo "R2 has object [$AV_KEY]: $(r2has "$AV_KEY")"
+            else
+              echo "No avatar_key -> cannot serve. Run mode=execute to create one."
+            fi
+
+            if [ "$MODE" = "execute" ] && [ -n "$AV_KEY" ]; then
+              echo
+              echo "### T2: FAILOVER -- remove LOCAL file, expect serve from R2 ###"
+              NANO="$(basename "$AV_KEY")"
+              docker run --rm -v fxmily-uploads:/data alpine:3 sh -c "f=\$(find /data -name '$NANO' -type f 2>/dev/null | head -1); if [ -n \"\$f\" ]; then echo \"removed local: \$f\"; rm -f \"\$f\"; else echo 'local file NOT found'; fi" || echo "(rm failed)"
+              FX_KEY="$AV_KEY" FX_LABEL="T2-serve-FAILOVER-from-R2" runphase serve || echo "(T2 failed)"
+
+              echo
+              echo "### T3: DELETE avatar (expect mirror stage:delete + R2 object gone) ###"
+              runphase delete || echo "(T3 failed)"
+              sleep 1
+              echo "avatar_key(after delete): '$(avkey)'  (expect empty)"
+              echo "R2 has object [$AV_KEY] after delete: $(r2has "$AV_KEY")  (expect no)"
+              echo "mirror.delete: $BASE_DEL -> $(mdel)   avatar.removed: $BASE_REM -> $(count account.avatar.removed)"
+
+              echo
+              echo "### T4: RESTORE -- re-upload to leave demo consistent ###"
+              runphase upload || echo "(T4 failed)"
+              sleep 1; NEWKEY="$(avkey)"
+              echo "avatar_key(restored): '${NEWKEY:-<null>}'   R2 has restored: $([ -n "$NEWKEY" ] && r2has "$NEWKEY" || echo n/a)"
+              echo "mirror.put: $BASE_PUT -> $(mput)"
+
+              echo
+              echo "### T5: MT5 PROOF upload (second storage kind, kind-agnostic mirror) ###"
+              runphase proof || echo "(T5 failed)"
+              PKEY="$(cat /tmp/fxshare/proofkey.txt 2>/dev/null || echo '')"
+              echo "proof key: '${PKEY:-<none>}'   R2 has proof: $([ -n "$PKEY" ] && r2has "$PKEY" || echo n/a)"
+            fi
+
+            rm -f /tmp/fxjourney.mjs 2>/dev/null || true
+            rm -rf /tmp/fxshare 2>/dev/null || true
+
+            echo
+            echo "===================================================================="
+            echo "MEMBER JOURNEY DONE (mode=$MODE). Read T1..T5 lines above for verdicts."
+            echo "mirror.failed total: $BASE_FAIL -> $(mfail)  (expect unchanged = no silent mirror failure)"
+            echo "===================================================================="

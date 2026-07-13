@@ -119,6 +119,10 @@ else
     exit 2
   fi
 fi
+# Strip any trailing slash BEFORE the key derivation below: with "path/", the
+# prefix removal `${local_file#"$SRC_DIR"/}` never matches ("path//"), so every
+# sample key would resolve to the absolute local path and fail its download.
+SRC_DIR="${SRC_DIR%/}"
 if [[ ! -d "$SRC_DIR" ]]; then
   echo "[FATAL] source dir '$SRC_DIR' is not a readable directory (root is needed to read volume mountpoints)." >&2
   exit 2
@@ -221,6 +225,14 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 # NUL-delimited end to end so unusual filenames cannot break the sampling
 # (keys are server-issued and shell-safe, but stay robust by construction).
 mapfile -d '' SAMPLE_FILES < <(find "$SRC_DIR" -type f -print0 | shuf -z -n "$SAMPLE_SIZE")
+# An empty sample would leave SAMPLE_OK=true and report "Migration verified"
+# without checking a single byte. LOCAL_COUNT > 0 is guaranteed here (early
+# exit above), so zero samples means the sampling itself broke — refuse to
+# conclude anything.
+if [[ "${#SAMPLE_FILES[@]}" -eq 0 ]]; then
+  echo "[FATAL] sampling returned 0 of $LOCAL_COUNT local files — SHA-256 verification impossible, not reporting success." >&2
+  exit 5
+fi
 SAMPLE_OK=true
 ok_count=0
 fail_count=0

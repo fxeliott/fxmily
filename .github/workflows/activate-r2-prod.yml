@@ -88,6 +88,14 @@ jobs:
             #    recreates the container when env_file content changed. `--wait`
             #    blocks until the Dockerfile HEALTHCHECK reports healthy.
             cd /opt/fxmily
+            # Pin the recreate to the image the container is ALREADY running, so
+            # picking up the new env_file can never roll the code to a different
+            # `:latest`. Mirrors deploy.yml's PREV_IMAGE capture.
+            CURRENT_IMAGE="$(docker inspect --format '{{ .Config.Image }}' fxmily-web 2>/dev/null || true)"
+            if [ -n "$CURRENT_IMAGE" ]; then
+              export FXMILY_IMAGE="$CURRENT_IMAGE"
+            fi
+            echo "Recreating web on image: ${FXMILY_IMAGE:-<compose default :latest>}"
             docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 120 web
 
             # 4. Verify — presence only, never print a value.

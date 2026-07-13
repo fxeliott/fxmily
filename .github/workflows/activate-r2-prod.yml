@@ -1,0 +1,106 @@
+name: Activate R2 media (prod)
+
+# One-shot ops workflow (J1, ADR-006) — manual trigger only.
+#
+# Injects the four R2_* variables into the prod /etc/fxmily/web.env so
+# DualWriteStorageAdapter starts mirroring member uploads to the `fxmily-media`
+# R2 bucket (offsite redundancy), then recreates `web` so it re-reads env_file,
+# and verifies the variables are live in the running container.
+#
+# Why a workflow and not SSH-from-laptop: the only SSH key the prod host trusts
+# is the CI deploy key stored in the `HETZNER_SSH_KEY` secret — this reuses it.
+#
+# Secrets consumed (added by the repo owner in Settings -> Secrets -> Actions):
+#   R2_ACCOUNT_ID          media-bucket account id  (subdomain of the R2 endpoint)
+#   R2_ACCESS_KEY_ID       media-bucket token — S3 Access Key ID
+#   R2_SECRET_ACCESS_KEY   media-bucket token — S3 Secret Access Key
+#   HETZNER_HOST           already present (used by deploy.yml)
+#   HETZNER_SSH_KEY        already present (used by deploy.yml)
+# R2_BUCKET is NOT a secret (public bucket name) -> hardcoded below.
+#
+# Idempotent + reversible: it timestamps a backup of web.env, strips any prior
+# R2_* lines before writing, and never prints a secret value (GitHub also masks
+# registered secrets in logs).
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: activate-r2-prod
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: Inject R2 vars + recreate web + verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> write R2_* into web.env, recreate web, verify
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 5m
+          envs: R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY
+          script: |
+            set -euo pipefail
+
+            ENV_FILE=/etc/fxmily/web.env
+            BUCKET=fxmily-media
+
+            # 0. Preflight — the three secrets must have arrived over SSH. Fail
+            #    loudly BEFORE touching web.env if any is empty (envs mis-wired
+            #    or a secret not set), so the env file is never half-written.
+            : "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing — add it as a repo secret}"
+            : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing — add it as a repo secret}"
+            : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing — add it as a repo secret}"
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE not found on host"; exit 1
+            fi
+
+            # 1. Timestamped backup — reversible by construction.
+            cp -a "$ENV_FILE" "${ENV_FILE}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+
+            # 2. Idempotent write: strip any existing R2_* lines, then append the
+            #    four canonical ones. web.env is fxmily-owned mode 600 -> no sudo.
+            TMP="$(mktemp)"
+            grep -vE '^(R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BUCKET)=' "$ENV_FILE" > "$TMP" || true
+            {
+              printf 'R2_ACCOUNT_ID=%s\n' "$R2_ACCOUNT_ID"
+              printf 'R2_ACCESS_KEY_ID=%s\n' "$R2_ACCESS_KEY_ID"
+              printf 'R2_SECRET_ACCESS_KEY=%s\n' "$R2_SECRET_ACCESS_KEY"
+              printf 'R2_BUCKET=%s\n' "$BUCKET"
+            } >> "$TMP"
+            install -m 600 "$TMP" "$ENV_FILE"
+            rm -f "$TMP"
+            echo "web.env now carries $(grep -cE '^R2_' "$ENV_FILE") R2_ lines (values hidden)."
+
+            # 3. Recreate web so it re-reads env_file. `restart` reuses the old
+            #    container env and would NOT pick up the new vars; `up -d`
+            #    recreates the container when env_file content changed. `--wait`
+            #    blocks until the Dockerfile HEALTHCHECK reports healthy.
+            cd /opt/fxmily
+            docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 120 web
+
+            # 4. Verify — presence only, never print a value.
+            for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+              if docker exec fxmily-web printenv "$v" >/dev/null 2>&1; then
+                echo "  [OK] $v present in running container"
+              else
+                echo "::error::$v NOT present in running container after recreate"; exit 1
+              fi
+            done
+
+            # 5. Report the container health the --wait gate already enforced.
+            hs="$(docker inspect --format '{{ .State.Health.Status }}' fxmily-web 2>/dev/null || echo unknown)"
+            echo "  container health: $hs"
+
+            echo "R2 media mirror ACTIVE — offsite dual-write live for new uploads."

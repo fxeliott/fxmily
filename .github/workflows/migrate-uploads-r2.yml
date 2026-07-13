@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "dry-run (list only) or execute (real sync + verify)"
+        description: 'dry-run (list only) or execute (real sync + verify)'
         type: choice
         options:
           - dry-run

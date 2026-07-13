@@ -1,0 +1,134 @@
+name: Verify R2 app-path (prod, read-only diagnostic)
+
+# One-shot READ-ONLY diagnostic for the J1 / ADR-006 dual-write mirror.
+#
+# The activation + historical backfill are already done (activate-r2-prod,
+# migrate-uploads-r2). What is NOT yet proven is the live APPLICATION path:
+# a real upload going route -> sharp -> storage.put() -> DualWriteStorageAdapter
+# -> putObjectToR2 -> logAudit('storage.r2_mirror.succeeded'). The aws-cli
+# backfill does NOT emit that audit row (it never runs the app code).
+#
+# This workflow answers the decisive question -- does audit_logs already
+# contain storage.r2_mirror.* rows? -- and, in the SAME round-trip, captures
+# every fact needed to design a demo-account trigger if the answer is "no":
+# demo id/token_version/status/avatar_key, R2 object baseline, AUTH_SECRET
+# presence, and whether next-auth/jwt is resolvable inside the running web
+# container (needed to mint a session cookie server-side, no password typed).
+#
+# Strictly read-only: SELECTs, printenv, docker logs, aws s3 ls, find. No
+# writes, no mutations. Reuses the R2 creds already in /etc/fxmily/web.env.
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: verify-r2-app-path
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Read-only R2 app-path diagnostic
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> read-only prod diagnostic
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+
+            echo "===================================================================="
+            echo "J1 / R2 APP-PATH DIAGNOSTIC (read-only)"
+            echo "===================================================================="
+
+            PSQL() { docker exec fxmily-postgres psql -U fxmily -d fxmily -tAc "$1"; }
+
+            echo
+            echo "### 1. R2 mirror audit events (THE direct J1 proof) ###"
+            echo "-- action | count | max(created_at) --"
+            PSQL "SELECT action || ' | ' || count(*) || ' | ' || COALESCE(max(created_at)::text,'-') FROM audit_logs WHERE action LIKE 'storage.r2_mirror%' GROUP BY action ORDER BY action;" || echo "(query failed)"
+            MIRROR_OK="$(PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.succeeded';" | tr -d '[:space:]' || true)"
+            MIRROR_FAIL="$(PSQL "SELECT count(*) FROM audit_logs WHERE action='storage.r2_mirror.failed';" | tr -d '[:space:]' || true)"
+            echo "r2_mirror.succeeded total: ${MIRROR_OK:-?}   r2_mirror.failed total: ${MIRROR_FAIL:-?}"
+
+            echo
+            echo "### 1b. Last 5 r2_mirror rows (action | metadata | created_at) ###"
+            PSQL "SELECT action || '  ' || COALESCE(metadata::text,'{}') || '  ' || created_at FROM audit_logs WHERE action LIKE 'storage.r2_mirror%' ORDER BY created_at DESC LIMIT 5;" || true
+
+            echo
+            echo "### 2. Avatar-upload audit history (has the app path ever run?) ###"
+            PSQL "SELECT 'account.avatar.updated | ' || count(*) || ' | ' || COALESCE(max(created_at)::text,'-') FROM audit_logs WHERE action='account.avatar.updated';" || echo "(query failed)"
+
+            echo
+            echo "### 3. Demo account (trigger target) ###"
+            DEMO="$(PSQL "SELECT 'id='||id||' | token_version='||token_version||' | status='||status||' | avatar_key='||COALESCE(avatar_key,'<null>') FROM users WHERE email='demo@fxmily.local';" || true)"
+            if [ -n "$DEMO" ]; then echo "$DEMO"; else echo "demo@fxmily.local: NOT FOUND"; fi
+
+            echo
+            echo "### 4. web container: R2 env SHAPE (value, not just presence) ###"
+            V="$(docker exec fxmily-web printenv R2_ACCOUNT_ID 2>/dev/null || true)"
+            case "$V" in http*) SCHEME=yes ;; *) SCHEME=no ;; esac
+            case "$V" in *.*) DOT=yes ;; *) DOT=no ;; esac
+            VPREFIX="$(printf '%s' "$V" | cut -c1-6)"
+            echo "R2_ACCOUNT_ID: len=${#V} starts='$VPREFIX' has_scheme=$SCHEME has_dot=$DOT  (expect len=32 has_scheme=no has_dot=no)"
+            echo "R2_BUCKET='$(docker exec fxmily-web printenv R2_BUCKET 2>/dev/null || true)'"
+            for k in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY AUTH_SECRET; do
+              if docker exec fxmily-web sh -c "test -n \"\$$k\"" 2>/dev/null; then echo "$k: present"; else echo "$k: ABSENT"; fi
+            done
+
+            echo
+            echo "### 5. web container logs mentioning the mirror ###"
+            docker logs fxmily-web 2>&1 | grep -iE 'r2_mirror|r2 mirror|dualwrite|mirror_put|mirror_delete' | tail -20 || echo "(no matching log lines)"
+
+            echo
+            echo "### 6. R2 object count (independent path) ###"
+            while IFS= read -r line; do
+              case "$line" in
+                R2_ACCOUNT_ID=*|R2_ACCESS_KEY_ID=*|R2_SECRET_ACCESS_KEY=*|R2_BUCKET=*) export "$line" ;;
+              esac
+            done < /etc/fxmily/web.env
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID#http://}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID#https://}"
+            R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%.r2.cloudflarestorage.com*}"; R2_ACCOUNT_ID="${R2_ACCOUNT_ID%%/*}"
+            ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+            awsr2() {
+              docker run --rm \
+                -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+                -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+                -e AWS_DEFAULT_REGION=auto \
+                amazon/aws-cli:latest "$@"
+            }
+            awsr2 s3api head-bucket --bucket "$R2_BUCKET" --endpoint-url "$ENDPOINT" && echo "head-bucket: OK" || echo "head-bucket: FAILED"
+            TOTAL="$(awsr2 s3 ls "s3://$R2_BUCKET" --recursive --endpoint-url "$ENDPOINT" | wc -l | tr -d '[:space:]' || true)"
+            AVATARS="$(awsr2 s3 ls "s3://$R2_BUCKET/avatars/" --recursive --endpoint-url "$ENDPOINT" | wc -l | tr -d '[:space:]' || true)"
+            echo "R2 objects total: ${TOTAL:-0}   under avatars/: ${AVATARS:-0}"
+
+            echo
+            echo "### 7. Local uploads volume file count (PRIMARY store) ###"
+            docker run --rm -v fxmily-uploads:/data:ro alpine:3 sh -c 'find /data -type f 2>/dev/null | wc -l' || echo "(volume read failed)"
+
+            echo
+            echo "### 8. Trigger feasibility (mint session cookie server-side?) ###"
+            for k in AUTH_URL NEXTAUTH_URL AUTH_TRUST_HOST NODE_ENV; do
+              echo "$k='$(docker exec fxmily-web printenv "$k" 2>/dev/null || true)'"
+            done
+            APPDIR="$(docker exec fxmily-web sh -c 'if [ -f /app/apps/web/server.js ]; then echo /app/apps/web; elif [ -f /app/server.js ]; then echo /app; else dirname "$(find /app -maxdepth 5 -name server.js 2>/dev/null | head -1)"; fi' 2>/dev/null | tr -d '[:space:]' || true)"
+            echo "standalone server dir: '${APPDIR:-?}'   node: $(docker exec fxmily-web node -v 2>/dev/null || echo '?')"
+            if [ -n "${APPDIR:-}" ]; then
+              docker exec -w "$APPDIR" fxmily-web node -e "for (const m of ['next-auth/jwt','@auth/core/jwt']) { try { require.resolve(m); console.log(m+': resolvable') } catch (e) { console.log(m+': NOT ('+(e && e.code)+')') } }" 2>&1 || echo "(node resolve probe failed)"
+            fi
+
+            echo
+            echo "===================================================================="
+            echo "DECISION:"
+            if [ "${MIRROR_OK:-0}" != "0" ] && [ -n "${MIRROR_OK:-}" ]; then
+              echo "  -> storage.r2_mirror.succeeded EXISTS (${MIRROR_OK}). J1 app-path already proven live; no trigger needed."
+            else
+              echo "  -> NO storage.r2_mirror.succeeded yet. A demo-account upload trigger is required to prove the app path."
+            fi
+            echo "===================================================================="

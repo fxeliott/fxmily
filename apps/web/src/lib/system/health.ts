@@ -1479,6 +1479,12 @@ export interface OffsiteMirrorHealth {
   lastEventAction: string | null;
   /** ISO timestamp of the most recent mirror event, `null` when none exists. */
   lastEventAt: string | null;
+  /**
+   * `storage.r2_mirror.failed` events over the last 24h. Flapping detector:
+   * `status` classifies only the LAST event, so a mirror alternating
+   * fail/success reads green — this counter surfaces the churn.
+   */
+  recentFailures24h: number;
 }
 
 /** Audit actions written by the dual-write adapter (`lib/storage/dual.ts`). */
@@ -1496,22 +1502,36 @@ const R2_MIRROR_AUDIT_ACTIONS = ['storage.r2_mirror.succeeded', 'storage.r2_mirr
  */
 export async function getOffsiteMirrorHealth(): Promise<OffsiteMirrorHealth> {
   if (!isR2MirrorConfigured()) {
-    return { status: 'not_configured', lastEventAction: null, lastEventAt: null };
+    return {
+      status: 'not_configured',
+      lastEventAction: null,
+      lastEventAt: null,
+      recentFailures24h: 0,
+    };
   }
 
-  const lastEvent = await db.auditLog.findFirst({
-    where: { action: { in: R2_MIRROR_AUDIT_ACTIONS } },
-    orderBy: { createdAt: 'desc' },
-    select: { action: true, createdAt: true },
-  });
+  const [lastEvent, recentFailures24h] = await Promise.all([
+    db.auditLog.findFirst({
+      where: { action: { in: R2_MIRROR_AUDIT_ACTIONS } },
+      orderBy: { createdAt: 'desc' },
+      select: { action: true, createdAt: true },
+    }),
+    db.auditLog.count({
+      where: {
+        action: 'storage.r2_mirror.failed',
+        createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    }),
+  ]);
 
   if (!lastEvent) {
-    return { status: 'green', lastEventAction: null, lastEventAt: null };
+    return { status: 'green', lastEventAction: null, lastEventAt: null, recentFailures24h };
   }
 
   return {
     status: lastEvent.action === 'storage.r2_mirror.failed' ? 'red' : 'green',
     lastEventAction: lastEvent.action,
     lastEventAt: lastEvent.createdAt.toISOString(),
+    recentFailures24h,
   };
 }

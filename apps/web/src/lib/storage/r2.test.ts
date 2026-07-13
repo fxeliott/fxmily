@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   NoSuchKey,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -8,7 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   R2StorageAdapter,
+  R2_CONNECTION_TIMEOUT_MS,
+  R2_MAX_ATTEMPTS,
+  R2_REQUEST_TIMEOUT_MS,
   deleteObjectFromR2,
+  headObjectFromR2,
   openR2ReadStream,
   putObjectToR2,
   resetR2ClientForTests,
@@ -37,13 +42,23 @@ vi.mock('@aws-sdk/client-s3', () => {
   class GetObjectCommand {
     constructor(public readonly input: Record<string, unknown>) {}
   }
+  class HeadObjectCommand {
+    constructor(public readonly input: Record<string, unknown>) {}
+  }
   class NoSuchKey extends Error {
     constructor() {
       super('The specified key does not exist.');
       this.name = 'NoSuchKey';
     }
   }
-  return { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, NoSuchKey };
+  return {
+    S3Client,
+    PutObjectCommand,
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadObjectCommand,
+    NoSuchKey,
+  };
 });
 
 const envMock = vi.hoisted(() => ({
@@ -227,6 +242,55 @@ describe('openR2ReadStream', () => {
   });
 });
 
+describe('headObjectFromR2', () => {
+  it('sends a HeadObjectCommand and returns size + contentType', async () => {
+    h.sendMock.mockResolvedValue({ ContentLength: 1234, ContentType: 'image/jpeg' });
+
+    const result = await headObjectFromR2(KEY);
+
+    const command = sentCommand();
+    expect(command).toBeInstanceOf(HeadObjectCommand);
+    expect(command.input).toEqual({ Bucket: 'test-bucket', Key: KEY });
+    expect(result).toEqual({ size: 1234, contentType: 'image/jpeg' });
+  });
+
+  it('returns nulls when R2 omits Content-Length and Content-Type', async () => {
+    h.sendMock.mockResolvedValue({});
+
+    const result = await headObjectFromR2(KEY);
+    expect(result).toEqual({ size: null, contentType: null });
+  });
+
+  it('rejects a malformed key before any network call', async () => {
+    await expect(headObjectFromR2('proofs/../x.jpg')).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'invalid_key',
+    });
+    expect(h.sendMock).not.toHaveBeenCalled();
+  });
+
+  it('maps an error named NotFound to StorageError not_found', async () => {
+    const err = new Error('missing');
+    err.name = 'NotFound';
+    h.sendMock.mockRejectedValue(err);
+
+    await expect(headObjectFromR2(KEY)).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'not_found',
+    });
+  });
+
+  it('wraps other SDK failures into an internal StorageError', async () => {
+    h.sendMock.mockRejectedValue(new Error('timeout'));
+
+    await expect(headObjectFromR2(KEY)).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'internal',
+      message: 'r2 head failed: timeout',
+    });
+  });
+});
+
 describe('getR2Client wiring', () => {
   it('derives the canonical account endpoint with region auto + path style + env credentials', async () => {
     h.sendMock.mockResolvedValue({});
@@ -241,6 +305,24 @@ describe('getR2Client wiring', () => {
       accessKeyId: 'test-access-key',
       secretAccessKey: 'test-secret-key',
     });
+  });
+
+  it('pins transport hardening: maxAttempts + connection/request timeouts (J1 R2)', async () => {
+    h.sendMock.mockResolvedValue({});
+
+    await putObjectToR2(KEY, BYTES, 'image/jpeg');
+
+    const config = clientConfig();
+    expect(config['maxAttempts']).toBe(R2_MAX_ATTEMPTS);
+    expect(config['requestHandler']).toEqual({
+      connectionTimeout: R2_CONNECTION_TIMEOUT_MS,
+      requestTimeout: R2_REQUEST_TIMEOUT_MS,
+    });
+    // Pin the exported values against silent drift — a GET-route fallback
+    // must never hang a member request behind a wedged TCP connection.
+    expect(R2_MAX_ATTEMPTS).toBe(3);
+    expect(R2_CONNECTION_TIMEOUT_MS).toBe(5_000);
+    expect(R2_REQUEST_TIMEOUT_MS).toBe(30_000);
   });
 
   it('honours the R2_ENDPOINT override (MinIO dev/test)', async () => {

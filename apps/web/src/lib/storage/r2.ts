@@ -3,6 +3,7 @@ import 'server-only';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   NoSuchKey,
   PutObjectCommand,
   S3Client,
@@ -35,6 +36,17 @@ import {
 
 let client: S3Client | null = null;
 
+/**
+ * Transport hardening: a GET-route fallback read must never hang a member
+ * request behind a wedged TCP connection, and a mirror write must not stall
+ * an upload past what `dual.ts` can absorb. Fail fast, let the SDK retry
+ * (default exponential backoff), then surface a StorageError. Exported so
+ * tests can pin the values against silent drift.
+ */
+export const R2_MAX_ATTEMPTS = 3;
+export const R2_CONNECTION_TIMEOUT_MS = 5_000;
+export const R2_REQUEST_TIMEOUT_MS = 30_000;
+
 function requireR2Env(name: string, value: string | undefined): string {
   if (!value) {
     // selectStorage() only takes the R2 path when all four R2_* vars are set,
@@ -58,6 +70,13 @@ function getR2Client(): S3Client {
     },
     // Path-style keeps a single code path across R2 and MinIO.
     forcePathStyle: true,
+    maxAttempts: R2_MAX_ATTEMPTS,
+    // Shorthand requestHandler config (AWS SDK v3.521+) — no NodeHttpHandler
+    // import needed, and it survives SDK-internal handler swaps.
+    requestHandler: {
+      connectionTimeout: R2_CONNECTION_TIMEOUT_MS,
+      requestTimeout: R2_REQUEST_TIMEOUT_MS,
+    },
   });
   return client;
 }
@@ -123,6 +142,33 @@ export async function deleteObjectFromR2(key: string): Promise<void> {
     if (err instanceof StorageError) throw err;
     throw toInternalError('delete', err);
   }
+}
+
+/**
+ * HEAD an R2 object — existence + metadata without transferring the body.
+ * Ops primitive for mirror-drift checks and admin tooling: answers "is the
+ * offsite copy of this key present, and how big is it" for the cost of a
+ * single metadata round-trip. Throws `StorageError('not_found')` on a missing
+ * object (S3 HEAD reports 404 as `NotFound`, covered by `isNotFoundError`);
+ * `size`/`contentType` are null when R2 omits the header.
+ */
+export async function headObjectFromR2(
+  key: string,
+): Promise<{ size: number | null; contentType: string | null }> {
+  parseStorageKey(key);
+  let response;
+  try {
+    response = await getR2Client().send(new HeadObjectCommand({ Bucket: r2Bucket(), Key: key }));
+  } catch (err) {
+    if (isNotFoundError(err)) {
+      throw new StorageError('file not found in R2', 'not_found');
+    }
+    throw toInternalError('head', err);
+  }
+  return {
+    size: typeof response.ContentLength === 'number' ? response.ContentLength : null,
+    contentType: typeof response.ContentType === 'string' ? response.ContentType : null,
+  };
 }
 
 /**

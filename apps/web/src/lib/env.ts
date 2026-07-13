@@ -333,6 +333,28 @@ export const envSchemaWithRefines = envSchema
     },
   )
   /**
+   * J1 hardening (R2 offsite mirror) — the four core R2 vars are all-or-none.
+   * `isR2Configured()` (lib/storage/index.ts) engages the dual-write mirror
+   * only when ALL FOUR are set, so a partial config (e.g. a rotated secret
+   * dropped from web.env) would silently fall back to local-only storage: the
+   * offsite copy stops growing with zero error anywhere. Block the boot
+   * instead. Truthiness (not `!== undefined`) mirrors `isR2Configured()`
+   * exactly — an empty-string var in .env counts as absent on both sides.
+   */
+  .refine(
+    (e) => {
+      const set = [e.R2_ACCOUNT_ID, e.R2_ACCESS_KEY_ID, e.R2_SECRET_ACCESS_KEY, e.R2_BUCKET].filter(
+        (v) => Boolean(v),
+      ).length;
+      return set === 0 || set === 4;
+    },
+    {
+      message:
+        'R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET must be deployed together (or all absent): a partial R2 config silently disables the offsite mirror.',
+      path: ['R2_ACCOUNT_ID'],
+    },
+  )
+  /**
    * Jalon 5 hardening — `CRON_SECRET` est REQUIS en production.
    *
    * Le champ reste `optional()` (dev/test n'ont pas besoin d'authentifier les

@@ -55,6 +55,14 @@ export const dynamic = 'force-dynamic';
  */
 const MAX_PROOF_INPUT_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Multipart framing allowance on top of the raw file cap: boundaries plus the
+ * small non-file fields (`kind`, `accountId`, `accountType`). Lets the
+ * Content-Length pre-check reject early without bouncing a legitimate
+ * max-size upload whose envelope slightly exceeds the file cap.
+ */
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) {
@@ -76,6 +84,18 @@ export async function POST(req: Request): Promise<Response> {
         headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
       },
     );
+  }
+
+  // J1 hardening — reject an oversized body from the Content-Length header
+  // BEFORE `req.formData()` buffers the whole stream into memory. The header
+  // is client-supplied, so this is an early-exit hint only: the authoritative
+  // `file.size` check below still runs on the parsed part.
+  const contentLength = Number(req.headers.get('content-length'));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_PROOF_INPUT_BYTES + MULTIPART_OVERHEAD_BYTES
+  ) {
+    return NextResponse.json({ error: 'too_large', limit: MAX_PROOF_INPUT_BYTES }, { status: 413 });
   }
 
   let formData: FormData;

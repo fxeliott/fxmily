@@ -4,11 +4,7 @@ import { Resend } from 'resend';
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
-import {
-  normalizeEmail,
-  upsertSuppression,
-  type SuppressionReason,
-} from '@/lib/email/suppression';
+import { normalizeEmail, upsertSuppression, type SuppressionReason } from '@/lib/email/suppression';
 import { flushSentry, reportError, reportInfo, reportWarning } from '@/lib/observability';
 
 /**

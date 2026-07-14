@@ -23,6 +23,8 @@ import { Pill } from '@/components/ui/pill';
 import { getCohortAttention, getMembersAttention } from '@/lib/admin/attention-service';
 import { getMemberDirectoryStats, listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
+import { db } from '@/lib/db';
+import { normalizeEmail, type SuppressionReason } from '@/lib/email/suppression';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
@@ -98,6 +100,23 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
 
   // Per-member "à traiter" flags for THIS page only (O(page size), bounded reads).
   const attentionByMember = await getMembersAttention(page.items.map((m) => m.id));
+
+  // J2 — the page's suppressed emails (hard bounce / spam complaint) fetched in
+  // ONE bulk query, then resolved in memory. NEVER isEmailSuppressed() per row
+  // in a loop (N+1). Mirrors the getMembersAttention Map pattern above. Keyed by
+  // the normalized address (the suppression PK is always stored lowercase).
+  const suppressionByEmail = new Map(
+    (
+      await db.emailSuppression.findMany({
+        where: { email: { in: page.items.map((m) => normalizeEmail(m.email)) } },
+        select: { email: true, reason: true },
+      })
+    )
+      // `reason` is a plain String column but only ever written as a
+      // SuppressionReason via upsertSuppression, so narrowing at this read
+      // boundary is safe (mirrors preferences.ts `row.type as NotificationTypeSlug`).
+      .map((s) => [s.email, s.reason as SuppressionReason] as const),
+  );
 
   await logAudit({
     action: 'admin.members.listed',
@@ -344,7 +363,11 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
               // structure stays intact for the admin e2e; MemberRow keeps its
               // own HoverLift spring. CSS reveal is no-JS + reduced-motion safe.
               <li key={member.id} className="wow-reveal h-full">
-                <MemberRow member={member} attention={attentionByMember.get(member.id)} />
+                <MemberRow
+                  member={member}
+                  attention={attentionByMember.get(member.id)}
+                  suppressionReason={suppressionByEmail.get(normalizeEmail(member.email))}
+                />
               </li>
             ))}
           </ul>

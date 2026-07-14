@@ -64,6 +64,8 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   verification_gentle_reminder: 86400, // 24h — S3 §33 benevolent nudge, calm, never urgent
   verification_proof_analyzed: 86400, // 24h — Tour 14 verdict, informative not urgent
   training_reply_received: 86400, // 24h — admin sees a member reply, can wait a day
+  weekly_review_reminder: 86400, // 24h — J2 Sunday nudge, not time-critical
+  calendar_ready: 86400, // 24h — J2 weekly calendar publication, not time-critical
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -79,6 +81,8 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   verification_gentle_reminder: 'low', // S3 §33 — a gentle nudge, never a pressure stick
   verification_proof_analyzed: 'low', // Tour 14 — a calm verdict signal, never a stick
   training_reply_received: 'low', // admin-facing loop-close, never urgent
+  weekly_review_reminder: 'low', // J2 — calm Sunday nudge, never a pressure stick
+  calendar_ready: 'low', // J2 — calm informative signal, never urgent
 };
 
 /**
@@ -152,7 +156,8 @@ export function shouldSkipFallbackEmailForType(type: NotificationTypeSlug): bool
  *
  * DEFERRED (held until 08:00 local) — event-driven nudges / undated digests:
  *   `douglas_card_delivered`, `weekly_report_ready`, `monthly_debrief_ready`,
- *   `mindset_check_ready`, `verification_gentle_reminder`. None is tied to a
+ *   `mindset_check_ready`, `verification_gentle_reminder`, `weekly_review_reminder`,
+ *   `calendar_ready`. None is tied to a
  *   specific calendar day: a Douglas card, a weekly digest or a mindset QCM is
  *   just as relevant delivered at 08:00 as it would have been at 23:00. Holding
  *   them to the morning is the right behaviour.
@@ -396,6 +401,22 @@ export function buildPayload(
         memberId && trainingTradeId
           ? `/admin/members/${memberId}/training/${trainingTradeId}`
           : '/admin/members';
+      break;
+    }
+    case 'weekly_review_reminder': {
+      // J2 — Sunday-morning nudge to complete the week's review if not yet
+      // done. Deep-link to `/review`. Calm, informative, respects opt-out.
+      title = 'Ta revue de la semaine';
+      body = 'Prends un moment pour faire le point sur ta semaine, tranquillement.';
+      path = '/review';
+      break;
+    }
+    case 'calendar_ready': {
+      // J2 — fires when the member's weekly adaptive calendar is published.
+      // Deep-link to `/calendrier`. Calm, informative signal, never urgent.
+      title = 'Ton plan de la semaine est prêt';
+      body = 'Ton calendrier de la semaine vient d’être publié.';
+      path = '/calendrier';
       break;
     }
   }

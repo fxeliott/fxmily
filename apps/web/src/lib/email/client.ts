@@ -4,6 +4,13 @@ import { Resend } from 'resend';
 import type { ReactElement } from 'react';
 
 import { env } from '@/lib/env';
+import { reportWarning } from '@/lib/observability';
+import { isEmailSuppressed } from '@/lib/email/suppression';
+import {
+  RESEND_DAILY_ALERT_THRESHOLD,
+  RESEND_DAILY_CAP,
+  reserveDailySend,
+} from '@/lib/email/send-counter';
 
 /**
  * Resend wrapper with a dev-friendly fallback.
@@ -62,6 +69,48 @@ export async function sendEmail({
       ].join('\n'),
     );
     return { id: null, delivered: false };
+  }
+
+  // J2 — public-surface guards before hitting Resend. Repo is public : Sentry
+  // extras carry the event name + counters only, never the address or subject.
+  try {
+    if (await isEmailSuppressed(to)) {
+      // Hard bounce / complaint already on file : never re-send (protects the
+      // shared sending reputation). No quota consumed.
+      reportWarning('email.send', 'suppressed recipient skipped', {
+        reason: 'suppressed',
+      });
+      return { id: null, delivered: false };
+    }
+  } catch (error) {
+    // Fail-open : a suppression-store outage must not block transactional mail.
+    reportWarning('email.send', 'suppression check failed (fail-open)', {
+      error: error instanceof Error ? error.name : 'unknown',
+    });
+  }
+
+  try {
+    const reservation = await reserveDailySend();
+    if (reservation.capped) {
+      // Daily Resend budget exhausted : refuse cleanly (piège J2 — refus propre
+      // + log à 100 %). Callers treat a non-delivered result as soft.
+      reportWarning('email.send', 'daily send cap reached', {
+        cap: RESEND_DAILY_CAP,
+      });
+      return { id: null, delivered: false };
+    }
+    if (reservation.count === RESEND_DAILY_ALERT_THRESHOLD) {
+      reportWarning('email.send', 'daily send cap 80% reached', {
+        count: reservation.count,
+        cap: RESEND_DAILY_CAP,
+      });
+    }
+  } catch (error) {
+    // Fail-open : if the counter store is unreachable we still attempt delivery
+    // rather than silently dropping mail.
+    reportWarning('email.send', 'send counter failed (fail-open)', {
+      error: error instanceof Error ? error.name : 'unknown',
+    });
   }
 
   // Bound the outbound Resend call with a Promise.race timeout. The SDK (v6.x)

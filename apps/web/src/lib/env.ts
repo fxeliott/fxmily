@@ -97,6 +97,12 @@ const envSchema = z.object({
       return true;
     }, 'RESEND_FROM doit être un email valide ou "Display Name <email@domain>" (sans guillemets ni séquence ?<lettre>)'),
 
+  // Jalon 2 — Resend webhooks (bounces / complaints). Secret de signature svix
+  // fourni par Resend Console → Webhooks. Optionnel : sans lui, la route
+  // /api/webhooks/resend répond 503 (refuse-by-default, comme CRON_SECRET).
+  // JAMAIS en dur — repo public.
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
+
   // Jalon 1+ — Cloudflare R2
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

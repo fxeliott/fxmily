@@ -83,6 +83,9 @@ export type AuditAction =
   | 'checkin.off_day.range_declared'
   | 'checkin.off_day.weekends_updated'
   | 'cron.checkin_reminders.scan'
+  // J2 — weekly review reminder cron heartbeat (active-but-no-review Sunday nudge,
+  // REFLECT V1.8). 1 PII-free row per scan (counters only), mirrors checkin_reminders.
+  | 'cron.weekly_review_reminders.scan'
   // J6 — behavioral score snapshot
   | 'score.computed'
   | 'cron.recompute_scores.scan'

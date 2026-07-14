@@ -1,4 +1,4 @@
-import { Shield, ShieldAlert } from 'lucide-react';
+import { MailX, Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 
 import { MemberAttentionBadges } from '@/components/admin/member-attention';
@@ -6,6 +6,7 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import type { MemberAttention } from '@/lib/admin/attention-service';
 import type { MemberSummary } from '@/lib/admin/members-service';
+import type { SuppressionReason } from '@/lib/email/suppression';
 
 const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',
@@ -19,6 +20,12 @@ interface MemberRowProps {
   member: MemberSummary;
   /** S7 §33-#2 — "à traiter" triage flags (uncommented trades, open gaps, dip). */
   attention?: MemberAttention | undefined;
+  /**
+   * J2 — the member's email is on the suppression list (hard bounce / spam
+   * complaint); Resend refuses to re-send to it. Presence drives a red "Email
+   * en échec" pill. Resolved by the list page in ONE bulk query (never N+1).
+   */
+  suppressionReason?: SuppressionReason | undefined;
 }
 
 /**
@@ -69,7 +76,7 @@ export function presenceFrom(
  * admin list gets the same "mouvement au survol" premium as the member-facing
  * cards — instead of the prior raw shadcn aliases (`bg-card`/`text-muted`).
  */
-export function MemberRow({ member, attention }: MemberRowProps) {
+export function MemberRow({ member, attention, suppressionReason }: MemberRowProps) {
   const fullName = [member.firstName, member.lastName].filter(Boolean).join(' ').trim();
   const displayName = fullName.length > 0 ? fullName : member.email;
   const isAdmin = member.role === 'admin';
@@ -119,6 +126,15 @@ export function MemberRow({ member, attention }: MemberRowProps) {
               <Pill tone="warn">
                 <ShieldAlert aria-hidden="true" className="h-2.5 w-2.5" />
                 Suspendu
+              </Pill>
+            ) : null}
+            {/* J2 — email hard-bounced or was marked as spam; Resend suppresses
+                it so notifications never reach this member. Red pill (bad),
+                matching the member detail hero. */}
+            {suppressionReason ? (
+              <Pill tone="bad">
+                <MailX aria-hidden="true" className="h-2.5 w-2.5" />
+                Email en échec
               </Pill>
             ) : null}
           </div>

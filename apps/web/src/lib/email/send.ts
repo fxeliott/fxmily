@@ -425,6 +425,10 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   verification_proof_analyzed: 'Ton analyse de suivi est prête · Fxmily',
   // S8 V2 §32-4 — ADMIN-facing fallback (member replied to a backtest correction).
   training_reply_received: 'Réponse à une correction · Fxmily',
+  // J2 — Sunday-morning nudge to complete the weekly review if not yet done.
+  weekly_review_reminder: 'Ta revue hebdo t’attend · Fxmily',
+  // J2 — fires when the member's weekly adaptive calendar is published.
+  calendar_ready: 'Ton plan de la semaine est prêt · Fxmily',
 };
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -449,6 +453,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
     'Ton analyse de suivi est prête. Les positions lues et les éventuels écarts t’attendent sur ta page de vérification. Un moment pour te voir tel que tu es, sans jugement.',
   training_reply_received:
     'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
+  weekly_review_reminder: 'Prends un moment pour faire le point sur ta semaine, tranquillement.',
+  calendar_ready: 'Ton calendrier de la semaine vient d’être publié.',
 };
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -463,6 +469,8 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   verification_gentle_reminder: 'Voir mon suivi',
   verification_proof_analyzed: 'Voir mon analyse',
   training_reply_received: 'Voir la réponse',
+  weekly_review_reminder: 'Faire ma revue',
+  calendar_ready: 'Voir mon calendrier',
 };
 
 export interface SendNotificationFallbackParams {

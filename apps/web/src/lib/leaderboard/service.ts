@@ -15,7 +15,12 @@ import { getLatestBehavioralScore } from '@/lib/scoring/service';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 
-import { computeLeaderboardScore, LEADERBOARD_WINDOW_DAYS, preciseScoreFromParts } from './builder';
+import {
+  computeLeaderboardGate,
+  computeLeaderboardScore,
+  LEADERBOARD_WINDOW_DAYS,
+  preciseScoreFromParts,
+} from './builder';
 import {
   computeRankMovement,
   countActivePillars,
@@ -154,6 +159,7 @@ interface ComputedEntry extends RankableEntry {
   result: LeaderboardScore;
   activeDays: number;
   activePillars: number;
+  minActiveDays: number;
 }
 
 /**
@@ -199,6 +205,11 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
       slice.map(async (u) => {
         const { input, streak } = await gatherMember(u.id, instant, windowStartUtc, anchorUtc);
         const result = computeLeaderboardScore(input);
+        // The justification-aware min-active-days gate this member was ranked
+        // against, from the single source of truth. Persisted in the sample-size
+        // JSON so the member card can render the exact "X/N jours actifs — il
+        // t'en reste M" counter without re-deriving (never diverging from) it.
+        const { minActiveDays } = computeLeaderboardGate(input);
         return {
           userId: u.id,
           score: result.score,
@@ -212,6 +223,7 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
           result,
           activeDays: input.activeDays,
           activePillars: countActivePillars(result),
+          minActiveDays,
         } satisfies ComputedEntry;
       }),
     );
@@ -241,6 +253,7 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
       activeDays: e.activeDays,
       windowDays: LEADERBOARD_WINDOW_DAYS,
       activePillars: e.activePillars,
+      minActiveDays: e.minActiveDays,
     };
     await db.leaderboardSnapshot.upsert({
       where: { userId_date: { userId: e.userId, date: dateUtc } },

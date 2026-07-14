@@ -111,6 +111,15 @@ export interface LeaderboardSampleSizeJson {
   windowDays: number;
   /** Number of pillars that had enough data to contribute. */
   activePillars: number;
+  /**
+   * Active days the member must reach to be ranked, AFTER the
+   * justification-aware relaxation (`min(7, window − justifiedOffDays)`). The
+   * single source of truth is {@link computeLeaderboardGate}; persisting it here
+   * lets the member card render the exact "X/N jours actifs — il t'en reste M"
+   * qualification counter without re-deriving (and never diverging from) the
+   * gate the ranking actually applied.
+   */
+  minActiveDays: number;
 }
 
 /** Helper used by the service to build `Prisma.InputJsonValue`. */

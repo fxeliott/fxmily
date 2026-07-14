@@ -108,18 +108,37 @@ export function preciseScoreFromParts(parts: LeaderboardParts): number | null {
   return Number.isFinite(raw) ? raw : null;
 }
 
-export function computeLeaderboardScore(
-  input: LeaderboardScoreInput,
-): ScoreResult<LeaderboardParts> {
-  // Decision A — justification-aware fairness gate. A member who DECLARED off-days
-  // (`justifiedOffDays`) had less OPPORTUNITY to be active; gate on the days they
-  // could realistically have shown up (window − justified off-days) instead of a
-  // flat 7. So a justifiably-absent member who showed up whenever they could is
-  // ranked (never penalized), while a genuinely inactive member — few/no declared
-  // off-days AND few active days — still needs the full sample and stays
-  // "qualification en cours". Weekends are NOT counted here (they are already
-  // neutral inside every pillar); only explicit `MemberOffDay` declarations relax
-  // the gate. Clamped so the guard can never divide the opportunity to zero.
+/**
+ * Derived fairness-gate quantities for a member — the justification-aware
+ * thresholds `computeLeaderboardScore` ranks on, extracted as a PURE helper so
+ * the SAME formula is the single source of truth for both the score computation
+ * and the persisted sample-size JSON. The member card reads `minActiveDays` back
+ * from that JSON to render the exact "X/N jours actifs — il t'en reste M"
+ * qualification counter, so it must never diverge from the gate the ranking
+ * actually applied. No I/O.
+ *
+ * Decision A (justification-aware): a member who DECLARED off-days had less
+ * OPPORTUNITY to be active, so we gate on `window − justifiedOffDays` (floored at
+ * 1) instead of a flat 7. A justifiably-absent member who showed up whenever they
+ * could qualifies sooner (never penalized); a genuinely inactive member — few/no
+ * declared off-days AND few active days — still needs the full sample and stays
+ * "qualification en cours". Weekends are NOT counted here (already neutral inside
+ * every pillar); only explicit `MemberOffDay` declarations relax the gate.
+ *
+ *   - `deepAbsence` — away for MOST of the window (`opportunity < 7`): the
+ *     tracking-coverage `work` pillar, measured over a window mostly spent
+ *     legitimately away, is dropped (renormalized) rather than allowed to drag
+ *     the member down.
+ */
+export interface LeaderboardGate {
+  windowDays: number;
+  justifiedOffDays: number;
+  opportunityDays: number;
+  minActiveDays: number;
+  deepAbsence: boolean;
+}
+
+export function computeLeaderboardGate(input: LeaderboardScoreInput): LeaderboardGate {
   const windowDays =
     Number.isFinite(input.windowDays) && (input.windowDays as number) > 0
       ? (input.windowDays as number)
@@ -127,12 +146,14 @@ export function computeLeaderboardScore(
   const justifiedOffDays = Math.min(Math.max(input.justifiedOffDays ?? 0, 0), windowDays);
   const opportunityDays = Math.max(1, windowDays - justifiedOffDays);
   const minActiveDays = Math.min(LEADERBOARD_MIN_ACTIVE_DAYS, opportunityDays);
-  // Deep-absence regime: the member was justifiably away for MOST of the window,
-  // so tracking-coverage measured over the full window (absent days read as
-  // "no work") is not representative → drop the work pillar (renormalized away)
-  // rather than let it drag them. Same "never penalize an inapplicable surface"
-  // invariant as a natively-null pillar; only triggers for a genuine long absence.
   const deepAbsence = opportunityDays < LEADERBOARD_MIN_ACTIVE_DAYS;
+  return { windowDays, justifiedOffDays, opportunityDays, minActiveDays, deepAbsence };
+}
+
+export function computeLeaderboardScore(
+  input: LeaderboardScoreInput,
+): ScoreResult<LeaderboardParts> {
+  const { minActiveDays, deepAbsence } = computeLeaderboardGate(input);
 
   const assiduity = pillar(input.engagementScore, WEIGHT_ASSIDUITY);
   const discipline = pillar(input.disciplineScore, WEIGHT_DISCIPLINE);

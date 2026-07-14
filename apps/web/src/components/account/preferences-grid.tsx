@@ -107,6 +107,16 @@ const CATEGORIES: CategoryMeta[] = [
       'Notification quand un membre répond à l’une de tes corrections de backtest, pour boucler l’échange sans surveiller chaque entraînement.',
     adminOnly: true,
   },
+  {
+    type: 'weekly_review_reminder',
+    label: 'Rappel de revue hebdomadaire',
+    description: "Un rappel le dimanche matin si tu n'as pas encore fait ta revue de la semaine.",
+  },
+  {
+    type: 'calendar_ready',
+    label: 'Calendrier de la semaine',
+    description: 'Une notification quand ton calendrier de la semaine est publié.',
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -123,6 +133,8 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       verification_gentle_reminder: true,
       verification_proof_analyzed: true,
       training_reply_received: true,
+      weekly_review_reminder: true,
+      calendar_ready: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

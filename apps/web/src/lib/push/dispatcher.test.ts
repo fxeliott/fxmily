@@ -337,9 +337,10 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 11 NotificationType slugs', () => {
+  it('TTL covers exactly the 13 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
+      'calendar_ready',
       'checkin_evening_reminder',
       'checkin_morning_reminder',
       'douglas_card_delivered',
@@ -350,10 +351,11 @@ describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
       'verification_gentle_reminder',
       'verification_proof_analyzed',
       'weekly_report_ready',
+      'weekly_review_reminder',
     ]);
   });
 
-  it('URGENCY covers exactly the same 11 slugs as TTL (no map drift)', () => {
+  it('URGENCY covers exactly the same 13 slugs as TTL (no map drift)', () => {
     expect(Object.keys(URGENCY_BY_TYPE).sort()).toEqual(Object.keys(TTL_BY_TYPE).sort());
   });
 
@@ -640,7 +642,7 @@ describe('quiet-hours classification (Tour 15 — [22:00, 08:00) member-local si
       }
     });
 
-    it('the three buckets partition all 11 slugs (exempt + expire + defer = total)', () => {
+    it('the three buckets partition all 13 slugs (exempt + expire + defer = total)', () => {
       const exemptCount = NOTIFICATION_TYPES.filter((s) => isQuietHoursExempt(s)).length;
       const expireCount = NOTIFICATION_TYPES.filter((s) => isQuietHoursExpireOnHold(s)).length;
       const deferCount = NOTIFICATION_TYPES.filter(
@@ -650,7 +652,7 @@ describe('quiet-hours classification (Tour 15 — [22:00, 08:00) member-local si
       // Pin the current split so a reclassification is a conscious test edit.
       expect(exemptCount).toBe(4);
       expect(expireCount).toBe(2);
-      expect(deferCount).toBe(5);
+      expect(deferCount).toBe(7);
     });
   });
 });

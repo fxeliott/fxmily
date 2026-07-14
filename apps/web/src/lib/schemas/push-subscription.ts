@@ -105,7 +105,7 @@ export const subscribePushInputSchema = pushSubscriptionInputSchema.extend({
 });
 export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 
-/// The 10 notification categories. Mirrors the
+/// The 13 notification categories. Mirrors the
 /// `NotificationType` enum in `prisma/schema.prisma` 1:1 — the parity is
 /// enforced by a unit test (`push-subscription.test.ts`) so a value added to
 /// the Prisma enum but NOT registered here FAILS the suite. This kills the
@@ -126,7 +126,13 @@ export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 /// correction's author when the MEMBER replies to it, so the coaching loop
 /// closes without the admin polling each backtest. Admin-only (hidden from the
 /// member preferences grid, like `weekly_report_ready`). §21.5: ids only, never
-/// the reply text nor any backtest P&L.
+/// the reply text nor any backtest P&L. `weekly_review_reminder` (J2) is the
+/// Sunday-morning nudge to complete the week's review if it hasn't been done
+/// yet — calm, informative, respects the member's opt-out like every other
+/// reminder. `calendar_ready` (J2) fires when the member's weekly calendar is
+/// published, so they know it's ready to open — distinct from
+/// `weekly_report_ready` (admin-only digest) and `monthly_debrief_ready`
+/// (member's monthly synthesis).
 export const NOTIFICATION_TYPES = [
   'annotation_received',
   'training_annotation_received',
@@ -142,6 +148,12 @@ export const NOTIFICATION_TYPES = [
   // one push per member per run, PII-free (counts only).
   'verification_proof_analyzed',
   'training_reply_received',
+  // J2 — Sunday-morning nudge to complete the weekly review if not yet done.
+  // Deep-link /review, calm and non-urgent.
+  'weekly_review_reminder',
+  // J2 — fires when the member's weekly adaptive calendar is published.
+  // Deep-link /calendrier, calm and non-urgent.
+  'calendar_ready',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];
 

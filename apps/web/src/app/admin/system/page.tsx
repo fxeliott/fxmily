@@ -7,6 +7,7 @@ import {
   HardDrive,
   Image as ImageIcon,
   ScanEye,
+  Send,
   ShieldCheck,
   Terminal,
 } from 'lucide-react';
@@ -19,6 +20,11 @@ import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { logAudit } from '@/lib/auth/audit';
+import {
+  getDailySendCount,
+  RESEND_DAILY_ALERT_THRESHOLD,
+  RESEND_DAILY_CAP,
+} from '@/lib/email/send-counter';
 import {
   buildHostActionsReport,
   getCronHealthReport,
@@ -71,13 +77,15 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
     redirect('/login?redirect=/admin/system');
   }
 
-  const [report, workerReport, snapshot, verificationBacklog, offsiteMirror] = await Promise.all([
-    getCronHealthReport(),
-    getWorkerHealthReport(),
-    getSystemSnapshot(),
-    getVerificationBacklogHealth(),
-    getOffsiteMirrorHealth(),
-  ]);
+  const [report, workerReport, snapshot, verificationBacklog, offsiteMirror, emailCount] =
+    await Promise.all([
+      getCronHealthReport(),
+      getWorkerHealthReport(),
+      getSystemSnapshot(),
+      getVerificationBacklogHealth(),
+      getOffsiteMirrorHealth(),
+      getDailySendCount(),
+    ]);
 
   // Tour 13 — live disk probe (sync, cheap). Read AFTER the awaits so the
   // reading is as fresh as the render. A full shared 40 GB volume stops
@@ -284,6 +292,38 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         </div>
 
         <VerificationBacklogDetail backlog={verificationBacklog} />
+      </section>
+
+      <section
+        aria-labelledby="email-sends-heading"
+        className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <Send className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="email-sends-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              Envois email du jour
+              <EmailSendPill count={emailCount} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              L&apos;offre gratuite Resend plafonne les envois à {RESEND_DAILY_CAP} emails par jour
+              calendaire (fuseau Europe/Paris) : au-delà, chaque envoi est refusé proprement. Le
+              compteur est atomique en base et remis à zéro chaque jour. Vert en dessous de{' '}
+              {RESEND_DAILY_ALERT_THRESHOLD} · Ambre à partir de {RESEND_DAILY_ALERT_THRESHOLD} ·
+              Rouge à {RESEND_DAILY_CAP} (quota atteint).
+            </p>
+          </div>
+        </div>
+
+        <EmailSendGauge count={emailCount} />
       </section>
 
       <section
@@ -521,6 +561,76 @@ function DiskStatusPill({ status }: { status: DiskStatus }): React.ReactElement 
           ? 'Critique'
           : 'Inconnu';
   return <Pill tone={tone}>{label}</Pill>;
+}
+
+/** Bucket the day's Resend send count into the three operator-facing states. */
+type EmailSendStatus = 'ok' | 'warn' | 'full';
+
+function emailSendStatus(count: number): EmailSendStatus {
+  if (count >= RESEND_DAILY_CAP) return 'full';
+  if (count >= RESEND_DAILY_ALERT_THRESHOLD) return 'warn';
+  return 'ok';
+}
+
+/** Status pill mirroring DiskStatusPill: green under the alert threshold, amber at it, red at the cap. */
+function EmailSendPill({ count }: { count: number }): React.ReactElement {
+  const status = emailSendStatus(count);
+  const tone = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : 'bad';
+  const label = status === 'ok' ? 'OK' : status === 'warn' ? "Seuil d'alerte" : 'Quota atteint';
+  return <Pill tone={tone}>{label}</Pill>;
+}
+
+/**
+ * J2 — daily Resend send gauge. Fills with the day's count against the 100/day
+ * free-tier cap so a nearly-exhausted budget reads as a nearly-full bar (same
+ * direction as DiskGauge). Colour mirrors the status bucket; the tick marks the
+ * 80 % alert threshold. At the cap, a refusal note replaces the silent bar.
+ */
+function EmailSendGauge({ count }: { count: number }): React.ReactElement {
+  const clamped = Math.min(RESEND_DAILY_CAP, Math.max(0, count));
+  const usedPct = (clamped / RESEND_DAILY_CAP) * 100;
+  const status = emailSendStatus(count);
+  const fill = status === 'ok' ? 'var(--ok)' : status === 'warn' ? 'var(--warn)' : 'var(--bad)';
+  // Where the green→amber boundary sits on the bar (alert threshold as a percentage).
+  const alertThresholdPct = (RESEND_DAILY_ALERT_THRESHOLD / RESEND_DAILY_CAP) * 100;
+
+  return (
+    <div className="mt-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-sm text-[var(--t-2)]">
+          <span className="font-mono text-lg font-semibold text-[var(--t-1)] tabular-nums">
+            {clamped}
+          </span>{' '}
+          / {RESEND_DAILY_CAP} emails envoyés
+        </p>
+        <p className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">
+          {Math.round(usedPct)} % du plafond
+        </p>
+      </div>
+      <div
+        className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-2)]"
+        role="img"
+        aria-label={`Envois email : ${clamped} sur ${RESEND_DAILY_CAP} (${Math.round(usedPct)} % du plafond quotidien).`}
+      >
+        <div
+          className="h-full w-full origin-left rounded-full transition-transform"
+          style={{ transform: `scaleX(${usedPct / 100})`, backgroundColor: fill }}
+        />
+        {/* Tick marking the green→amber boundary (alert threshold). */}
+        <span
+          aria-hidden="true"
+          className="absolute top-0 bottom-0 w-px bg-[var(--b-default)]"
+          style={{ left: `${alertThresholdPct}%` }}
+        />
+      </div>
+      {status === 'full' && (
+        <p className="mt-2 text-xs font-medium text-[var(--bad)]">
+          Quota atteint : les envois sont refusés proprement jusqu&apos;à la remise à zéro de
+          demain.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function SnapshotCard({

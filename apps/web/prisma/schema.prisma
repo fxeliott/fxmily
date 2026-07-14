@@ -174,6 +174,18 @@ enum NotificationType {
   /// read. ONE push per member per batch run (aggregated, never one-per-proof),
   /// PII-free (counts only, never any P&L). Calm, factual — never a stick.
   verification_proof_analyzed
+  /// J2 (Resend durci + notifications vague 1) — a member who was active this
+  /// week but has NOT written their weekly review (REFLECT V1.8) gets a calm
+  /// Sunday-morning (Paris) nudge: push if installed, else email fallback.
+  /// At most one per week (app-level idempotency on payload `weekStart`),
+  /// opt-out respected. Never a trading advice — a mirror, posture SPEC §2.
+  weekly_review_reminder
+  /// J2 — the adaptive weekly calendar (§26) has just been published for this
+  /// member. Calm "ton plan de la semaine est prêt" push (email fallback).
+  /// Enqueued once per publication — `persistGeneratedCalendars` writes at most
+  /// one calendar per member per week (idempotency skip), so the enqueue is a
+  /// plain insert (that publication hook is the once-per-week guard; no dedup).
+  calendar_ready
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -3730,4 +3742,102 @@ model ReplayMessage {
   /// Ordered copy list in the admin.
   @@index([sessionId, position])
   @@map("replay_messages")
+}
+
+/// J2 — Resend webhook event log (bounce / complaint / delivery / …).
+///
+/// Every verified Resend webhook event is persisted here for forensics and to
+/// power the admin "email en échec" badge. `svixId` is the idempotency key: the
+/// `svix-id` header is unique per event, so a redelivered event upserts the same
+/// row instead of double-counting (piège J2 : Resend peut redélivrer un event).
+/// PII posture: we store the recipient email + raw payload (operational log,
+/// admin-only surface). `userId` is a best-effort member resolution (nullable,
+/// NO FK — an event can target a non-member address; RGPD purge is a J10 cron
+/// follow-up, acceptable at V1 30-member scale).
+model EmailEvent {
+  id String @id @default(cuid())
+
+  /// The `svix-id` header — unique per Resend event = idempotency key.
+  svixId String @unique @map("svix_id")
+
+  /// Resend event type, e.g. `email.bounced`, `email.complained`,
+  /// `email.delivered`, `email.sent`, `email.delivery_delayed`.
+  eventType String @map("event_type")
+
+  /// Recipient address, normalized lowercase (join key for the admin badge).
+  email String
+
+  /// Resend's own message id (`data.email_id`) when present.
+  resendEmailId String? @map("resend_email_id")
+
+  /// Best-effort resolved member (nullable, no FK — see model doc).
+  userId String? @map("user_id")
+
+  /// For `email.bounced`: `data.bounce.type` — `Permanent` = hard bounce.
+  bounceType String? @map("bounce_type")
+
+  /// For `email.bounced`: `data.bounce.subType` (diagnostic sub-reason).
+  bounceSubType String? @map("bounce_sub_type")
+
+  /// Full verified event payload (forensics; never re-parsed for control flow).
+  payload Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Admin badge join by recipient.
+  @@index([email])
+  /// Member-scoped lookups (admin fiche membre).
+  @@index([userId])
+  /// Recent-events sweep.
+  @@index([createdAt])
+  @@map("email_events")
+}
+
+/// J2 — outbound email suppression list (auto-stop-send).
+///
+/// A hard bounce (`bounce.type = Permanent`) or a spam complaint suppresses the
+/// address: `sendEmail` refuses to send to a suppressed address WITHOUT
+/// consuming the daily quota (arrêt d'envoi automatique, piège J2). The email is
+/// the natural primary key → O(1) lookup on the send hot path. Suppressions
+/// deliberately PERSIST across a member's lifecycle (sender-reputation: a dead
+/// address stays dead) — no FK, no cascade.
+model EmailSuppression {
+  /// Suppressed address, normalized lowercase.
+  email String @id
+
+  /// Why the address is suppressed: `hard_bounce` | `complaint`.
+  reason String
+
+  /// For hard bounces: the Resend `bounce.type` / `bounce.subType` snapshot.
+  bounceType    String? @map("bounce_type")
+  bounceSubType String? @map("bounce_sub_type")
+
+  /// Resend message id that triggered the suppression.
+  resendEmailId String? @map("resend_email_id")
+
+  /// Best-effort resolved member (nullable, no FK).
+  userId String? @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("email_suppressions")
+}
+
+/// J2 — atomic daily Resend send counter (NOT in-memory, piège J2).
+///
+/// One row per Paris-local calendar day (`day` = `YYYY-MM-DD`). `reserveDailySend`
+/// increments atomically via `INSERT … ON CONFLICT (day) DO UPDATE … WHERE count
+/// < cap RETURNING count` — an empty RETURNING means the cap (Resend free tier
+/// 100/day) is reached and the send is refused cleanly. Alert fires at 80 %.
+model EmailSendCounter {
+  /// Paris-local calendar day, `YYYY-MM-DD` (see `localDateOf(..,'Europe/Paris')`).
+  day String @id
+
+  /// Emails sent (reserved) so far today.
+  count Int @default(0)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("email_send_counters")
 }

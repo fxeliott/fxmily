@@ -32,6 +32,16 @@ vi.mock('./service', () => ({
   persistAdaptiveCalendar: vi.fn(),
 }));
 
+// J2 §7.10 — persistGeneratedCalendars enqueues a `calendar_ready` notification
+// (best-effort) after each successful persist. That enqueue is its own tested
+// concern (notifications/enqueue.test.ts). Left unmocked, the real function hits
+// the `@/lib/db` mock (which has no `notificationQueue`), throws, and its internal
+// catch fires reportWarning('calendar-ready.enqueue', ...) — which would pollute
+// the crisis/AMF `reportWarning` assertions below. Stub it to isolate the batch.
+vi.mock('@/lib/notifications/enqueue', () => ({
+  enqueueCalendarReadyNotification: vi.fn(),
+}));
+
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { shiftLocalDate } from '@/lib/checkin/timezone';

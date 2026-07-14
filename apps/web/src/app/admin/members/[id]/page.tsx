@@ -1,4 +1,4 @@
-import { ChevronRight, Mail, MailWarning, Shield, ShieldAlert } from 'lucide-react';
+import { ChevronRight, Mail, MailWarning, MailX, Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -33,6 +33,7 @@ import { listModerationHistory } from '@/lib/admin/member-moderation';
 import { getLatestConstancyScore, listRecentConstancyScores } from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 import { db } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/suppression';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
 import { currentParisWeekStart } from '@/lib/mindset/week';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -153,6 +154,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // forcing the coach to open every trade to know if a reframe landed. Fetched
   // unconditionally (the hero shows on every tab); a single indexed count.
   const unseenCorrections = await countUnseenAnnotationsByMember(memberId);
+
+  // J2 — is this member's email on the suppression list (hard bounce / spam
+  // complaint) ? If so, Resend refuses to re-send to it and every notification
+  // silently drops. Surfaced in the hero as a red pill so the coach knows the
+  // channel is dead. Single indexed findUnique on the normalized address; the
+  // `reason` lets us tell « rejet définitif » from « plainte » below the email.
+  const emailSuppression = await db.emailSuppression.findUnique({
+    where: { email: normalizeEmail(detail.email) },
+    select: { reason: true },
+  });
 
   // Cursor-paginated (S7). A stale cursor (trade deleted since the link was
   // rendered) returns an empty list (Prisma 7 — no throw), handled by the
@@ -471,11 +482,27 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
                   {unseenCorrections > 1 ? 's' : ''}
                 </Pill>
               ) : null}
+              {/* J2 — the member's email hard-bounced or was marked as spam, so
+                  Resend suppresses it and no email reaches them. Red pill (bad),
+                  matching the danger tone; the reason sits below the address. */}
+              {emailSuppression ? (
+                <Pill tone="bad">
+                  <MailX className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                  Email en échec
+                </Pill>
+              ) : null}
             </div>
             <p className="t-body flex min-w-0 items-center gap-1.5 font-mono text-[var(--t-2)] tabular-nums">
               <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]" strokeWidth={1.75} />
               <span className="min-w-0 break-all">{detail.email}</span>
             </p>
+            {emailSuppression ? (
+              <p className="t-cap text-[var(--bad)]">
+                {emailSuppression.reason === 'hard_bounce'
+                  ? 'Rejet définitif (hard bounce) : les emails ne sont plus envoyés à cette adresse.'
+                  : 'Signalé comme spam (plainte) : les emails ne sont plus envoyés à cette adresse.'}
+              </p>
+            ) : null}
           </div>
         </div>
       </Card>

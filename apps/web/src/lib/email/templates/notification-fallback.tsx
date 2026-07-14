@@ -185,6 +185,22 @@ const META_BY_TYPE: Record<
     body: 'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
     ctaLabel: 'Voir la réponse →',
   },
+  // J2 — Sunday-morning nudge to complete the weekly review if not yet done.
+  weekly_review_reminder: {
+    title: 'Ta revue de la semaine',
+    preview: 'Prends un moment pour faire le point sur ta semaine.',
+    eyebrow: 'REVUE · HEBDO',
+    body: 'Prends un moment pour faire le point sur ta semaine, tranquillement.',
+    ctaLabel: 'Faire ma revue →',
+  },
+  // J2 — fires when the member's weekly adaptive calendar is published.
+  calendar_ready: {
+    title: 'Ton plan de la semaine est prêt',
+    preview: 'Ton calendrier de la semaine vient d’être publié.',
+    eyebrow: 'CALENDRIER · SEMAINE',
+    body: 'Ton calendrier de la semaine vient d’être publié.',
+    ctaLabel: 'Voir mon calendrier →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

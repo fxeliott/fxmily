@@ -754,3 +754,151 @@ export const NOTIFICATION_TYPES_CHECKIN = new Set<NotificationType>([
   'checkin_morning_reminder',
   'checkin_evening_reminder',
 ]);
+
+// =============================================================================
+// J2 — Resend hardening + notifications vague 1 (SPEC §18.2). Two member-facing
+// nudges that fall back to email when a push subscription isn't installed:
+//   · calendar_ready         — the §26 adaptive weekly calendar was published.
+//   · weekly_review_reminder — active-but-no-review Sunday nudge (REFLECT V1.8).
+// Both are engagement nudges → `isTransactional` stays default-false, so the J9
+// email fallback is frequency-capped (see NotificationQueue.isTransactional /
+// SPEC §18.2). PII-free payloads: a local week date only, never any edge/P&L.
+// =============================================================================
+
+export interface CalendarReadyPayload {
+  /** Monday `YYYY-MM-DD` (Europe/Paris) of the week the calendar covers —
+   *  deep-links `/calendrier`. PII-free: a local week date only (§16). */
+  weekStart: string;
+}
+
+/**
+ * Enqueue a calm "ton plan de la semaine est prêt" push for the member when the
+ * §26 adaptive calendar is published (email fallback when push isn't installed).
+ *
+ * Carbon mirror of `enqueueMonthlyDebriefNotification`: a SIMPLE insert with NO
+ * dedup — the calendar publish hook fires at most once per member per week, so
+ * there is nothing to race on here. Best-effort (returns the row id, or null if
+ * the write failed — logged, never thrown, so publishing the calendar never
+ * rolls back over a queue hiccup). Optionally joins a parent `db.$transaction`.
+ * `isTransactional` stays default-false (engagement nudge; SPEC §18.2 cap).
+ */
+export async function enqueueCalendarReadyNotification(
+  recipientUserId: string,
+  payload: CalendarReadyPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'calendar_ready',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'calendar_ready',
+          weekStart: payload.weekStart,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort: return
+    // null so a queue hiccup never rolls back a just-published calendar.
+    reportWarning('calendar-ready.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+export interface WeeklyReviewReminderPayload {
+  /** Monday `YYYY-MM-DD` (Europe/Paris) of the week the review is for —
+   *  deep-links `/review`. Also the app-level dedup key (see below). PII-free:
+   *  a local week date only, never anything from the member's edge (§16). */
+  weekStart: string;
+}
+
+/**
+ * Enqueue a gentle "ta revue de la semaine t'attend" push for a member who was
+ * active this week but hasn't written their weekly review yet (REFLECT V1.8) —
+ * email fallback when push isn't installed. Calm Sunday nudge, posture SPEC §2
+ * (a mirror, never a trading advice).
+ *
+ * "Max 1 per week" (J2 requirement) is enforced by an APPLICATION-LEVEL dedup:
+ * unlike `enqueueMindsetCheckNotification` / `enqueueGentleVerificationReminder`
+ * there is NO partial unique index in the DB for `weekly_review_reminder`, so we
+ * pre-check for an existing row (same user + type + `payload.weekStart`) whose
+ * status isn't terminally `failed`, and no-op if found. That is sufficient here
+ * because the emission is a SINGLE weekly cron on a SINGLE instance — the classic
+ * concurrent double-fire that would need a DB unique index doesn't happen, and a
+ * benign re-run inside the same weekly scan just converges on the existing row.
+ * Only a terminally `failed` prior row is allowed to be re-enqueued (retry).
+ *
+ * Best-effort: returns the row id (new or existing), or null if the write failed
+ * (logged, never thrown). Optionally joins a parent `db.$transaction`.
+ */
+export async function enqueueWeeklyReviewReminderNotification(
+  recipientUserId: string,
+  payload: WeeklyReviewReminderPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    // App-level dedup (no DB partial unique index for this type). A non-terminal
+    // row (pending → dispatching → sent) for this (user, weekStart) means the
+    // member was already nudged this week → no-op. Mirrors how the neighbouring
+    // dedup helpers read the queue status, minus the terminal `failed` state.
+    const existing = await client.notificationQueue.findFirst({
+      where: {
+        userId: recipientUserId,
+        type: 'weekly_review_reminder',
+        status: { in: ['pending', 'dispatching', 'sent'] },
+        payload: { path: ['weekStart'], equals: payload.weekStart },
+      },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'weekly_review_reminder',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'weekly_review_reminder',
+          weekStart: payload.weekStart,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort: return
+    // null so a weekly-scan hiccup never breaks the run.
+    reportWarning('weekly-review-reminder.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}

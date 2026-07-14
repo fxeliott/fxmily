@@ -4,6 +4,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
+import { enqueueCalendarReadyNotification } from '@/lib/notifications/enqueue';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import {
@@ -665,6 +666,23 @@ export async function persistGeneratedCalendars(
         ...(snapshotGeneratedAt ? { generatedAt: snapshotGeneratedAt } : {}),
       });
       persisted += 1;
+
+      // J2 §7.10 — "ton calendrier de la semaine est prêt" notification. Only
+      // on a SUCCESSFUL persist, and strictly best-effort: an enqueue failure
+      // (DB hiccup, queue contention) must NEVER fail the calendar generation
+      // that already committed. enqueueCalendarReadyNotification is itself a
+      // simple insert (no dedup) — the try/catch here is a second belt so a
+      // throw can't leak into the batch loop and mark a persisted calendar as
+      // an error. J9 web-push dispatches the queued row later.
+      try {
+        await enqueueCalendarReadyNotification(entry.userId, { weekStart: request.weekStart });
+      } catch (notifyErr) {
+        reportWarning('calendar.batch', 'calendar_ready_enqueue_failed', {
+          userId: entry.userId,
+          weekStart: request.weekStart,
+          error: notifyErr instanceof Error ? notifyErr.message.slice(0, 200) : 'unknown',
+        });
+      }
     } catch (err) {
       errors += 1;
       await logAudit({

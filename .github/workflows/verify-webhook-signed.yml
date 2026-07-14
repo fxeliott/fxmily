@@ -1,0 +1,95 @@
+name: Verify webhook signed 200
+
+# Manual smoke test of the Resend webhook happy-path against LIVE prod.
+#
+# It proves the full gate end-to-end, from an independent HTTP client (the
+# GitHub runner — exactly what Resend is: a client that POSTs a svix-signed
+# body):
+#   1. an UNSIGNED POST must return 400 (gate open: the secret is loaded, so we
+#      are past the 503 "webhook_disabled" state);
+#   2. a REAL svix-signed POST (HMAC-SHA256 over "${id}.${ts}.${payload}" with
+#      the production RESEND_WEBHOOK_SECRET) must return 200.
+#
+# The signed payload is a benign `{"type":"email.sent","data":{}}` event: it has
+# no recipient, so the route acknowledges it via the `200 {received:true}` no-op
+# branch WITHOUT touching the database (no EmailEvent row, no suppression).
+#
+# The secret value is never printed; only the derived signature is used.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-webhook-signed
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Prove 503 -> 200 on /api/webhooks/resend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Signed + unsigned probe against prod
+        env:
+          RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import base64, hmac, hashlib, json, os, sys, time, urllib.request, urllib.error
+
+          URL = "https://app.fxmilyapp.com/api/webhooks/resend"
+
+          secret = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+          if not secret:
+              print("::error::RESEND_WEBHOOK_SECRET is empty in the runner env.")
+              sys.exit(1)
+
+          def post(headers, body):
+              req = urllib.request.Request(
+                  URL, data=body.encode(), method="POST",
+                  headers={"content-type": "application/json", **headers},
+              )
+              try:
+                  r = urllib.request.urlopen(req, timeout=20)
+                  return r.status, r.read().decode()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()
+
+          failures = []
+
+          # 1. Unsigned POST -> expect 400 (gate open, not 503).
+          code, body = post({}, "{}")
+          print(f"[1] Unsigned POST  -> HTTP {code} {body}")
+          if code == 503:
+              failures.append("Unsigned POST still 503 (secret not loaded).")
+          elif code != 400:
+              failures.append(f"Unsigned POST expected 400, got {code}.")
+
+          # 2. Real svix-signed POST -> expect 200 (happy path, no DB side-effect).
+          key = base64.b64decode(secret.split("_", 1)[1])  # strip whsec_ prefix
+          svix_id = f"msg_verify_{int(time.time())}"
+          svix_ts = str(int(time.time()))
+          payload = json.dumps({"type": "email.sent", "data": {}}, separators=(",", ":"))
+          signed_content = f"{svix_id}.{svix_ts}.{payload}".encode()
+          sig = base64.b64encode(hmac.new(key, signed_content, hashlib.sha256).digest()).decode()
+
+          code, body = post(
+              {
+                  "svix-id": svix_id,
+                  "svix-timestamp": svix_ts,
+                  "svix-signature": f"v1,{sig}",
+              },
+              payload,
+          )
+          print(f"[2] Signed POST    -> HTTP {code} {body}")
+          if code != 200:
+              failures.append(f"Signed POST expected 200, got {code} {body}.")
+
+          if failures:
+              for f in failures:
+                  print(f"::error::{f}")
+              sys.exit(1)
+
+          print("OK: 503 -> 400 (unsigned) and signed -> 200 both proven end-to-end.")
+          PY

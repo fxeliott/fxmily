@@ -205,6 +205,11 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   await db.adaptiveCalendar.deleteMany({ where: { userId: { in: ids } } });
   await db.weeklyScheduleQuestionnaire.deleteMany({ where: { userId: { in: ids } } });
 
+  // J3 Classement pour tous — LeaderboardSnapshot (nightly cached ranking,
+  // 1 row/day/member). ON DELETE CASCADE on User; deleted explicitly BEFORE the
+  // User wipe for log-visibility (same canon as V1.5/V1.8/V1.3/V2.3/§26 above).
+  await db.leaderboardSnapshot.deleteMany({ where: { userId: { in: ids } } });
+
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };
 }

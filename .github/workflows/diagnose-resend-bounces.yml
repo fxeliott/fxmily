@@ -1,0 +1,69 @@
+name: Diagnose Resend bounces
+
+# Read-only diagnostic — finds WHY prod emails bounce.
+#
+# The RESEND_FROM provisioning run (provision-resend-from.yml) proved the running
+# container already sends from the correct domain sender
+# `Fxmily <noreply@fxmilyapp.com>` (BEFORE == AFTER), so the bounces are NOT the
+# old `onboarding@resend.dev` fallback. This workflow gathers the real evidence,
+# all PII-free and secret-free:
+#
+#   1. Resend `/domains` verification status for fxmilyapp.com + the per-record
+#      DNS status (DKIM/SPF/MX/DMARC). An unverified domain or a not-verified
+#      DKIM record is the leading cause of hard bounces. The RESEND_API_KEY is
+#      read from the running `web` container's env and used only in the
+#      Authorization header — it is NEVER printed.
+#   2. The `email_suppressions` taxonomy: an AGGREGATE (reason / bounce_type /
+#      bounce_sub_type / count / date range) with NO email addresses, so nothing
+#      personal reaches the public Actions log.
+#   3. The effective RESEND_FROM (a public sender address, safe to print).
+#
+# It writes nothing and recreates nothing — pure observation. SSHes with the same
+# credentials deploy.yml uses (HETZNER_HOST + HETZNER_SSH_KEY, user `fxmily`).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-resend-bounces
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Read Resend domain status + suppression taxonomy from prod
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> inspect Resend + suppression list (read-only)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/fxmily
+            COMPOSE="docker compose -f docker-compose.prod.yml"
+
+            echo "=================================================================="
+            echo "1. Effective RESEND_FROM in the running web container"
+            echo "=================================================================="
+            $COMPOSE exec -T web printenv RESEND_FROM 2>/dev/null || echo "(RESEND_FROM unset)"
+            echo
+
+            echo "=================================================================="
+            echo "2. Resend domain verification + per-record DNS status"
+            echo "   (API key used only in the Authorization header, never printed)"
+            echo "=================================================================="
+            $COMPOSE exec -T web node -e 'const k=process.env.RESEND_API_KEY; if(!k){console.log("NO_RESEND_API_KEY_IN_CONTAINER");process.exit(0);} const h={Authorization:"Bearer "+k}; (async()=>{ const list=await fetch("https://api.resend.com/domains",{headers:h}).then(r=>r.json()); const arr=Array.isArray(list&&list.data)?list.data:[]; if(arr.length===0){console.log("NO_DOMAINS_RETURNED", JSON.stringify(list).slice(0,300)); return;} for(const d of arr){ console.log("DOMAIN name="+d.name+" status="+d.status+" region="+d.region); const det=await fetch("https://api.resend.com/domains/"+d.id,{headers:h}).then(r=>r.json()); for(const rec of (det.records||[])){ console.log("  REC "+(rec.record||"")+" "+(rec.type||"")+" name="+(rec.name||"")+" status="+(rec.status||"")); } } })().catch(e=>console.log("RESEND_API_ERR",e.message));' || echo "(node probe failed)"
+            echo
+
+            echo "=================================================================="
+            echo "3. email_suppressions taxonomy (PII-free aggregate, no addresses)"
+            echo "=================================================================="
+            $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT COUNT(*) AS total_suppressed FROM email_suppressions;" 2>/dev/null || echo "(total query failed)"
+            $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT reason, COALESCE(bounce_type,'-') AS bounce_type, COALESCE(bounce_sub_type,'-') AS bounce_sub_type, COUNT(*) AS n, MIN(created_at)::date AS first_seen, MAX(created_at)::date AS last_seen FROM email_suppressions GROUP BY reason, bounce_type, bounce_sub_type ORDER BY n DESC;" 2>/dev/null || echo "(taxonomy query failed)"
+            echo
+            echo "OK: diagnostic complete (read-only, nothing changed)."

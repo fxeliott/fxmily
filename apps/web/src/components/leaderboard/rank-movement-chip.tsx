@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Minus, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUp, Minus, Sparkles } from 'lucide-react';
 
 import type { RankMovement } from '@/lib/leaderboard/service';
 
@@ -7,8 +7,9 @@ import { Pill } from '../ui/pill';
 /**
  * RankMovementChip — the "how did I move" affordance next to the viewer's rank
  * (dashboard widget + MyRankCard). A SMALLER rank is BETTER, so a climb is
- * painted calm-positive (green, up arrow, "+N"); a drop stays muted, never
- * alarming red (SPEC §2 no-FOMO posture: a slip is information, not a scolding).
+ * painted calm-positive (green, up arrow, "+N"); a slip down, and a member who
+ * fell OUT of the board entirely ("dropped"), both stay muted, never alarming
+ * red (SPEC §2 no-FOMO posture: a change is information, not a scolding).
  *
  * Server-safe (no client island): it only paints the already-derived
  * {@link RankMovement} from the leaderboard service. The visible label is terse
@@ -54,6 +55,20 @@ export function RankMovementChip({ movement }: RankMovementChipProps): React.Rea
         <ArrowDown className="h-3 w-3" strokeWidth={2.25} aria-hidden="true" />
         <span aria-hidden="true">{delta}</span>
         <span className="sr-only">{`Tu as perdu ${places} depuis le dernier classement.`}</span>
+      </Pill>
+    );
+  }
+
+  if (direction === 'dropped') {
+    // Held a rank before, holds none now: the member fell out of the board
+    // (complacent off-days shrank their window below the gate). Muted + calm,
+    // never red. Mark Douglas tone: an exit is information; the way back is
+    // check-ins (carried by the card/widget copy next to this chip).
+    return (
+      <Pill tone="mute" className="tracking-normal normal-case">
+        <ArrowDownToLine className="h-3 w-3" strokeWidth={2.25} aria-hidden="true" />
+        <span aria-hidden="true">Sorti</span>
+        <span className="sr-only">Tu es sorti du classement depuis le dernier calcul.</span>
       </Pill>
     );
   }

@@ -47,6 +47,10 @@ export function MyRankCard({
 }: MyRankCardProps): React.ReactElement {
   const ranked = me.rank !== null && me.score !== null;
   const onPodium = ranked && me.rank !== null && me.rank <= 3;
+  // J3 SCOPE 3 — held a rank and holds none now. The service feeds this card a
+  // movement with direction 'dropped' (computeRankMovement(null, previousRank)),
+  // so surface the exit honestly instead of the generic "presque là" not-yet copy.
+  const dropped = !ranked && movement?.direction === 'dropped';
   // Honest gap to the podium, in DISPLAYED (rounded) points. Ranking is decided
   // on the full-precision composite, so a rank-4 member can share the rounded
   // score of rank-3 (84.2 and 84.4 both show 84) or lose the podium purely on a
@@ -116,6 +120,13 @@ export function MyRankCard({
                       {ordinalSuffix(me.rank!)} sur {totalRanked}
                     </>
                   )}
+                </Pill>
+                {movement ? <RankMovementChip movement={movement} /> : null}
+              </div>
+            ) : dropped ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone="mute" dot>
+                  Hors classement
                 </Pill>
                 {movement ? <RankMovementChip movement={movement} /> : null}
               </div>
@@ -225,6 +236,11 @@ export function MyRankCard({
                 ) : null}
               </span>
             )}
+          </p>
+        ) : dropped ? (
+          <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
+            Tu es sorti du classement. Reprends tes check-ins et tu y reviens vite. Le classement
+            mesure ton travail et ta régularité, pas tes résultats de trading.
           </p>
         ) : showQualifyingCounter ? (
           <p className="text-[13px] leading-relaxed text-[var(--t-2)]">

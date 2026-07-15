@@ -128,8 +128,11 @@ export function podiumThresholdScore<T extends { rank: number | null; score: num
 // Rank movement — pure derivation from the snapshot log (no I/O)
 // =============================================================================
 
-/** Direction of a member's rank change since their previous ranked snapshot. */
-export type RankDirection = 'up' | 'down' | 'same' | 'new';
+/**
+ * Direction of a member's rank change since their previous ranked snapshot.
+ * `dropped` = they held a rank before and hold none now (fell out of the board).
+ */
+export type RankDirection = 'up' | 'down' | 'same' | 'new' | 'dropped';
 
 /** A member's rank delta since the last board they were ranked on. */
 export interface RankMovement {
@@ -145,12 +148,21 @@ export interface RankMovement {
  * `delta` (previousRank - currentRank) means the member climbed. Split into the
  * pure core (like {@link rankEntries}) so the movement chip and its unit tests
  * share one source of truth with zero I/O.
+ *
+ * When the current rank is null the member is not ranked on this board: if they
+ * HELD a rank before (`previousRank !== null`) they FELL OUT of the ranking —
+ * surfaced honestly as `dropped` (J3: complacent off-days must be visible, never
+ * masked as a neutral "Stable"). A member who was never ranked has no movement
+ * to show and collapses to `same`.
  */
 export function computeRankMovement(
   currentRank: number | null,
   previousRank: number | null,
 ): RankMovement {
-  if (currentRank === null) return { previousRank, delta: 0, direction: 'same' };
+  if (currentRank === null) {
+    const direction: RankDirection = previousRank === null ? 'same' : 'dropped';
+    return { previousRank, delta: 0, direction };
+  }
   if (previousRank === null) return { previousRank: null, delta: 0, direction: 'new' };
   const delta = previousRank - currentRank;
   const direction: RankDirection = delta > 0 ? 'up' : delta < 0 ? 'down' : 'same';

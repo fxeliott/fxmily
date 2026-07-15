@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // the action does, so window assertions match without pinning a literal date.
 // Imported statically (not via `await import`) so the binding is a real function.
 import { localDateOf, shiftLocalDate } from '@/lib/checkin/timezone';
+import { MAX_FREE_OFF_DAYS_PER_WINDOW } from '@/lib/schemas/off-day';
 
 /**
  * Tour 14 — Server Action tests for the "jour off" surface.
@@ -24,6 +25,10 @@ const authMock = vi.fn();
 // the call tuple to `[]`, which TS then rejects at `[0]`).
 const upsertMock = vi.fn(async (_args: unknown) => ({}));
 const deleteManyMock = vi.fn(async (_args: unknown) => ({ count: 1 }));
+// SCOPE 4 anti-gaming: the forward-window off-day count the cap check reads.
+// Defaults to 0 (below cap) so every pre-existing declare/range test keeps its
+// original behaviour; the cap-specific tests below override it per-case.
+const countMock = vi.fn(async (_args: unknown) => 0);
 const userUpdateMock = vi.fn(async (_args: unknown) => ({}));
 // `$transaction(ops[])` receives the array of already-invoked upsert promises;
 // it just awaits them all (mirroring Prisma's array form).
@@ -37,7 +42,7 @@ vi.mock('@/auth', () => ({
 
 vi.mock('@/lib/db', () => ({
   db: {
-    memberOffDay: { upsert: upsertMock, deleteMany: deleteManyMock },
+    memberOffDay: { upsert: upsertMock, deleteMany: deleteManyMock, count: countMock },
     user: { update: userUpdateMock },
     $transaction: transactionMock,
   },
@@ -71,6 +76,8 @@ beforeEach(() => {
   upsertMock.mockResolvedValue({});
   deleteManyMock.mockReset();
   deleteManyMock.mockResolvedValue({ count: 1 });
+  countMock.mockReset();
+  countMock.mockResolvedValue(0);
   userUpdateMock.mockReset();
   userUpdateMock.mockResolvedValue({});
   transactionMock.mockClear();
@@ -130,7 +137,7 @@ describe('declareOffDayAction', () => {
       expect.objectContaining({
         action: 'checkin.off_day.declared',
         userId: 'usr_1',
-        metadata: { date, hasReason: true },
+        metadata: { date, hasReason: true, overCap: false },
       }),
     );
     const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
@@ -292,7 +299,7 @@ describe('declareOffDayRangeAction', () => {
     expect(firstArg.create.reason).toBe('Vacances');
     // Audit is PII-free: bounds + count + boolean, never the reason text.
     const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
-    expect(auditArg.metadata).toEqual({ from, to, days: 4, hasReason: true });
+    expect(auditArg.metadata).toEqual({ from, to, days: 4, hasReason: true, overCap: false });
     expect(JSON.stringify(auditArg.metadata)).not.toContain('Vacances');
   });
 
@@ -344,6 +351,107 @@ describe('declareOffDayRangeAction', () => {
     const result = await declareOffDayRangeAction(today(), shiftLocalDate(today(), 2));
     expect(result).toEqual({ ok: false, error: 'unknown' });
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('declareOffDayAction cap enforcement (SCOPE 4)', () => {
+  it('allows an off day WITHOUT a reason while at or below the free cap', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    // 9 already declared in the forward window: the 10th (this one) is still free.
+    countMock.mockResolvedValueOnce(MAX_FREE_OFF_DAYS_PER_WINDOW - 1);
+    const date = shiftLocalDate(today(), 5);
+    const result = await declareOffDayAction(date);
+
+    expect(result).toEqual({ ok: true, date });
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'checkin.off_day.declared',
+        metadata: { date, hasReason: false, overCap: false },
+      }),
+    );
+  });
+
+  it('refuses cleanly when declaring BEYOND the cap without a reason', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    // 10 already declared: this one would be the 11th, so a reason becomes mandatory.
+    countMock.mockResolvedValueOnce(MAX_FREE_OFF_DAYS_PER_WINDOW);
+    const date = shiftLocalDate(today(), 5);
+    const result = await declareOffDayAction(date);
+
+    expect(result).toEqual({ ok: false, error: 'reason_required' });
+    expect(upsertMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts an over-cap off day WITH a reason and flags it for admin visibility', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    countMock.mockResolvedValueOnce(MAX_FREE_OFF_DAYS_PER_WINDOW);
+    const date = shiftLocalDate(today(), 5);
+    const result = await declareOffDayAction(date, 'Congés prolongés');
+
+    expect(result).toEqual({ ok: true, date });
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
+    // Admin sees the atypical declaration via a PII-free boolean, never the reason text.
+    expect(auditArg.metadata).toEqual({ date, hasReason: true, overCap: true });
+    expect(JSON.stringify(auditArg.metadata)).not.toContain('Congés');
+  });
+
+  it('excludes the declared date from its own cap count (idempotent re-declare)', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    countMock.mockResolvedValueOnce(0);
+    const date = shiftLocalDate(today(), 5);
+    await declareOffDayAction(date);
+
+    expect(countMock).toHaveBeenCalledTimes(1);
+    const countArg = countMock.mock.calls[0]?.[0] as {
+      where: { userId: string; date: { notIn?: Date[] } };
+    };
+    expect(countArg.where.userId).toBe('usr_1');
+    const excluded = (countArg.where.date.notIn ?? []).map((d) => d.toISOString().slice(0, 10));
+    expect(excluded).toContain(date);
+  });
+});
+
+describe('declareOffDayRangeAction cap enforcement (SCOPE 4)', () => {
+  it('allows a range that stays within the free cap without a reason', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    // 3 existing + 4 range days = 7, still at or below the cap.
+    countMock.mockResolvedValueOnce(3);
+    const from = shiftLocalDate(today(), 1);
+    const to = shiftLocalDate(today(), 4);
+    const result = await declareOffDayRangeAction(from, to);
+
+    expect(result).toMatchObject({ ok: true, from, to, days: 4 });
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a range that crosses the cap without a reason', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    // 10 existing + 4 range days = 14 > cap: a reason becomes mandatory.
+    countMock.mockResolvedValueOnce(MAX_FREE_OFF_DAYS_PER_WINDOW);
+    const from = shiftLocalDate(today(), 1);
+    const to = shiftLocalDate(today(), 4);
+    const result = await declareOffDayRangeAction(from, to);
+
+    expect(result).toEqual({ ok: false, error: 'reason_required' });
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts an over-cap range WITH a reason and flags it for admin visibility', async () => {
+    authMock.mockResolvedValueOnce(activeSession());
+    countMock.mockResolvedValueOnce(MAX_FREE_OFF_DAYS_PER_WINDOW);
+    const from = shiftLocalDate(today(), 1);
+    const to = shiftLocalDate(today(), 4);
+    const result = await declareOffDayRangeAction(from, to, 'Vacances');
+
+    expect(result).toMatchObject({ ok: true, from, to, days: 4 });
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+    const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
+    expect(auditArg.metadata).toEqual({ from, to, days: 4, hasReason: true, overCap: true });
+    expect(JSON.stringify(auditArg.metadata)).not.toContain('Vacances');
   });
 });
 

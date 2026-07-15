@@ -10,7 +10,7 @@ import {
 } from '@/app/checkin/off-day-actions';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
-import { OFF_DAY_FORWARD_HORIZON_DAYS } from '@/lib/schemas/off-day';
+import { MAX_FREE_OFF_DAYS_PER_WINDOW, OFF_DAY_FORWARD_HORIZON_DAYS } from '@/lib/schemas/off-day';
 
 /**
  * `<OffDaysManager>` — the member's off-day (jour off) settings island (Tour 14),
@@ -71,6 +71,7 @@ export function OffDaysManager({
   const [message, setMessage] = useState('');
   const [isPending, startTransition] = useTransition();
   const rangeErrorRef = useRef<HTMLParagraphElement>(null);
+  const reasonInputRef = useRef<HTMLInputElement>(null);
 
   // Declare is forward-only: the range inputs never offer a day before today or
   // beyond the +30 horizon (no offered-then-rejected day). Cancelling a recent
@@ -126,6 +127,11 @@ export function OffDaysManager({
           for (const day of res.upcoming) byDate.set(day.date, day);
           return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
         });
+      } else if (res.error === 'reason_required') {
+        setMessage(
+          `Au-delà de ${MAX_FREE_OFF_DAYS_PER_WINDOW} jours off sur ${OFF_DAY_FORWARD_HORIZON_DAYS} jours, une raison devient nécessaire. Ajoute-la ci-dessus, puis repose ces jours.`,
+        );
+        reasonInputRef.current?.focus();
       } else {
         setMessage(
           res.error === 'invalid_input'
@@ -249,6 +255,7 @@ export function OffDaysManager({
               Raison (optionnelle)
             </label>
             <input
+              ref={reasonInputRef}
               id="off-range-reason"
               type="text"
               value={reason}
@@ -256,8 +263,13 @@ export function OffDaysManager({
               placeholder="Vacances, formation, repos..."
               onChange={(e) => setReason(e.target.value)}
               disabled={isPending}
+              aria-describedby="off-range-reason-hint"
               className="rounded-control w-full border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--b-acc)] focus-visible:ring-2 focus-visible:ring-[var(--b-acc)] focus-visible:outline-none"
             />
+            <p id="off-range-reason-hint" className="text-xs text-[var(--t-3)]">
+              Au-delà de {MAX_FREE_OFF_DAYS_PER_WINDOW} jours off sur {OFF_DAY_FORWARD_HORIZON_DAYS}{' '}
+              jours, une raison devient nécessaire.
+            </p>
           </div>
           <button
             type="submit"

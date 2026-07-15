@@ -10,7 +10,9 @@ import { MemberCorrectionsFollowupPanel } from '@/components/admin/member-correc
 import { listAnnotationObjectivesForMember } from '@/lib/coaching/micro-objective';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { MemberCheckinsPanel } from '@/components/admin/member-checkins-panel';
+import { MemberOffDaysPanel } from '@/components/admin/member-off-days-panel';
 import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
+import { getMemberOffDayAdminSummary } from '@/lib/checkin/off-days-admin';
 import { listMemberCheckinsAsAdmin } from '@/lib/checkin/service';
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
 import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
@@ -99,6 +101,7 @@ function parseTab(
   | 'trades'
   | 'training'
   | 'checkins'
+  | 'off-days'
   | 'pretrade'
   | 'mark-douglas'
   | 'weekly-reports'
@@ -115,6 +118,7 @@ function parseTab(
   if (value === 'trades') return 'trades';
   if (value === 'training') return 'training';
   if (value === 'checkins') return 'checkins';
+  if (value === 'off-days') return 'off-days';
   if (value === 'pretrade') return 'pretrade';
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
@@ -349,6 +353,15 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // admin-only Modération tab. Fetched only when the tab is active; bounded
   // by the service (take=50). Admin-only surface, never shown to the member.
   const moderationHistory = tab === 'moderation' ? await listModerationHistory(memberId) : null;
+
+  // J3 "classement pour tous" SCOPE 4 — read-only admin visibility of the
+  // member's self-declared off days in the forward cap window. Recomputes the
+  // over-cap flag from live rows (same threshold as the declaration layer), so
+  // the admin sees the atypical (past-cap, reason-required) declarations. This
+  // exposes DECLARATIONS to curb leaderboard gaming, never trading performance
+  // (firewall §21.5 untouched).
+  const offDaySummary =
+    tab === 'off-days' ? await getMemberOffDayAdminSummary(memberId, detail.timezone) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -620,6 +633,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           hasAvatar={detail.hasAvatar}
           history={moderationHistory}
         />
+      ) : null}
+      {tab === 'off-days' && offDaySummary !== null ? (
+        <MemberOffDaysPanel summary={offDaySummary} />
       ) : null}
     </main>
   );

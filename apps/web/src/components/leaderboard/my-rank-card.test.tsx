@@ -47,6 +47,8 @@ function row(over: Partial<LeaderboardRowView> = {}): LeaderboardRowView {
     isViewer: true,
     status: 'ok',
     breakdown: { score: 28, status: 'ok', parts: PARTS, sample: { sufficient: true } },
+    activeDays: 7,
+    minActiveDays: 7,
     ...over,
   };
 }
@@ -105,5 +107,54 @@ describe('MyRankCard — honest gap to the podium', () => {
 
     expect(container.textContent).toMatch(/te manque\s*10\s*points/i);
     expect(container.textContent).toMatch(/pour entrer dans le top 3/i);
+  });
+});
+
+describe('MyRankCard — qualification counter (SCOPE 2)', () => {
+  // A not-yet-ranked member (rank null) sees the exact "X/N jours actifs — il
+  // t'en reste M" counter instead of the vague old copy. N is the REAL gate
+  // threshold applied to them (may shrink below 7 with justified off-days).
+  it('shows the exact "X/N jours actifs — il t\'en reste M" counter', () => {
+    const { container } = render(
+      <MyRankCard
+        me={row({ rank: null, score: null, activeDays: 3, minActiveDays: 7 })}
+        totalRanked={0}
+        thirdScore={null}
+      />,
+    );
+
+    expect(container.textContent).toMatch(/3\/7\s*jours actifs/i);
+    expect(container.textContent).toMatch(/il t'en reste\s*4/i);
+    // Never P&L on the surface (firewall §21.5): the reassurance stays behavioral.
+    expect(container.textContent).toMatch(/pas tes résultats de trading/i);
+  });
+
+  it('drops the "il t\'en reste" clause once the member has reached the gate', () => {
+    const { container } = render(
+      <MyRankCard
+        me={row({ rank: null, score: null, activeDays: 7, minActiveDays: 7 })}
+        totalRanked={0}
+        thirdScore={null}
+      />,
+    );
+
+    expect(container.textContent).toMatch(/7\/7\s*jours actifs/i);
+    expect(container.textContent).not.toMatch(/il t'en reste/i);
+    expect(container.textContent).toMatch(/ton rang se calcule cette nuit/i);
+  });
+
+  it('falls back to the generic copy when the counter data is unavailable', () => {
+    // Pre-foundation snapshots (or a non-viewer edge) leave the fields null →
+    // the card must never render "null/7", it shows the calm generic line.
+    const { container } = render(
+      <MyRankCard
+        me={row({ rank: null, score: null, activeDays: null, minActiveDays: null })}
+        totalRanked={0}
+        thirdScore={null}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/null/i);
+    expect(container.textContent).toMatch(/encore quelques jours de check-ins/i);
   });
 });

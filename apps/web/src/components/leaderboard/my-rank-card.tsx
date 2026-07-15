@@ -47,6 +47,10 @@ export function MyRankCard({
 }: MyRankCardProps): React.ReactElement {
   const ranked = me.rank !== null && me.score !== null;
   const onPodium = ranked && me.rank !== null && me.rank <= 3;
+  // J3 SCOPE 3 — held a rank and holds none now. The service feeds this card a
+  // movement with direction 'dropped' (computeRankMovement(null, previousRank)),
+  // so surface the exit honestly instead of the generic "presque là" not-yet copy.
+  const dropped = !ranked && movement?.direction === 'dropped';
   // Honest gap to the podium, in DISPLAYED (rounded) points. Ranking is decided
   // on the full-precision composite, so a rank-4 member can share the rounded
   // score of rank-3 (84.2 and 84.4 both show 84) or lose the podium purely on a
@@ -57,6 +61,20 @@ export function MyRankCard({
   const rawGap =
     ranked && !onPodium && thirdScore !== null && me.score !== null ? thirdScore - me.score : null;
   const gapToPodium = rawGap !== null && rawGap > 0 ? rawGap : null;
+
+  // J3 SCOPE 2 — exact qualification counter for a not-yet-ranked member. `me`
+  // is always the signed-in member's own row, so these viewer-only fields are
+  // populated; they are typed `number | null`, so guard before rendering so the
+  // card never shows "null/7". The denominator is the REAL gate threshold
+  // applied to this member (min(7, opportunityDays) — it shrinks with justified
+  // off-days), which is exactly the gate transparency SCOPE 2 asks for.
+  const myActiveDays = me.activeDays;
+  const myMinActiveDays = me.minActiveDays;
+  const showQualifyingCounter = !ranked && myActiveDays !== null && myMinActiveDays !== null;
+  const remainingActiveDays =
+    myActiveDays !== null && myMinActiveDays !== null
+      ? Math.max(0, myMinActiveDays - myActiveDays)
+      : 0;
 
   // Personalized signals (read-time, migration-free — same `breakdown` the card
   // already holds). `weakest` = the lever with the most room to climb, so the
@@ -102,6 +120,13 @@ export function MyRankCard({
                       {ordinalSuffix(me.rank!)} sur {totalRanked}
                     </>
                   )}
+                </Pill>
+                {movement ? <RankMovementChip movement={movement} /> : null}
+              </div>
+            ) : dropped ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone="mute" dot>
+                  Hors classement
                 </Pill>
                 {movement ? <RankMovementChip movement={movement} /> : null}
               </div>
@@ -211,6 +236,27 @@ export function MyRankCard({
                 ) : null}
               </span>
             )}
+          </p>
+        ) : dropped ? (
+          <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
+            Tu es sorti du classement. Reprends tes check-ins et tu y reviens vite. Le classement
+            mesure ton travail et ta régularité, pas tes résultats de trading.
+          </p>
+        ) : showQualifyingCounter ? (
+          <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
+            <strong className="font-semibold text-[var(--t-1)]">
+              {myActiveDays}/{myMinActiveDays} jours actifs
+            </strong>
+            {remainingActiveDays > 0 ? (
+              <>
+                , il t&apos;en reste{' '}
+                <strong className="font-semibold text-[var(--t-1)]">{remainingActiveDays}</strong>{' '}
+                pour entrer au classement.
+              </>
+            ) : (
+              ', ton rang se calcule cette nuit.'
+            )}{' '}
+            Seuls les jours où tu fais un check-in comptent, pas tes résultats de trading.
           </p>
         ) : !ranked ? (
           <p className="text-[13px] leading-relaxed text-[var(--t-2)]">

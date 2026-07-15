@@ -30,6 +30,10 @@ export async function LeaderboardRankWidget({
   const mine = await getMyLeaderboardRank(userId);
   const ranked = mine !== null && mine.rank !== null && mine.score !== null;
   const onPodium = ranked && mine.rank !== null && mine.rank <= 3;
+  // J3 SCOPE 3 — held a rank before, holds none now: getMyLeaderboardRank feeds a
+  // movement with direction 'dropped'. Surface the exit calmly (Mark Douglas tone),
+  // never the generic "bientôt au classement" (which reads as never-ranked).
+  const dropped = mine !== null && mine.rank === null && mine.movement.direction === 'dropped';
 
   // Personalized dashboard signals (read-time, no extra query — `breakdown` is
   // already on the React.cache-shared read). `weakest` names the lever to push;
@@ -42,13 +46,17 @@ export async function LeaderboardRankWidget({
   const weakest = weakestKey ? PILLAR_META_BY_KEY[weakestKey] : null;
 
   const headline = !ranked
-    ? 'Bientôt au classement'
+    ? dropped
+      ? 'Sorti du classement'
+      : 'Bientôt au classement'
     : onPodium
       ? 'Tu es dans le top 3'
       : `${ordinal(mine.rank!)} sur ${mine.totalRanked}`;
 
   const description = !ranked
-    ? 'Encore quelques jours de check-ins et ton nom apparaît. Le classement mesure ton travail, pas tes gains.'
+    ? dropped
+      ? 'Reprends tes check-ins et tu y reviens. Le classement mesure ton travail, pas tes gains.'
+      : 'Encore quelques jours de check-ins et ton nom apparaît. Le classement mesure ton travail, pas tes gains.'
     : onPodium
       ? 'Continue ton travail au quotidien pour tenir ta place sur le podium.'
       : lowScore
@@ -76,7 +84,7 @@ export async function LeaderboardRankWidget({
             <span className="t-eyebrow text-[var(--t-3)]">Classement</span>
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[15px] font-semibold text-[var(--t-1)]">{headline}</p>
-              {ranked ? <RankMovementChip movement={mine.movement} /> : null}
+              {mine && (ranked || dropped) ? <RankMovementChip movement={mine.movement} /> : null}
               {lowScore ? (
                 <Pill tone="warn" dot>
                   Score bas

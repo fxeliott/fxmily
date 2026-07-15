@@ -15,7 +15,13 @@ import { getLatestBehavioralScore } from '@/lib/scoring/service';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 
-import { computeLeaderboardScore, LEADERBOARD_WINDOW_DAYS, preciseScoreFromParts } from './builder';
+import {
+  computeLeaderboardGate,
+  computeLeaderboardScore,
+  LEADERBOARD_MIN_ACTIVE_DAYS,
+  LEADERBOARD_WINDOW_DAYS,
+  preciseScoreFromParts,
+} from './builder';
 import {
   computeRankMovement,
   countActivePillars,
@@ -154,6 +160,7 @@ interface ComputedEntry extends RankableEntry {
   result: LeaderboardScore;
   activeDays: number;
   activePillars: number;
+  minActiveDays: number;
 }
 
 /**
@@ -199,6 +206,11 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
       slice.map(async (u) => {
         const { input, streak } = await gatherMember(u.id, instant, windowStartUtc, anchorUtc);
         const result = computeLeaderboardScore(input);
+        // The justification-aware min-active-days gate this member was ranked
+        // against, from the single source of truth. Persisted in the sample-size
+        // JSON so the member card can render the exact "X/N jours actifs — il
+        // t'en reste M" counter without re-deriving (never diverging from) it.
+        const { minActiveDays } = computeLeaderboardGate(input);
         return {
           userId: u.id,
           score: result.score,
@@ -212,6 +224,7 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
           result,
           activeDays: input.activeDays,
           activePillars: countActivePillars(result),
+          minActiveDays,
         } satisfies ComputedEntry;
       }),
     );
@@ -241,6 +254,7 @@ export async function recomputeLeaderboard(now?: Date): Promise<LeaderboardRecom
       activeDays: e.activeDays,
       windowDays: LEADERBOARD_WINDOW_DAYS,
       activePillars: e.activePillars,
+      minActiveDays: e.minActiveDays,
     };
     await db.leaderboardSnapshot.upsert({
       where: { userId_date: { userId: e.userId, date: dateUtc } },
@@ -289,6 +303,51 @@ export interface LeaderboardRowView {
   status: 'ok' | 'insufficient_data';
   /** Full ScoreResult for the "Pourquoi ce rang ?" breakdown. */
   breakdown: LeaderboardScore;
+  /**
+   * Viewer-only: days actually counted toward qualification (the X in
+   * "X/N jours actifs"). `null` for every other member — a member's day count
+   * never travels on the client wire for anyone but themselves (§16 data
+   * minimisation).
+   */
+  activeDays: number | null;
+  /**
+   * Viewer-only: the gate threshold N. SSOT = `computeLeaderboardGate`,
+   * persisted in the `sample_size` JSONB by the nightly recompute; read here
+   * so the member card renders the exact "il t'en reste M" counter without
+   * re-deriving — and never diverging from — the gate the ranking applied.
+   * `null` for other members.
+   */
+  minActiveDays: number | null;
+}
+
+/**
+ * A member who is checking in but has NOT reached the qualification gate yet
+ * (`rank === null`), surfaced in the public "En qualification" section (J3
+ * SCOPE 1) so every active member appears on `/classement` from day one and
+ * knows where they stand.
+ *
+ * Unlike {@link LeaderboardRowView} — whose `activeDays`/`minActiveDays` stay
+ * viewer-only (§16 data minimisation) — the qualifying progression is a
+ * DELIBERATE public signal: the whole point of "classement pour tous" is that
+ * the cohort sees everyone climbing in. It is therefore a SEPARATE type, never
+ * a re-use of the null-gated ranked fields, so the two privacy contracts can't
+ * be confused. Opt-out is still honoured upstream (an opted-out member never
+ * appears here for others, only for themselves). Progression is behavioral
+ * only — days checked in, NEVER trading results (firewall §21.5).
+ */
+export interface QualifyingRowView {
+  userId: string;
+  firstName: string;
+  /** Read URL for the member's avatar, or null → render initials. */
+  avatarUrl: string | null;
+  /** Uppercase initials fallback (first + last). */
+  initials: string;
+  /** Days counted toward qualification so far (the X in "X/N jours actifs"). */
+  activeDays: number;
+  /** The gate threshold N applied to this member (min(7, opportunityDays)). */
+  minActiveDays: number;
+  /** True for the signed-in viewer's own row (self-highlight + "(toi)"). */
+  isViewer: boolean;
 }
 
 export interface LeaderboardBoardView {
@@ -298,6 +357,13 @@ export interface LeaderboardBoardView {
   rows: LeaderboardRowView[];
   /** The viewer's own row (always present if they have a snapshot). */
   me: LeaderboardRowView | null;
+  /**
+   * Not-yet-ranked, VISIBLE members (`rank === null`, opted-out hidden except
+   * the viewer), each with their PUBLIC "X/N jours actifs" progression — the
+   * "En qualification" section (J3 SCOPE 1). Sorted closest-to-qualifying
+   * first, then by first name for a stable order.
+   */
+  qualifying: QualifyingRowView[];
   /** Total members with a real rank on this date (the "sur N" denominator). */
   totalRanked: number;
   /** Score of the TRUE `rank === 3` member — read from the pre-filter set (which
@@ -316,6 +382,7 @@ interface SnapshotUserRow {
   rank: number | null;
   status: string;
   components: unknown;
+  sampleSize: unknown;
   user: {
     firstName: string | null;
     lastName: string | null;
@@ -327,6 +394,16 @@ interface SnapshotUserRow {
 
 function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
   const components = row.components as LeaderboardComponentsJson;
+  const isViewer = row.userId === viewerId;
+  // The qualification counter (J3 SCOPE 2) is viewer-only: the exact
+  // "X/N jours actifs" pair is derived from the persisted `sample_size` JSONB
+  // (SSOT = computeLeaderboardGate) and never leaves the server for anyone but
+  // the signed-in member (§16 data minimisation). `sampleSize` is null on
+  // pre-foundation snapshots (posted before minActiveDays was persisted), so
+  // fall back to the score's own sample-day count / the static gate constant.
+  const sample = isViewer ? (row.sampleSize as LeaderboardSampleSizeJson | null) : null;
+  const activeDays = isViewer ? (sample?.activeDays ?? components.score.sample.days ?? 0) : null;
+  const minActiveDays = isViewer ? (sample?.minActiveDays ?? LEADERBOARD_MIN_ACTIVE_DAYS) : null;
   return {
     userId: row.userId,
     rank: row.rank,
@@ -334,9 +411,38 @@ function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
     firstName: row.user.firstName?.trim() || 'Membre',
     avatarUrl: avatarUrlOf(row.user.avatarKey, row.user.image),
     initials: initialsOf(row.user.firstName, row.user.lastName),
-    isViewer: row.userId === viewerId,
+    isViewer,
     status: row.status === 'insufficient_data' ? 'insufficient_data' : 'ok',
     breakdown: components.score,
+    activeDays,
+    minActiveDays,
+  };
+}
+
+/**
+ * Build a {@link QualifyingRowView} for a not-yet-ranked member. Unlike
+ * {@link toRowView}, the `activeDays`/`minActiveDays` pair is NOT viewer-gated:
+ * the "X/N jours actifs" progression is a DELIBERATE public signal (the whole
+ * point of "classement pour tous"), so it is derived unconditionally here. SSOT
+ * for the pair is the persisted `sample_size` JSONB (`computeLeaderboardGate`);
+ * pre-foundation snapshots (posted before `minActiveDays` was persisted) fall
+ * back to the score's own sample-day count / the static gate constant — same
+ * fallback chain as `toRowView`. Progression is behavioral only (days checked
+ * in), NEVER a trading result (firewall §21.5).
+ */
+function toQualifyingRowView(row: SnapshotUserRow, viewerId: string): QualifyingRowView {
+  const components = row.components as LeaderboardComponentsJson;
+  const sample = row.sampleSize as LeaderboardSampleSizeJson | null;
+  const activeDays = sample?.activeDays ?? components.score.sample.days ?? 0;
+  const minActiveDays = sample?.minActiveDays ?? LEADERBOARD_MIN_ACTIVE_DAYS;
+  return {
+    userId: row.userId,
+    firstName: row.user.firstName?.trim() || 'Membre',
+    avatarUrl: avatarUrlOf(row.user.avatarKey, row.user.image),
+    initials: initialsOf(row.user.firstName, row.user.lastName),
+    activeDays,
+    minActiveDays,
+    isViewer: row.userId === viewerId,
   };
 }
 
@@ -363,7 +469,8 @@ const latestBoardDate = cache(async (): Promise<Date | null> => {
 export const getLeaderboardBoard = cache(
   async (viewerId: string): Promise<LeaderboardBoardView> => {
     const date = await latestBoardDate();
-    if (!date) return { date: null, rows: [], me: null, totalRanked: 0, thirdScore: null };
+    if (!date)
+      return { date: null, rows: [], me: null, qualifying: [], totalRanked: 0, thirdScore: null };
 
     const raw = await db.leaderboardSnapshot.findMany({
       // Firewall/state hardening: a snapshot row survives a member being
@@ -378,6 +485,7 @@ export const getLeaderboardBoard = cache(
         rank: true,
         status: true,
         components: true,
+        sampleSize: true,
         user: {
           select: {
             firstName: true,
@@ -396,6 +504,25 @@ export const getLeaderboardBoard = cache(
     const rows = mapped
       .filter((m) => m.row.rank !== null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
       .map((m) => m.row);
+    // "En qualification" (J3 SCOPE 1): the INVERSE filter — members still
+    // checking in but not yet ranked (`rank === null`). Same opt-out guard as
+    // `rows` (hidden from others, always visible to the viewer). Sorted
+    // closest-to-qualifying first (most active days), then by first name for a
+    // stable, deterministic order. Each row carries its PUBLIC "X/N jours
+    // actifs" progression.
+    const qualifying = mapped
+      .filter((m) => m.row.rank === null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
+      .map((m) => toQualifyingRowView(m.raw as SnapshotUserRow, viewerId))
+      .sort(
+        (a, b) =>
+          b.activeDays - a.activeDays ||
+          a.firstName.localeCompare(b.firstName, 'fr') ||
+          // Final, stable tiebreak on userId (mirrors the ranked path in
+          // `ranking.ts`) so two members with the same activeDays AND firstName
+          // keep a deterministic order across snapshots, since Postgres leaves
+          // `rank null` rows unordered.
+          (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+      );
     const totalRanked = raw.filter((r) => r.rank !== null).length;
     // Podium threshold = the score of the member holding TRUE `rank === 3`, keyed
     // on the real rank (never a positional index) so it stays COHERENT with the
@@ -411,6 +538,7 @@ export const getLeaderboardBoard = cache(
       date: date.toISOString().slice(0, 10) as LocalDateString,
       rows,
       me,
+      qualifying,
       totalRanked,
       thirdScore,
     };

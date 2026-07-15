@@ -5,6 +5,7 @@ export type MemberTabKey =
   | 'trades'
   | 'training'
   | 'checkins'
+  | 'off-days'
   | 'pretrade'
   | 'mark-douglas'
   | 'weekly-reports'
@@ -33,6 +34,11 @@ const TABS: readonly TabDefinition[] = [
   { key: 'trades', label: 'Trades' },
   { key: 'training', label: 'Entraînement' },
   { key: 'checkins', label: 'Check-ins' },
+  // J3 "classement pour tous" SCOPE 4 — admin read-only view of the member's
+  // self-declared off days in the forward cap window: which are motivated
+  // (reason attached, past the free cap) vs free, and whether they are over cap.
+  // The "visible admin" half of the anti-gaming lever.
+  { key: 'off-days', label: 'Jours off' },
   // S7 §22-23 — admin read-only view of the member's pre-trade discipline
   // (reason to trade, plan alignment, SL pre-defined, reason×outcome).
   // Reuses the member-facing userId-scoped cards. Carbone pattern §7.7.

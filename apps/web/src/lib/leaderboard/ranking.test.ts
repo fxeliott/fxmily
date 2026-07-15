@@ -181,10 +181,18 @@ describe('computeRankMovement', () => {
     });
   });
 
-  it('reports an unranked current member as same (no movement to show)', () => {
-    // The chip is only rendered when ranked; an unranked member never surfaces
-    // a delta, so a null current rank collapses to a neutral same.
-    expect(computeRankMovement(null, 7)).toEqual({ previousRank: 7, delta: 0, direction: 'same' });
+  it('reports a member who fell out of the ranking as dropped (was ranked, now not)', () => {
+    // Previously 7th, now unranked: complacent off-days shrank the rolling
+    // window back below the gate. Surfaced honestly as 'dropped' (J3), never
+    // masked as a neutral 'same'/"Stable".
+    expect(computeRankMovement(null, 7)).toEqual({
+      previousRank: 7,
+      delta: 0,
+      direction: 'dropped',
+    });
+  });
+
+  it('reports a never-ranked member as same (no previous rank, no movement to show)', () => {
     expect(computeRankMovement(null, null)).toEqual({
       previousRank: null,
       delta: 0,

@@ -9,6 +9,7 @@ import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timez
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
 import {
+  MAX_FREE_OFF_DAYS_PER_WINDOW,
   OFF_DAY_CANCEL_BACK_HORIZON_DAYS,
   OFF_DAY_FORWARD_HORIZON_DAYS,
   cancelOffDaySchema,
@@ -50,7 +51,7 @@ import {
 
 export type OffDayActionState =
   | { ok: true; date: string }
-  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'unknown' };
+  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'reason_required' | 'unknown' };
 
 /**
  * TZ-aware second pass: the day must sit in `[today, today+30]` in the MEMBER's
@@ -76,6 +77,45 @@ function isWithinCancelWindow(date: string, timezone: string): boolean {
   return date >= lower && date <= upper;
 }
 
+/**
+ * SCOPE 4 anti-gaming (J3 "classement pour tous"): count the member's ALREADY
+ * declared off days that fall in the forward window `[today, today+30]`,
+ * EXCLUDING the date(s) being declared in this very call (so re-declaring an
+ * existing day is idempotent and never double-counts toward the cap). Off days
+ * are forward-declared, so this forward window is the natural denominator for
+ * the free cap. Degrades to 0 on a DB hiccup (fail-open: an infra blip must
+ * never block a legitimate declaration — mirrors the leaderboard
+ * `offday_count_degraded` posture in `service.ts`).
+ */
+async function countOffDaysInForwardWindow(
+  userId: string,
+  timezone: string,
+  excludeDates: Date[],
+): Promise<number> {
+  const today = localDateOf(new Date(), timezone);
+  const upper = shiftLocalDate(today, OFF_DAY_FORWARD_HORIZON_DAYS);
+  try {
+    return await db.memberOffDay.count({
+      where: {
+        userId,
+        date: {
+          gte: parseLocalDate(today),
+          lte: parseLocalDate(upper),
+          ...(excludeDates.length > 0 ? { notIn: excludeDates } : {}),
+        },
+      },
+    });
+  } catch (err) {
+    reportWarning('checkin.off_day.cap', 'count_degraded', {
+      code:
+        err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : 'unknown',
+    });
+    return 0;
+  }
+}
+
 export async function declareOffDayAction(
   date?: string,
   reason?: string,
@@ -99,6 +139,19 @@ export async function declareOffDayAction(
   }
 
   const dateValue = parseLocalDate(parsed.data.date);
+
+  // SCOPE 4 anti-gaming (J3 "classement pour tous"): beyond the free cap, a
+  // reason becomes MANDATORY. A genuine occasional day off stays frictionless
+  // (reason optional below the cap); a member front-loading empty off days to
+  // soften the leaderboard gate is asked to justify each one past the cap, and
+  // the over-cap declaration is flagged for admin visibility. This is the ONLY
+  // anti-gaming lever — the leaderboard gate math (#477/#479) is untouched.
+  const existingOffDays = await countOffDaysInForwardWindow(session.user.id, timezone, [dateValue]);
+  const overCap = existingOffDays + 1 > MAX_FREE_OFF_DAYS_PER_WINDOW;
+  if (overCap && parsed.data.reason === null) {
+    return { ok: false, error: 'reason_required' };
+  }
+
   try {
     await db.memberOffDay.upsert({
       where: { userId_date: { userId: session.user.id, date: dateValue } },
@@ -118,8 +171,9 @@ export async function declareOffDayAction(
   await logAudit({
     action: 'checkin.off_day.declared',
     userId: session.user.id,
-    // PII-free: the opaque civil date + whether a reason was given, never the text.
-    metadata: { date: parsed.data.date, hasReason: parsed.data.reason !== null },
+    // PII-free: the opaque civil date + whether a reason was given (never the
+    // text) + whether this declaration crossed the free cap (admin visibility).
+    metadata: { date: parsed.data.date, hasReason: parsed.data.reason !== null, overCap },
   });
 
   // The off day changes the streak/reminder/scoring surfaces + any calendar view.
@@ -190,7 +244,7 @@ export type OffDayRangeActionState =
        */
       upcoming: Array<{ date: string; label: string; reason: string | null }>;
     }
-  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'unknown' };
+  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'reason_required' | 'unknown' };
 
 export async function declareOffDayRangeAction(
   from: string,
@@ -221,6 +275,17 @@ export async function declareOffDayRangeAction(
     dates.push(d);
   }
 
+  // SCOPE 4 anti-gaming (J3): count existing off days in the forward window
+  // EXCLUDING this range's own days (re-declaring an overlapping span stays
+  // idempotent), then check the post-declaration total against the free cap.
+  // Beyond the cap, a shared reason becomes MANDATORY.
+  const dateValues = dates.map((d) => parseLocalDate(d));
+  const existingOffDays = await countOffDaysInForwardWindow(session.user.id, timezone, dateValues);
+  const overCap = existingOffDays + dates.length > MAX_FREE_OFF_DAYS_PER_WINDOW;
+  if (overCap && parsed.data.reason === null) {
+    return { ok: false, error: 'reason_required' };
+  }
+
   try {
     // One transaction, one idempotent upsert per day: re-declaring an existing
     // day updates its reason (never a duplicate row), and a partial failure
@@ -248,12 +313,14 @@ export async function declareOffDayRangeAction(
   await logAudit({
     action: 'checkin.off_day.range_declared',
     userId: session.user.id,
-    // PII-free: opaque bounds + day count + whether a reason was given.
+    // PII-free: opaque bounds + day count + whether a reason was given + whether
+    // the batch crossed the free cap (admin visibility of atypical declarations).
     metadata: {
       from: parsed.data.from,
       to: parsed.data.to,
       days: dates.length,
       hasReason: parsed.data.reason !== null,
+      overCap,
     },
   });
 
@@ -277,7 +344,7 @@ export async function declareOffDayRangeAction(
 /** Result of the weekends-off toggle — the value that is now persisted. */
 export type WeekendsOffActionState =
   | { ok: true; weekendsOff: boolean }
-  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'unknown' };
+  | { ok: false; error: 'unauthorized' | 'invalid_input' | 'reason_required' | 'unknown' };
 
 export async function updateWeekendsOffAction(value: boolean): Promise<WeekendsOffActionState> {
   const session = await auth();

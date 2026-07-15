@@ -43,6 +43,28 @@ export const OFF_DAY_CANCEL_BACK_HORIZON_DAYS = 7;
 /** Small backward tolerance to absorb browser/server timezone drift (±1 day). */
 const OFF_DAY_PAST_TOLERANCE_DAYS = 1;
 
+/**
+ * SCOPE 4 (J3 "classement pour tous") — anti-gaming cap on self-declared off
+ * days per rolling 30-day forward window. AT or below the cap, a reason stays
+ * OPTIONAL (the existing UX is untouched — a genuine occasional day off needs
+ * no justification). BEYOND the cap, a free-text reason becomes MANDATORY at
+ * the ACTION layer (the schema keeps `reason` optional because only the action
+ * knows the running count). This is the ONLY anti-gaming lever: it deliberately
+ * does NOT clamp the leaderboard gate math in `builder.ts` — the adaptive
+ * off-day gate (#477/#479) is a SETTLED decision and re-litigating it here would
+ * flatten `minActiveDays` back to a constant 7 (the gate only ever drops below
+ * 7 once justifiedOffDays > 23). A complacency off-day has no genuine reason so
+ * it is refused/flagged; a real absence (with a reason) is allowed and the
+ * settled gate applies unchanged.
+ *
+ * The threshold is the CONSERVATIVE choice (SPEC "prendre la plus conservatrice
+ * et la documenter, réversible"): 10 keeps ~8-9 weekend markers over 30 forward
+ * days comfortably free, so only a member front-loading a whole month of empty
+ * off days hits it. Reversible: bumping this constant is a one-line change with
+ * no migration (off-day counting is derived, never persisted as a cap).
+ */
+export const MAX_FREE_OFF_DAYS_PER_WINDOW = 10;
+
 const offDayDateInWindow = localDateSchema
   .refine(
     (s) => {

@@ -17,6 +17,16 @@ name: Diagnose Resend bounces
 #      bounce_sub_type / count / date range) with NO email addresses, so nothing
 #      personal reaches the public Actions log.
 #   3. The effective RESEND_FROM (a public sender address, safe to print).
+#   4. Whether RESEND_WEBHOOK_SECRET is present in the web container (presence +
+#      length only, the value is NEVER printed). Absent => the webhook returns
+#      503 and no bounce is ever recorded.
+#   5. The Resend webhooks registered on the account (is our own
+#      /api/webhooks/resend endpoint wired, and for which events).
+#   6. The `email_events` taxonomy — the RAW upstream truth. This table persists
+#      EVERY verified webhook event; `email_suppressions` is only the filtered
+#      hard-bounce/complaint subset. If email_events is empty, the webhook is not
+#      firing against prod; if it is full of `Transient` bounces, the "Bounced"
+#      count in the dashboard is harmless soft bounces.
 #
 # It writes nothing and recreates nothing — pure observation. SSHes with the same
 # credentials deploy.yml uses (HETZNER_HOST + HETZNER_SSH_KEY, user `fxmily`).
@@ -66,4 +76,28 @@ jobs:
             $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT COUNT(*) AS total_suppressed FROM email_suppressions;" 2>/dev/null || echo "(total query failed)"
             $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT reason, COALESCE(bounce_type,'-') AS bounce_type, COALESCE(bounce_sub_type,'-') AS bounce_sub_type, COUNT(*) AS n, MIN(created_at)::date AS first_seen, MAX(created_at)::date AS last_seen FROM email_suppressions GROUP BY reason, bounce_type, bounce_sub_type ORDER BY n DESC;" 2>/dev/null || echo "(taxonomy query failed)"
             echo
+
+            echo "=================================================================="
+            echo "4. Is RESEND_WEBHOOK_SECRET present in the web container?"
+            echo "   (only presence + length are printed, NEVER the value)"
+            echo "=================================================================="
+            $COMPOSE exec -T web node -e 'const v=process.env.RESEND_WEBHOOK_SECRET; console.log(v?("RESEND_WEBHOOK_SECRET=PRESENT ("+v.length+" chars)"):"RESEND_WEBHOOK_SECRET=ABSENT");' 2>/dev/null || echo "(webhook secret probe failed)"
+            echo
+
+            echo "=================================================================="
+            echo "5. Resend webhooks registered on the account"
+            echo "   (endpoint URL is our own public route, safe to print)"
+            echo "=================================================================="
+            $COMPOSE exec -T web node -e 'const k=process.env.RESEND_API_KEY; if(!k){console.log("NO_RESEND_API_KEY_IN_CONTAINER");process.exit(0);} const h={Authorization:"Bearer "+k}; (async()=>{ const r=await fetch("https://api.resend.com/webhooks",{headers:h}); const j=await r.json().catch(()=>null); if(!j){console.log("WEBHOOKS_HTTP="+r.status+" (no json body)"); return;} const arr=Array.isArray(j&&j.data)?j.data:null; if(arr===null){console.log("WEBHOOKS_API_UNSUPPORTED_OR_ERROR http="+r.status, JSON.stringify(j).slice(0,300)); return;} if(arr.length===0){console.log("NO_WEBHOOKS_REGISTERED"); return;} for(const w of arr){ console.log("WEBHOOK endpoint="+(w.endpoint||w.url||"?")+" status="+(w.status||"?")); console.log("  events="+JSON.stringify(w.events||w.event_types||[])); } })().catch(e=>console.log("RESEND_WEBHOOKS_ERR",e.message));' 2>/dev/null || echo "(webhooks probe failed)"
+            echo
+
+            echo "=================================================================="
+            echo "6. email_events taxonomy (RAW upstream truth, PII-free aggregate)"
+            echo "   email_events persists EVERY verified webhook event; empty here"
+            echo "   means the webhook is not firing against prod at all."
+            echo "=================================================================="
+            $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT COUNT(*) AS total_events FROM email_events;" 2>/dev/null || echo "(total events query failed)"
+            $COMPOSE exec -T postgres psql -U fxmily -d fxmily -P pager=off -c "SELECT event_type, COALESCE(bounce_type,'-') AS bounce_type, COALESCE(bounce_sub_type,'-') AS bounce_sub_type, COUNT(*) AS n, MIN(created_at)::date AS first_seen, MAX(created_at)::date AS last_seen FROM email_events GROUP BY event_type, bounce_type, bounce_sub_type ORDER BY n DESC;" 2>/dev/null || echo "(events taxonomy query failed)"
+            echo
+
             echo "OK: diagnostic complete (read-only, nothing changed)."

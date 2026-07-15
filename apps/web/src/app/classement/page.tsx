@@ -7,6 +7,7 @@ import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { LeaderboardList } from '@/components/leaderboard/leaderboard-list';
 import { MyRankCard } from '@/components/leaderboard/my-rank-card';
 import { Podium } from '@/components/leaderboard/podium';
+import { QualifyingSection } from '@/components/leaderboard/qualifying-section';
 import { splitBoardByRank } from '@/lib/leaderboard/ranking';
 import { getLeaderboardBoard, getMyLeaderboardRank } from '@/lib/leaderboard/service';
 
@@ -44,6 +45,12 @@ export default async function ClassementPage(): Promise<React.ReactElement> {
   const { podium: podiumRows, rest } = splitBoardByRank(board.rows);
   const thirdScore = board.thirdScore;
   const hasBoard = board.date !== null && board.rows.length > 0;
+  // J3 SCOPE 1 — the public "En qualification" list. Deliberately visible to
+  // every active member (SPEC §16) so the whole cohort sees itself from day one,
+  // even before anyone is ranked. Opt-out members are already filtered server-side
+  // (they only appear in their own viewer's list). Empty until the first snapshot,
+  // so `qualifying` is [] when `board.date` is null.
+  const hasQualifying = board.qualifying.length > 0;
   // Rank movement + top-3-entry come from the light `getMyLeaderboardRank`
   // (React.cache()-shared with the dashboard widget + AppShell slot, so this is
   // not a second board query). Only fetched when the viewer has a row to enrich.
@@ -87,10 +94,19 @@ export default async function ClassementPage(): Promise<React.ReactElement> {
           </div>
         ) : null}
 
-        {hasBoard ? (
+        {hasBoard || hasQualifying ? (
           <>
-            {podiumRows.length > 0 ? <Podium top={podiumRows} /> : null}
-            {rest.length > 0 ? <LeaderboardList rows={rest} /> : null}
+            {hasBoard ? (
+              <>
+                {podiumRows.length > 0 ? <Podium top={podiumRows} /> : null}
+                {rest.length > 0 ? <LeaderboardList rows={rest} /> : null}
+              </>
+            ) : null}
+            {hasQualifying ? (
+              <div className={hasBoard ? 'mt-8' : undefined}>
+                <QualifyingSection rows={board.qualifying} />
+              </div>
+            ) : null}
           </>
         ) : (
           <EmptyBoard />

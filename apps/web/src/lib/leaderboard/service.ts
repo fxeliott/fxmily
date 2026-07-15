@@ -320,6 +320,36 @@ export interface LeaderboardRowView {
   minActiveDays: number | null;
 }
 
+/**
+ * A member who is checking in but has NOT reached the qualification gate yet
+ * (`rank === null`), surfaced in the public "En qualification" section (J3
+ * SCOPE 1) so every active member appears on `/classement` from day one and
+ * knows where they stand.
+ *
+ * Unlike {@link LeaderboardRowView} — whose `activeDays`/`minActiveDays` stay
+ * viewer-only (§16 data minimisation) — the qualifying progression is a
+ * DELIBERATE public signal: the whole point of "classement pour tous" is that
+ * the cohort sees everyone climbing in. It is therefore a SEPARATE type, never
+ * a re-use of the null-gated ranked fields, so the two privacy contracts can't
+ * be confused. Opt-out is still honoured upstream (an opted-out member never
+ * appears here for others, only for themselves). Progression is behavioral
+ * only — days checked in, NEVER trading results (firewall §21.5).
+ */
+export interface QualifyingRowView {
+  userId: string;
+  firstName: string;
+  /** Read URL for the member's avatar, or null → render initials. */
+  avatarUrl: string | null;
+  /** Uppercase initials fallback (first + last). */
+  initials: string;
+  /** Days counted toward qualification so far (the X in "X/N jours actifs"). */
+  activeDays: number;
+  /** The gate threshold N applied to this member (min(7, opportunityDays)). */
+  minActiveDays: number;
+  /** True for the signed-in viewer's own row (self-highlight + "(toi)"). */
+  isViewer: boolean;
+}
+
 export interface LeaderboardBoardView {
   /** The civil day the board covers, or null when no snapshot exists yet. */
   date: LocalDateString | null;
@@ -327,6 +357,13 @@ export interface LeaderboardBoardView {
   rows: LeaderboardRowView[];
   /** The viewer's own row (always present if they have a snapshot). */
   me: LeaderboardRowView | null;
+  /**
+   * Not-yet-ranked, VISIBLE members (`rank === null`, opted-out hidden except
+   * the viewer), each with their PUBLIC "X/N jours actifs" progression — the
+   * "En qualification" section (J3 SCOPE 1). Sorted closest-to-qualifying
+   * first, then by first name for a stable order.
+   */
+  qualifying: QualifyingRowView[];
   /** Total members with a real rank on this date (the "sur N" denominator). */
   totalRanked: number;
   /** Score of the TRUE `rank === 3` member — read from the pre-filter set (which
@@ -382,6 +419,33 @@ function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
   };
 }
 
+/**
+ * Build a {@link QualifyingRowView} for a not-yet-ranked member. Unlike
+ * {@link toRowView}, the `activeDays`/`minActiveDays` pair is NOT viewer-gated:
+ * the "X/N jours actifs" progression is a DELIBERATE public signal (the whole
+ * point of "classement pour tous"), so it is derived unconditionally here. SSOT
+ * for the pair is the persisted `sample_size` JSONB (`computeLeaderboardGate`);
+ * pre-foundation snapshots (posted before `minActiveDays` was persisted) fall
+ * back to the score's own sample-day count / the static gate constant — same
+ * fallback chain as `toRowView`. Progression is behavioral only (days checked
+ * in), NEVER a trading result (firewall §21.5).
+ */
+function toQualifyingRowView(row: SnapshotUserRow, viewerId: string): QualifyingRowView {
+  const components = row.components as LeaderboardComponentsJson;
+  const sample = row.sampleSize as LeaderboardSampleSizeJson | null;
+  const activeDays = sample?.activeDays ?? components.score.sample.days ?? 0;
+  const minActiveDays = sample?.minActiveDays ?? LEADERBOARD_MIN_ACTIVE_DAYS;
+  return {
+    userId: row.userId,
+    firstName: row.user.firstName?.trim() || 'Membre',
+    avatarUrl: avatarUrlOf(row.user.avatarKey, row.user.image),
+    initials: initialsOf(row.user.firstName, row.user.lastName),
+    activeDays,
+    minActiveDays,
+    isViewer: row.userId === viewerId,
+  };
+}
+
 // `React.cache`-wrapped like its two consumers (getLeaderboardBoard +
 // getMyLeaderboardRank): on /classement a viewer with a row calls BOTH in the
 // same request, so without this the identical zero-arg findFirst would run
@@ -405,7 +469,8 @@ const latestBoardDate = cache(async (): Promise<Date | null> => {
 export const getLeaderboardBoard = cache(
   async (viewerId: string): Promise<LeaderboardBoardView> => {
     const date = await latestBoardDate();
-    if (!date) return { date: null, rows: [], me: null, totalRanked: 0, thirdScore: null };
+    if (!date)
+      return { date: null, rows: [], me: null, qualifying: [], totalRanked: 0, thirdScore: null };
 
     const raw = await db.leaderboardSnapshot.findMany({
       // Firewall/state hardening: a snapshot row survives a member being
@@ -439,6 +504,16 @@ export const getLeaderboardBoard = cache(
     const rows = mapped
       .filter((m) => m.row.rank !== null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
       .map((m) => m.row);
+    // "En qualification" (J3 SCOPE 1): the INVERSE filter — members still
+    // checking in but not yet ranked (`rank === null`). Same opt-out guard as
+    // `rows` (hidden from others, always visible to the viewer). Sorted
+    // closest-to-qualifying first (most active days), then by first name for a
+    // stable, deterministic order. Each row carries its PUBLIC "X/N jours
+    // actifs" progression.
+    const qualifying = mapped
+      .filter((m) => m.row.rank === null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
+      .map((m) => toQualifyingRowView(m.raw as SnapshotUserRow, viewerId))
+      .sort((a, b) => b.activeDays - a.activeDays || a.firstName.localeCompare(b.firstName, 'fr'));
     const totalRanked = raw.filter((r) => r.rank !== null).length;
     // Podium threshold = the score of the member holding TRUE `rank === 3`, keyed
     // on the real rank (never a positional index) so it stays COHERENT with the
@@ -454,6 +529,7 @@ export const getLeaderboardBoard = cache(
       date: date.toISOString().slice(0, 10) as LocalDateString,
       rows,
       me,
+      qualifying,
       totalRanked,
       thirdScore,
     };

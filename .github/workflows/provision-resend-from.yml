@@ -1,0 +1,104 @@
+name: Provision RESEND_FROM
+
+# Manual maintenance workflow — fixes the "bounced emails" root cause.
+#
+# The runtime app env lives in /etc/fxmily/web.env ON THE HOST — it is the
+# source of truth and is NOT written by deploy.yml (deploy only *reads* it via
+# --env-file). So even a posed GitHub Actions secret never reaches the running
+# container. RESEND_FROM was posed as a GitHub secret (pose-github-secrets.sh)
+# but — unlike RESEND_WEBHOOK_SECRET (provision-webhook-secret.yml) and the R2
+# creds (activate-r2-prod.yml) — it never got a provisioning workflow. So the
+# container has NO RESEND_FROM, and src/lib/email/client.ts falls back to
+# `Fxmily <onboarding@resend.dev>` (Resend's shared test domain, which only
+# delivers to the Resend account owner) => every other recipient hard-bounces.
+#
+# This workflow bridges that gap: it SSHes into the prod host with the SAME
+# credentials deploy.yml uses (HETZNER_HOST + HETZNER_SSH_KEY, user `fxmily`),
+# writes the canonical RESEND_FROM into web.env, and recreates the `web` service
+# so it re-reads the value. It reads the effective value BEFORE and AFTER so the
+# run log proves the fix (and settles whether RESEND_FROM was unset).
+#
+# RESEND_FROM is NOT a secret — it is a public functional sender address
+# (docs/env-template.md, ops/scripts/tokens.local.env.example) — so it is
+# hardcoded below, exactly like R2_BUCKET in activate-r2-prod.yml. The prod
+# domain fxmilyapp.com must be `verified` in the Resend dashboard for delivery;
+# its DNS (DKIM/SPF/MX/DMARC) is already present and propagated.
+#
+# Idempotent: any existing RESEND_FROM line is removed before the fresh value
+# is appended, so re-running never duplicates it.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provision-resend-from
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Write RESEND_FROM to host web.env and reload web
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH -> read old, patch web.env, recreate web, verify
+        # RESEND_FROM is a public sender address, not a secret — forwarded as a
+        # plain env so ssh-action's `envs:` carries it to the remote shell.
+        env:
+          RESEND_FROM: 'Fxmily <noreply@fxmilyapp.com>'
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          envs: RESEND_FROM
+          script: |
+            set -euo pipefail
+
+            if [ -z "${RESEND_FROM:-}" ]; then
+              echo "::error::RESEND_FROM is empty (workflow misconfigured)."
+              exit 1
+            fi
+
+            ENV_FILE=/etc/fxmily/web.env
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::$ENV_FILE not found on host."
+              exit 1
+            fi
+
+            # Use sudo only if the file is not directly writable by `fxmily`.
+            if [ -w "$ENV_FILE" ]; then PRIV=""; else PRIV="sudo"; fi
+
+            # --- BEFORE: what does the running container actually send from? ---
+            # An empty value here confirms the fallback to onboarding@resend.dev
+            # was in effect (the bounce root cause). The value is a public
+            # sender address, safe to print.
+            cd /opt/fxmily
+            BEFORE=$(docker compose -f docker-compose.prod.yml exec -T web printenv RESEND_FROM 2>/dev/null || true)
+            echo "BEFORE: container RESEND_FROM=[${BEFORE}]"
+
+            # Idempotent replace: drop any existing line, then append fresh.
+            $PRIV sed -i '/^RESEND_FROM=/d' "$ENV_FILE"
+            printf 'RESEND_FROM=%s\n' "$RESEND_FROM" | $PRIV tee -a "$ENV_FILE" > /dev/null
+
+            LINES=$($PRIV grep -c '^RESEND_FROM=' "$ENV_FILE" || true)
+            echo "web.env now has ${LINES} RESEND_FROM line(s) (expected 1)."
+            if [ "${LINES}" != "1" ]; then
+              echo "::error::Expected exactly 1 RESEND_FROM line, found ${LINES}."
+              exit 1
+            fi
+
+            # Reload the web service so it re-reads web.env (same command family
+            # deploy.yml uses; same image, no pull -> just an env refresh).
+            docker compose -f docker-compose.prod.yml up -d --force-recreate web
+
+            # --- AFTER: confirm the running container now sends from the domain.
+            sleep 4
+            AFTER=$(docker compose -f docker-compose.prod.yml exec -T web printenv RESEND_FROM 2>/dev/null || true)
+            echo "AFTER: container RESEND_FROM=[${AFTER}]"
+            if [ "${AFTER}" != "${RESEND_FROM}" ]; then
+              echo "::error::Container RESEND_FROM is [${AFTER}], expected [${RESEND_FROM}]."
+              exit 1
+            fi
+            echo "OK: prod now sends from ${AFTER} (was: [${BEFORE}])."

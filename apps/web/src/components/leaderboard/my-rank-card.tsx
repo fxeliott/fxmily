@@ -58,6 +58,20 @@ export function MyRankCard({
     ranked && !onPodium && thirdScore !== null && me.score !== null ? thirdScore - me.score : null;
   const gapToPodium = rawGap !== null && rawGap > 0 ? rawGap : null;
 
+  // J3 SCOPE 2 — exact qualification counter for a not-yet-ranked member. `me`
+  // is always the signed-in member's own row, so these viewer-only fields are
+  // populated; they are typed `number | null`, so guard before rendering so the
+  // card never shows "null/7". The denominator is the REAL gate threshold
+  // applied to this member (min(7, opportunityDays) — it shrinks with justified
+  // off-days), which is exactly the gate transparency SCOPE 2 asks for.
+  const myActiveDays = me.activeDays;
+  const myMinActiveDays = me.minActiveDays;
+  const showQualifyingCounter = !ranked && myActiveDays !== null && myMinActiveDays !== null;
+  const remainingActiveDays =
+    myActiveDays !== null && myMinActiveDays !== null
+      ? Math.max(0, myMinActiveDays - myActiveDays)
+      : 0;
+
   // Personalized signals (read-time, migration-free — same `breakdown` the card
   // already holds). `weakest` = the lever with the most room to climb, so the
   // motivation is "adapté pour chaque membre". `lowScore` = a genuinely low
@@ -211,6 +225,22 @@ export function MyRankCard({
                 ) : null}
               </span>
             )}
+          </p>
+        ) : showQualifyingCounter ? (
+          <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
+            <strong className="font-semibold text-[var(--t-1)]">
+              {myActiveDays}/{myMinActiveDays} jours actifs
+            </strong>
+            {remainingActiveDays > 0 ? (
+              <>
+                , il t&apos;en reste{' '}
+                <strong className="font-semibold text-[var(--t-1)]">{remainingActiveDays}</strong>{' '}
+                pour entrer au classement.
+              </>
+            ) : (
+              ', ton rang se calcule cette nuit.'
+            )}{' '}
+            Seuls les jours où tu fais un check-in comptent, pas tes résultats de trading.
           </p>
         ) : !ranked ? (
           <p className="text-[13px] leading-relaxed text-[var(--t-2)]">

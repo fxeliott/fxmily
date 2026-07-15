@@ -18,6 +18,7 @@ import { getLatestConstancyScore } from '@/lib/verification/constancy';
 import {
   computeLeaderboardGate,
   computeLeaderboardScore,
+  LEADERBOARD_MIN_ACTIVE_DAYS,
   LEADERBOARD_WINDOW_DAYS,
   preciseScoreFromParts,
 } from './builder';
@@ -302,6 +303,21 @@ export interface LeaderboardRowView {
   status: 'ok' | 'insufficient_data';
   /** Full ScoreResult for the "Pourquoi ce rang ?" breakdown. */
   breakdown: LeaderboardScore;
+  /**
+   * Viewer-only: days actually counted toward qualification (the X in
+   * "X/N jours actifs"). `null` for every other member — a member's day count
+   * never travels on the client wire for anyone but themselves (§16 data
+   * minimisation).
+   */
+  activeDays: number | null;
+  /**
+   * Viewer-only: the gate threshold N. SSOT = `computeLeaderboardGate`,
+   * persisted in the `sample_size` JSONB by the nightly recompute; read here
+   * so the member card renders the exact "il t'en reste M" counter without
+   * re-deriving — and never diverging from — the gate the ranking applied.
+   * `null` for other members.
+   */
+  minActiveDays: number | null;
 }
 
 export interface LeaderboardBoardView {
@@ -329,6 +345,7 @@ interface SnapshotUserRow {
   rank: number | null;
   status: string;
   components: unknown;
+  sampleSize: unknown;
   user: {
     firstName: string | null;
     lastName: string | null;
@@ -340,6 +357,16 @@ interface SnapshotUserRow {
 
 function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
   const components = row.components as LeaderboardComponentsJson;
+  const isViewer = row.userId === viewerId;
+  // The qualification counter (J3 SCOPE 2) is viewer-only: the exact
+  // "X/N jours actifs" pair is derived from the persisted `sample_size` JSONB
+  // (SSOT = computeLeaderboardGate) and never leaves the server for anyone but
+  // the signed-in member (§16 data minimisation). `sampleSize` is null on
+  // pre-foundation snapshots (posted before minActiveDays was persisted), so
+  // fall back to the score's own sample-day count / the static gate constant.
+  const sample = isViewer ? (row.sampleSize as LeaderboardSampleSizeJson | null) : null;
+  const activeDays = isViewer ? (sample?.activeDays ?? components.score.sample.days ?? 0) : null;
+  const minActiveDays = isViewer ? (sample?.minActiveDays ?? LEADERBOARD_MIN_ACTIVE_DAYS) : null;
   return {
     userId: row.userId,
     rank: row.rank,
@@ -347,9 +374,11 @@ function toRowView(row: SnapshotUserRow, viewerId: string): LeaderboardRowView {
     firstName: row.user.firstName?.trim() || 'Membre',
     avatarUrl: avatarUrlOf(row.user.avatarKey, row.user.image),
     initials: initialsOf(row.user.firstName, row.user.lastName),
-    isViewer: row.userId === viewerId,
+    isViewer,
     status: row.status === 'insufficient_data' ? 'insufficient_data' : 'ok',
     breakdown: components.score,
+    activeDays,
+    minActiveDays,
   };
 }
 
@@ -391,6 +420,7 @@ export const getLeaderboardBoard = cache(
         rank: true,
         status: true,
         components: true,
+        sampleSize: true,
         user: {
           select: {
             firstName: true,

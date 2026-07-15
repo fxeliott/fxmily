@@ -150,4 +150,52 @@ describe('getLeaderboardBoard — "En qualification" (J3 SCOPE 1)', () => {
     // Zoé (6) first, then the two ties at 3 broken by firstName asc: Anna before Bob.
     expect(board.qualifying.map((r) => r.firstName)).toEqual(['Zoé', 'Anna', 'Bob']);
   });
+
+  it('(e) falls back to "Membre" and reads activeDays from components when sampleSize is null', async () => {
+    // A pre-foundation / legacy snapshot: no `sampleSize` JSONB and a null
+    // firstName. `toQualifyingRowView` must fall through to
+    // `components.score.sample.days` for the count, to the default gate for the
+    // denominator, and to the "Membre" label — never render "null" or NaN.
+    m.snapshotFindMany.mockResolvedValue([
+      {
+        userId: 'qual-e-legacy',
+        score: null,
+        rank: null,
+        status: 'insufficient_data',
+        components: { score: { sample: { days: 4 } } },
+        sampleSize: null,
+        user: {
+          firstName: null,
+          lastName: null,
+          avatarKey: null,
+          image: null,
+          leaderboardOptOut: false,
+        },
+      },
+    ]);
+
+    const board = await getLeaderboardBoard('qual-e-viewer');
+
+    expect(board.qualifying).toHaveLength(1);
+    expect(board.qualifying[0]).toMatchObject({
+      userId: 'qual-e-legacy',
+      firstName: 'Membre',
+      activeDays: 4,
+      minActiveDays: 7, // LEADERBOARD_MIN_ACTIVE_DAYS default when sampleSize is absent
+    });
+  });
+
+  it('(f) breaks an exact activeDays + firstName tie deterministically by userId', async () => {
+    // Two members identical on the first two sort keys: Postgres leaves rank-null
+    // rows unordered, so the terminal userId tiebreak is what keeps the list
+    // stable across snapshots (mirrors the ranked path in ranking.ts).
+    m.snapshotFindMany.mockResolvedValue([
+      qualRow({ userId: 'qual-f-zzz', firstName: 'Thomas', activeDays: 3 }),
+      qualRow({ userId: 'qual-f-aaa', firstName: 'Thomas', activeDays: 3 }),
+    ]);
+
+    const board = await getLeaderboardBoard('qual-f-viewer');
+
+    expect(board.qualifying.map((r) => r.userId)).toEqual(['qual-f-aaa', 'qual-f-zzz']);
+  });
 });

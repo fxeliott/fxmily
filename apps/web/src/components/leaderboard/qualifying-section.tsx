@@ -19,12 +19,14 @@ import { Avatar } from '../ui/avatar';
  */
 
 function QualifyingRow({ row }: { row: QualifyingRowView }): React.ReactElement {
-  // Clamp the fill to [0, 100] and guard a zero denominator (the gate is always
-  // >= 1 via computeLeaderboardGate, but stay defensive against a stale snapshot).
-  const pct = Math.max(
-    0,
-    Math.min(100, Math.round((row.activeDays / Math.max(1, row.minActiveDays)) * 100)),
-  );
+  // Guard a zero denominator (the gate is always >= 1 via computeLeaderboardGate,
+  // but stay defensive against a stale snapshot) and clamp the numerator so a
+  // relaxed gate or a legacy snapshot (activeDays >= minActiveDays while still
+  // rank null) never renders an invalid "5j/3" nor an aria-valuenow above
+  // aria-valuemax.
+  const safeMax = Math.max(1, row.minActiveDays);
+  const shown = Math.max(0, Math.min(row.activeDays, safeMax));
+  const pct = Math.round((shown / safeMax) * 100);
 
   return (
     <div
@@ -51,10 +53,10 @@ function QualifyingRow({ row }: { row: QualifyingRowView }): React.ReactElement 
         <span
           className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-3)]"
           role="progressbar"
-          aria-valuenow={row.activeDays}
+          aria-valuenow={shown}
           aria-valuemin={0}
-          aria-valuemax={row.minActiveDays}
-          aria-label={`${row.activeDays} jours actifs sur ${row.minActiveDays} pour se qualifier`}
+          aria-valuemax={safeMax}
+          aria-label={`${shown} jours actifs sur ${safeMax} pour se qualifier`}
         >
           <span
             className="block h-full rounded-full bg-[var(--acc)]"
@@ -64,9 +66,9 @@ function QualifyingRow({ row }: { row: QualifyingRowView }): React.ReactElement 
       </span>
       <span className="flex shrink-0 items-baseline gap-0.5" aria-hidden="true">
         <span className="f-display text-[17px] font-bold text-[var(--t-1)] tabular-nums">
-          {row.activeDays}
+          {shown}
         </span>
-        <span className="text-[13px] text-[var(--t-3)]">j/{row.minActiveDays}</span>
+        <span className="text-[13px] text-[var(--t-3)]">j/{safeMax}</span>
       </span>
     </div>
   );

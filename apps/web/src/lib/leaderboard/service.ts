@@ -513,7 +513,16 @@ export const getLeaderboardBoard = cache(
     const qualifying = mapped
       .filter((m) => m.row.rank === null && (!m.raw.user.leaderboardOptOut || m.row.isViewer))
       .map((m) => toQualifyingRowView(m.raw as SnapshotUserRow, viewerId))
-      .sort((a, b) => b.activeDays - a.activeDays || a.firstName.localeCompare(b.firstName, 'fr'));
+      .sort(
+        (a, b) =>
+          b.activeDays - a.activeDays ||
+          a.firstName.localeCompare(b.firstName, 'fr') ||
+          // Final, stable tiebreak on userId (mirrors the ranked path in
+          // `ranking.ts`) so two members with the same activeDays AND firstName
+          // keep a deterministic order across snapshots, since Postgres leaves
+          // `rank null` rows unordered.
+          (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+      );
     const totalRanked = raw.filter((r) => r.rank !== null).length;
     // Podium threshold = the score of the member holding TRUE `rank === 3`, keyed
     // on the real rank (never a positional index) so it stays COHERENT with the

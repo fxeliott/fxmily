@@ -75,6 +75,15 @@ export const REFLECTION_FIELD_MAX_CHARS = 240;
 export const OBJECTIVES_RING_MAX = 4;
 export const OBJECTIVES_TEXT_MAX_CHARS = 200;
 
+/**
+ * J5.8 — bornes DURES de la slice « fiches Mark Douglas favorites » (titre +
+ * categorie). N = 5 favoris les plus recents ; titre <= M chars (headlines courts,
+ * safeFreeText). Titre = contenu ADMIN curated, rendu wrapped untrusted au prompt.
+ * SSOT partagee schema+builder. Budget minuscule (~0,6 KB/membre*rapport).
+ */
+export const FAVORITES_PROMPT_MAX_ENTRIES = 5;
+export const FAVORITE_TITLE_MAX_CHARS = 120;
+
 // Free-text item — free-form string with anti-injection hardening.
 const safeItemSchema = z
   .string()
@@ -375,6 +384,18 @@ const objectivesSliceSchema = z
       })
       .strict()
       .nullable(),
+  })
+  .strict();
+
+/**
+ * J5.8 — une fiche Mark Douglas mise en favori (titre + categorie). Titre =
+ * contenu ADMIN curated ; borne + safeFreeText au builder, rendu wrapped untrusted
+ * au prompt (defense-in-depth). `.strict()` rejette tout champ non declare.
+ */
+const favoriteCardSchema = z
+  .object({
+    title: z.string().trim().min(1).max(FAVORITE_TITLE_MAX_CHARS),
+    category: z.string().trim().min(1).max(40),
   })
   .strict();
 
@@ -691,6 +712,10 @@ export const weeklySnapshotSchema = z
     /// methode), issus du SSOT `getProcessObjectives`. Absent -> le prompt omet
     /// la section (retrocompat, aucune cible fabriquee). Posture §2 (descriptif).
     objectives: objectivesSliceSchema.optional(),
+    /// J5.8 — fiches Mark Douglas mises en favori par le membre (titre + categorie),
+    /// via le SSOT `listMyFavorites`. Absent -> le prompt omet la section
+    /// (retrocompat). Titres wrapped untrusted au prompt. Posture §2 (psycho).
+    favorites: z.array(favoriteCardSchema).max(FAVORITES_PROMPT_MAX_ENTRIES).optional(),
   })
   .strict();
 

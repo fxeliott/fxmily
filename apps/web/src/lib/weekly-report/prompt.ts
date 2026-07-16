@@ -550,6 +550,19 @@ export function buildWeeklyReportUserPrompt(
     lines.push(``);
   }
 
+  // J5.8 — fiches Mark Douglas mises en favori par le membre : contexte
+  // psychologique (posture Mark Douglas, process — jamais un avis marche). Titres
+  // ADMIN curated -> wrapped untrusted defense-in-depth. Absent -> section omise.
+  if (snapshot.favorites && snapshot.favorites.length > 0) {
+    lines.push(`## Fiches Mark Douglas favorites du membre (contexte — jamais un avis marché)`);
+    lines.push(
+      wrapUntrustedMemberInput(
+        snapshot.favorites.map((f) => `- ${f.title} (${f.category})`).join('\n'),
+      ),
+    );
+    lines.push(``);
+  }
+
   lines.push(`---`);
   lines.push(
     `Réponds en JSON strict conforme au schéma fourni. Toute analyse de marché ou de paire serait une violation de posture.`,

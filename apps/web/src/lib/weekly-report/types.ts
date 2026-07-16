@@ -145,6 +145,13 @@ export interface BuilderInput {
     methodGoal: { label: string; hint: string; current: number; target: number } | null;
   };
   /**
+   * J5.8 — fiches Mark Douglas mises en favori par le membre (titre + categorie),
+   * pre-chargees par le loader via le SSOT `listMyFavorites` (published-only,
+   * recency-desc). Le builder borne (N + safeFreeText). Absente (`?:`) -> le prompt
+   * omet la section (retrocompat). §2-safe (process/psycho), hors firewall §21.5.
+   */
+  favorites?: Array<{ title: string; category: string }>;
+  /**
    * SPEC §21 J-T4 — number of the member's backtests in the report week
    * ("volume de pratique"). Optional: absent → the builder defaults it to 0
    * (existing fixtures + pre-J-T4 callers stay valid). 🚨 §21.5: an integer

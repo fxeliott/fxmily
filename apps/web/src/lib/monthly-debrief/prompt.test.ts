@@ -1142,3 +1142,26 @@ describe('buildMonthlyDebriefUserPrompt — J5.7 objectifs de process', () => {
     expect(prompt).not.toContain('Objectifs de process du membre');
   });
 });
+
+describe('buildMonthlyDebriefUserPrompt — J5.8 favoris Douglas (wrapped untrusted)', () => {
+  it('injecte la section favoris, wrapped untrusted', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          favorites: [
+            { title: 'Penser en probabilites', category: 'probabilities' },
+            { title: 'Accepter le risque', category: 'acceptance' },
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('Fiches Mark Douglas favorites du membre');
+    expect(prompt).toContain('- Penser en probabilites (probabilities)');
+    expect(prompt).toContain('member_reflection_untrusted');
+  });
+
+  it('retrocompat : sans favoris, aucune section', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Fiches Mark Douglas favorites du membre');
+  });
+});

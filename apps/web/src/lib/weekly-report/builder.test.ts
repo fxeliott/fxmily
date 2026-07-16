@@ -1193,3 +1193,65 @@ describe('buildWeeklySnapshot — patternSignals (S15 #7)', () => {
     expect(buildWeeklySnapshot(input).patternSignals).toBeUndefined();
   });
 });
+
+describe('buildWeeklySnapshot — J5.1 reflexions ABCD (CBT Ellis, borne)', () => {
+  it('relaie les reflexions ABCD dans freeText.reflections et safeParse passe', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      reflections: [
+        {
+          date: '2026-06-03',
+          triggerEvent: 'Gap haussier a l ouverture',
+          beliefAuto: 'Je vais rater le mouvement',
+          consequence: 'FOMO, entree sans setup',
+          disputation: 'Mon plan attend le retest, pas de precipitation',
+        },
+      ],
+    });
+    expect(snap.freeText.reflections).toHaveLength(1);
+    expect(snap.freeText.reflections[0]?.triggerEvent).toContain('Gap haussier');
+    expect(snap.freeText.reflections[0]?.disputation).toContain('retest');
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne : garde les N plus recentes (<=3) et tronque chaque champ a 240 chars', () => {
+    const mk = (i: number) => ({
+      date: '2026-06-0' + i,
+      triggerEvent: 'A'.repeat(400),
+      beliefAuto: 'B'.repeat(400),
+      consequence: 'C'.repeat(400),
+      disputation: 'D'.repeat(400),
+    });
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      reflections: [mk(1), mk(2), mk(3), mk(4), mk(5)],
+    });
+    expect(snap.freeText.reflections).toHaveLength(3);
+    expect(snap.freeText.reflections[0]?.triggerEvent.length).toBe(240);
+    expect(snap.freeText.reflections[0]?.disputation.length).toBe(240);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('drop une entree dont un champ ABCD est vide apres sanitize', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      reflections: [
+        {
+          date: '2026-06-03',
+          triggerEvent: 'Trigger valide present',
+          beliefAuto: '   ',
+          consequence: 'Consequence valide',
+          disputation: 'Disputation valide presente',
+        },
+      ],
+    });
+    expect(snap.freeText.reflections).toHaveLength(0);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans reflections, la slice est un array vide + safeParse passe', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.freeText.reflections).toEqual([]);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

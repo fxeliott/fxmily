@@ -30,7 +30,10 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 // J5.3 — the dedicated per-answer ceiling for the member weekly-review answers,
 // shared with the builder + schema so all three layers agree on one bound.
-import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
+import {
+  MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS,
+  REFLECTION_PROMPT_MAX_ENTRIES,
+} from '@/lib/schemas/weekly-report';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -285,6 +288,37 @@ export async function loadWeeklySliceForUser(
     if (isOffDay(d, offCtx)) offDaysInWindow += 1;
   }
 
+  // J5.1 — reflexions ABCD (CBT Ellis) du membre sur la fenetre hebdo. Requete
+  // indexee (@@index([userId, date(sort: Desc)])) bornee aux N plus recentes ;
+  // on ne selectionne QUE les 4 champs A/B/C/D + la date (aucune PII). Free-text
+  // MEMBRE -> le builder borne + `safeFreeText`, rendu untrusted au prompt. `[]`
+  // quand aucune -> le prompt omet la section (retrocompat, twin du mensuel).
+  const reflectionRows = await db.reflectionEntry.findMany({
+    where: {
+      userId,
+      date: {
+        gte: parseDbDate(window.weekStartLocal),
+        lte: parseDbDate(window.weekEndLocal),
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    take: REFLECTION_PROMPT_MAX_ENTRIES,
+    select: {
+      date: true,
+      triggerEvent: true,
+      beliefAuto: true,
+      consequence: true,
+      disputation: true,
+    },
+  });
+  const reflections = reflectionRows.map((row) => ({
+    date: row.date.toISOString().slice(0, 10),
+    triggerEvent: row.triggerEvent,
+    beliefAuto: row.beliefAuto,
+    consequence: row.consequence,
+    disputation: row.disputation,
+  }));
+
   const builderInput: BuilderInput = {
     userId: user.id,
     timezone: user.timezone,
@@ -324,6 +358,9 @@ export async function loadWeeklySliceForUser(
     // Member free-text → re-hardened by the builder (safeFreeText), wrapped
     // untrusted at the prompt boundary. `null` when no review was submitted.
     memberWeeklyReview,
+    // J5.1 — reflexions ABCD recentes (toujours present cote input ; [] quand
+    // aucune). Le builder borne + rend untrusted au prompt.
+    reflections,
   };
 
   return {

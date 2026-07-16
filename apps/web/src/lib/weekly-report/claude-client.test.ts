@@ -83,6 +83,16 @@ const ACTIVE_SNAPSHOT = {
     journalExcerpts: ['Journée propre, plan respecté.'],
     // TASK A — MATIN intention twin of journalExcerpts.
     morningIntentions: ['Respecter mon plan, rester patient.'],
+    // J5.1 — active member with one ABCD reflection this week.
+    reflections: [
+      {
+        date: '2026-04-15',
+        triggerEvent: 'Gros gap a l ouverture',
+        beliefAuto: 'Je vais rater le move',
+        consequence: 'FOMO, tentation d entrer sans setup',
+        disputation: 'Mon plan attend le retest, je reste patient',
+      },
+    ],
   },
   scores: {
     discipline: 75,
@@ -164,6 +174,8 @@ const INACTIVE_SNAPSHOT = {
     journalExcerpts: [],
     // TASK A — inactive member: no morning intention.
     morningIntentions: [],
+    // J5.1 — inactive member: no ABCD reflection.
+    reflections: [],
   },
   scores: {
     discipline: null,

@@ -56,6 +56,16 @@ export const PATTERN_VALUE_MAX_CHARS = 400;
  */
 export const MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS = 2000;
 
+/**
+ * J5.1 — bornes DURES de la slice « reflexions ABCD » (CBT Ellis : A declencheur,
+ * B croyance, C consequence, D recadrage) cote HEBDO. Free-text MEMBRE -> rendu
+ * untrusted au prompt. N plus recentes de la semaine, chaque champ <= M chars
+ * (source : 2000 max au write ; 240 = signal, pas l'essai complet). SSOT partagee
+ * schema+builder. Twin des bornes du debrief mensuel.
+ */
+export const REFLECTION_PROMPT_MAX_ENTRIES = 3;
+export const REFLECTION_FIELD_MAX_CHARS = 240;
+
 // Free-text item — free-form string with anti-injection hardening.
 const safeItemSchema = z
   .string()
@@ -285,6 +295,33 @@ const counterSliceSchema = z
 /// builder. ALL strings here MUST pass through safeFreeText (this schema
 /// enforces it via .transform). The builder must NOT bypass this for any
 /// member-controlled text (journalNote, intention, sportType, gratitudes).
+/**
+ * J5.1 — champ ABCD borne partage (A/B/C/D) cote hebdo. Free-text MEMBRE :
+ * `safeFreeText` + `.max()` defense-in-depth (deja borne au write 10-2000).
+ */
+const reflectionFieldSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(REFLECTION_FIELD_MAX_CHARS)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+/**
+ * J5.1 — slice « reflexions ABCD recentes » (CBT Ellis) du membre sur la semaine,
+ * bornee aux N plus recentes, chaque champ <= M chars. Free-text MEMBRE -> rendu
+ * untrusted au prompt. `.strict()` rejette tout champ non declare.
+ */
+const reflectionSliceSchema = z
+  .object({
+    date: z.string().min(1).max(40),
+    triggerEvent: reflectionFieldSchema,
+    beliefAuto: reflectionFieldSchema,
+    consequence: reflectionFieldSchema,
+    disputation: reflectionFieldSchema,
+  })
+  .strict();
+
 const freeTextSliceSchema = z
   .object({
     /// Top emotion tags observed this week (deduped, frequency-sorted).
@@ -342,6 +379,10 @@ const freeTextSliceSchema = z
       })
       .strict()
       .optional(),
+    /// J5.1 — reflexions ABCD recentes du membre (CBT Ellis), bornees aux N plus
+    /// recentes. Free-text MEMBRE -> rendu untrusted au prompt. Toujours present
+    /// (array vide si aucune -> le prompt omet la section, retrocompat).
+    reflections: z.array(reflectionSliceSchema).max(REFLECTION_PROMPT_MAX_ENTRIES),
   })
   .strict();
 

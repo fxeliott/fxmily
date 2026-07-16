@@ -10,6 +10,7 @@ import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verifi
 import { compressProofImage } from '@/lib/uploads/compress-proof-client';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/uploads/heic.client';
 import { cn } from '@/lib/utils';
+import { isPdfBytes } from '@/lib/verification/pdf-sniff';
 
 interface ProofUploaderAccountOption {
   readonly id: string;
@@ -163,7 +164,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       // magic bytes 25 50 44 46 ("%PDF"); reading 5 bytes is cheap and any
       // shorter file (already size-guarded > 0) simply won't match.
       const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
-      const isPdf = head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46;
+      const isPdf = isPdfBytes(head);
       if (isPdf) {
         setStatus('error');
         setIsPdfError(true);

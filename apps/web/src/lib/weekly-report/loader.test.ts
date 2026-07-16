@@ -81,6 +81,7 @@ vi.mock('@/lib/weekly-review/service', () => ({
 }));
 
 import { db } from '@/lib/db';
+import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
@@ -202,17 +203,20 @@ describe('loadWeeklySliceForUser — V1.8 member weekly review injection', () =>
   });
 
   it('should_shape_and_truncate_the_answers_when_the_member_submitted_a_review', async () => {
-    // Arrange — a completed review; one answer overshoots the 300-char loader
-    // cap, `bestPractice` is the honest optional null.
+    // Arrange — a completed review. `biggestMistake` overshoots the raised
+    // MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS loader cap (must truncate);
+    // `lessonLearned` sits in the 301–2000 window that the old 300-char cap would
+    // have clipped mid-sentence and must now survive intact (J5.3). `bestPractice`
+    // is the honest optional null.
     vi.mocked(getWeeklyReview).mockResolvedValue({
       id: 'rev-1',
       userId: 'user-1',
       weekStart: '2026-06-01',
       weekEnd: '2026-06-07',
       biggestWin: '  Respecté mon plan toute la semaine.  ',
-      biggestMistake: 'x'.repeat(500),
+      biggestMistake: 'x'.repeat(MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS + 100),
       bestPractice: null,
-      lessonLearned: 'Attendre mon setup.',
+      lessonLearned: 'y'.repeat(500),
       nextWeekFocus: 'Une seule session par jour.',
       submittedAt: '2026-06-07T18:00:00.000Z',
       createdAt: '2026-06-07T18:00:00.000Z',
@@ -222,12 +226,13 @@ describe('loadWeeklySliceForUser — V1.8 member weekly review injection', () =>
     // Act
     const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
 
-    // Assert — trimmed, truncated to the loader cap, null preserved.
+    // Assert — trimmed, truncated to the raised loader cap, the 301–2000 answer
+    // kept intact, null preserved.
     expect(slice?.builderInput.memberWeeklyReview).toEqual({
       biggestWin: 'Respecté mon plan toute la semaine.',
-      biggestMistake: 'x'.repeat(300),
+      biggestMistake: 'x'.repeat(MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS),
       bestPractice: null,
-      lessonLearned: 'Attendre mon setup.',
+      lessonLearned: 'y'.repeat(500),
       nextWeekFocus: 'Une seule session par jour.',
     });
   });

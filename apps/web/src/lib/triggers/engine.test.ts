@@ -38,6 +38,12 @@ vi.mock('@/lib/observability', () => ({ reportWarning: vi.fn() }));
 vi.mock('@/lib/coaching/service', () => ({
   getDominantMentalAxis: vi.fn().mockResolvedValue(null),
 }));
+// J5.8 — the engine reads the member's favorited card categories for the picker
+// tie-break. Default [] (no favorites) → historical pick order, so every assertion
+// below is unchanged. The tie-break behaviour is unit-tested in `cooldown.test.ts`.
+vi.mock('@/lib/cards/service', () => ({
+  listMyFavorites: vi.fn().mockResolvedValue([]),
+}));
 
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';

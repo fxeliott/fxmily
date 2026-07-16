@@ -1074,3 +1074,33 @@ describe('buildMonthlyDebriefUserPrompt — J5.4 continuite N-1 (debrief precede
     expect(prompt).not.toContain('Contexte du mois precedent');
   });
 });
+
+describe('buildMonthlyDebriefUserPrompt — J5.1 reflexions ABCD (wrapped untrusted)', () => {
+  it('injecte la section « Réflexions ABCD » avec A/B/C/D, wrapped untrusted', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          reflections: [
+            {
+              date: '2026-04-15',
+              triggerEvent: 'Gap haussier a l ouverture',
+              beliefAuto: 'Je vais rater le mouvement',
+              consequence: 'FOMO, entree sans setup',
+              disputation: 'Attendre le retest, mon plan tient',
+            },
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('Réflexions ABCD récentes');
+    expect(prompt).toContain('A (déclencheur) : Gap haussier a l ouverture');
+    expect(prompt).toContain('D (recadrage) : Attendre le retest, mon plan tient');
+    // Member free-text -> wrapped untrusted (defense-in-depth).
+    expect(prompt).toContain('member_reflection_untrusted');
+  });
+
+  it('retrocompat : sans reflexion ABCD, aucune section', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Réflexions ABCD récentes');
+  });
+});

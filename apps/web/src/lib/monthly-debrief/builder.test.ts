@@ -1075,3 +1075,66 @@ describe('buildMonthlySnapshot — J5.4 previousDebrief (continuite N-1, borne)'
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildMonthlySnapshot — J5.1 reflexions ABCD (CBT Ellis, borne)', () => {
+  it('relaie les reflexions ABCD (A/B/C/D) et safeParse passe', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        reflections: [
+          {
+            date: '2026-04-15',
+            triggerEvent: 'Gap haussier a l ouverture',
+            beliefAuto: 'Je vais rater le mouvement',
+            consequence: 'FOMO, entree sans setup',
+            disputation: 'Mon plan attend le retest, pas de precipitation',
+          },
+        ],
+      }),
+    );
+    expect(snap.reflections).toHaveLength(1);
+    expect(snap.reflections[0]?.triggerEvent).toContain('Gap haussier');
+    expect(snap.reflections[0]?.disputation).toContain('retest');
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne : garde les N plus recentes (<=3) et tronque chaque champ a 240 chars', () => {
+    const mk = (i: number) => ({
+      date: '2026-04-0' + i,
+      triggerEvent: 'A'.repeat(400),
+      beliefAuto: 'B'.repeat(400),
+      consequence: 'C'.repeat(400),
+      disputation: 'D'.repeat(400),
+    });
+    const snap = buildMonthlySnapshot(
+      baseInput({ reflections: [mk(1), mk(2), mk(3), mk(4), mk(5)] }),
+    );
+    expect(snap.reflections).toHaveLength(3);
+    expect(snap.reflections[0]?.triggerEvent.length).toBe(240);
+    expect(snap.reflections[0]?.disputation.length).toBe(240);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('drop une entree dont un champ ABCD est vide apres sanitize', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        reflections: [
+          {
+            date: '2026-04-15',
+            triggerEvent: 'Trigger valide present',
+            beliefAuto: '   ',
+            consequence: 'Consequence valide',
+            disputation: 'Disputation valide presente',
+          },
+        ],
+      }),
+    );
+    expect(snap.reflections).toHaveLength(0);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans reflections, la slice est un array vide + safeParse passe', () => {
+    const snap = buildMonthlySnapshot(baseInput());
+    expect(snap.reflections).toEqual([]);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

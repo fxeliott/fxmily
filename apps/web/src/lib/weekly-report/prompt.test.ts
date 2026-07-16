@@ -707,3 +707,40 @@ describe('buildWeeklyReportUserPrompt — J5.1 reflexions ABCD (wrapped untruste
     expect(prompt).not.toContain('Réflexions ABCD du membre');
   });
 });
+
+describe('buildWeeklyReportUserPrompt — J5.7 objectifs de process', () => {
+  it('injecte anneaux + methodGoal en clair et coachingAxis wrapped untrusted', () => {
+    const prompt = buildWeeklyReportUserPrompt(
+      buildWeeklySnapshot({
+        ...emptyInput(),
+        objectives: {
+          rings: [
+            { label: 'Discipline', current: 72, target: 80, reached: false },
+            { label: 'Constance', current: 65, target: 80, reached: false },
+          ],
+          coachingAxis: 'Patience sur les entrees',
+          methodGoal: {
+            label: 'Fenetre 13h-16h',
+            hint: 'Trader la bonne fenetre',
+            current: 60,
+            target: 75,
+          },
+        },
+      }),
+    );
+    expect(prompt).toContain('Objectifs de process du membre');
+    expect(prompt).toContain('Discipline 72/80');
+    expect(prompt).toContain('Constance 65/80');
+    expect(prompt).toContain('Objectif de méthode');
+    expect(prompt).toContain('Fenetre 13h-16h');
+    // coachingAxis (AI-derived) is wrapped in the untrusted envelope (exact form).
+    expect(prompt).toContain(
+      '<member_reflection_untrusted>\nPatience sur les entrees\n</member_reflection_untrusted>',
+    );
+  });
+
+  it('retrocompat : sans objectives, aucune section', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()));
+    expect(prompt).not.toContain('Objectifs de process du membre');
+  });
+});

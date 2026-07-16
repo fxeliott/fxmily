@@ -1255,3 +1255,63 @@ describe('buildWeeklySnapshot — J5.1 reflexions ABCD (CBT Ellis, borne)', () =
     expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildWeeklySnapshot — J5.7 objectifs de process (borne)', () => {
+  it('relaie anneaux + axe + methodGoal et safeParse passe', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      objectives: {
+        rings: [
+          { label: 'Discipline', current: 72, target: 80, reached: false },
+          { label: 'Constance', current: 65, target: 80, reached: false },
+        ],
+        coachingAxis: 'Patience sur les entrees',
+        methodGoal: {
+          label: 'Fenetre 13h-16h',
+          hint: 'Trader la bonne fenetre',
+          current: 60,
+          target: 75,
+        },
+      },
+    });
+    expect(snap.objectives).toBeDefined();
+    expect(snap.objectives?.rings).toHaveLength(2);
+    expect(snap.objectives?.coachingAxis).toBe('Patience sur les entrees');
+    expect(snap.objectives?.methodGoal?.label).toBe('Fenetre 13h-16h');
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne : coachingAxis + methodGoal tronques a 200 chars', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      objectives: {
+        rings: [{ label: 'Discipline', current: 50, target: 80, reached: false }],
+        coachingAxis: 'a'.repeat(400),
+        methodGoal: { label: 'b'.repeat(400), hint: 'c'.repeat(400), current: 40, target: 60 },
+      },
+    });
+    expect(snap.objectives?.coachingAxis?.length).toBe(200);
+    expect(snap.objectives?.methodGoal?.label.length).toBe(200);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('omet la slice quand rien de significatif (aucun ring score, pas d axe, pas de goal)', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      objectives: {
+        rings: [{ label: 'Discipline', current: null, target: 80, reached: false }],
+        coachingAxis: null,
+        methodGoal: null,
+      },
+    });
+    expect(snap.objectives).toBeUndefined();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans objectives, la slice est absente + safeParse passe', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.objectives).toBeUndefined();
+    expect('objectives' in snap).toBe(false);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

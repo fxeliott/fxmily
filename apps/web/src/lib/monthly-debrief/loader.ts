@@ -317,6 +317,28 @@ export async function loadMonthlySliceForUser(
     getOffDaySet(userId, window.monthStartLocal, window.monthEndLocal),
   ]);
 
+  // J5.4 — continuite N-1 : notre debrief du mois PRECEDENT (sortie IA deja
+  // validee), le plus recent strictement anterieur au mois rapporte. Requete
+  // indexee (@@index([userId, monthStart(sort: Desc)])). REEL only : on ne
+  // selectionne QUE `summaryReal` + `recommendations` (jamais `summaryTraining`
+  // — §21.5 firewall). `null` quand aucun debrief anterieur -> le builder omet la
+  // slice -> le prompt omet le bloc (retrocompat, aucune continuite fabriquee).
+  const previousDebriefRow = await db.monthlyDebrief.findFirst({
+    where: { userId, monthStart: { lt: parseLocalDate(window.monthStartLocal) } },
+    orderBy: { monthStart: 'desc' },
+    select: { monthStart: true, summaryReal: true, recommendations: true },
+  });
+  const previousDebrief = previousDebriefRow
+    ? {
+        monthStart: previousDebriefRow.monthStart,
+        summaryReal: previousDebriefRow.summaryReal,
+        recommendations: (Array.isArray(previousDebriefRow.recommendations)
+          ? previousDebriefRow.recommendations
+          : []
+        ).filter((rec): rec is string => typeof rec === 'string'),
+      }
+    : undefined;
+
   // Tour 14 — count the off days inside the civil-month window [monthStartLocal,
   // monthEndLocal] (both inclusive, civil-local). Weekends off-by-default are
   // folded in via `offCtx.weekendsOff`, exactly like the scoring/weekly count.
@@ -453,6 +475,8 @@ export async function loadMonthlySliceForUser(
     // S5 §32-C/D — coaching psychologique structuré (le builder le rend en bloc
     // Markdown dans le snapshot ; `null` → slice omis). §2-safe (copie curée).
     coaching,
+    // J5.4 — continuite N-1 (spread conditionnel, exactOptionalPropertyTypes).
+    ...(previousDebrief ? { previousDebrief } : {}),
   };
 
   return {

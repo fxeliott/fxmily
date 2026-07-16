@@ -166,6 +166,21 @@ export interface MonthlyBuilderInput {
    */
   memberProfile: MemberProfileReference | null;
   /**
+   * J5.4 — continuite N-1 : la sortie IA du debrief du mois PRECEDENT (REEL only
+   * §21.5 — `summaryReal` + `recommendations`), pre-chargee par le loader
+   * (`db.monthlyDebrief.findFirst` le plus recent < mois courant). Le builder la
+   * borne (summary <=600, <=3 reco <=200) + `safeFreeText`. Absente (`?:`) quand le
+   * membre n'a aucun debrief anterieur -> le prompt omet le bloc (retrocompat).
+   */
+  previousDebrief?: {
+    /// 1er du mois civil N-1 (`@db.Date` Prisma), rendu tel quel dans le prompt.
+    monthStart: Date;
+    /// Synthese REELLE du mois N-1 (raw ; le builder tronque + hardening).
+    summaryReal: string;
+    /// Recommandations donnees le mois N-1 (raw string[] ; builder cap <=3x200).
+    recommendations: string[];
+  };
+  /**
    * J-AI corrections echo — the coach's corrections on the member's REAL trades
    * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`
    * (only corrections the admin TAGGED with a `TrackingAxis` — the label prefixes

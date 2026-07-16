@@ -27,6 +27,7 @@ import type { TradeSession } from '@/generated/prisma/client.js';
 
 import { computeMaxConsecutiveLoss } from '@/lib/analytics/streaks';
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
+import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import {
   EMOTION_ARC_MIN_TO_SURFACE,
@@ -70,9 +71,11 @@ const MEMBER_SCREEN_NOTES_MAX = 20;
 const MEMBER_SCREEN_NOTE_ITEM_MAX_CHARS = 900;
 // V1.8 REFLECT — per-answer re-harden truncation for the member's own weekly
 // review, twin of the coach-corrections / screen-notes re-hardens. The loader
-// already truncated (~300); the builder re-hardens defense-in-depth. 400 is
-// the schema's per-string ceiling (PATTERN_VALUE_MAX_CHARS).
-const MEMBER_WEEKLY_REVIEW_FIELD_MAX_CHARS = 400;
+// already truncated; the builder re-hardens defense-in-depth. J5.3 — aligned to
+// the schema's dedicated per-string ceiling MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS
+// (2000, imported = one source of truth) so a whole real answer survives the
+// loader → builder → schema round-trip instead of being clipped mid-sentence.
+const MEMBER_WEEKLY_REVIEW_FIELD_MAX_CHARS = MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS;
 
 // =============================================================================
 // Pseudonymization (V1.5 — prompt boundary defense)

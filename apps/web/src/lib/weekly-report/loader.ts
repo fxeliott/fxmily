@@ -28,6 +28,9 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 // minimisation). `weakSignals` is NEVER read here (admin-only, §21.5) — importing
 // only these two mirrors the calendar + monthly-debrief loaders exactly.
 import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
+// J5.3 — the dedicated per-answer ceiling for the member weekly-review answers,
+// shared with the builder + schema so all three layers agree on one bound.
+import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -619,10 +622,13 @@ async function loadMemberScreenNotes(
 
 // V1.8 REFLECT — per-answer truncation applied at the loader boundary so the
 // payload crossing into the builder stays bounded even though the wizard
-// accepts up to 4000 chars per answer (`REVIEW_TEXT_MAX_CHARS`). The builder
-// re-hardens (trim + 400-char ceiling + `safeFreeText`) — this cap only keeps
-// the slice lean; it is NOT the sanitization layer.
-const MEMBER_WEEKLY_REVIEW_LOADER_MAX_CHARS = 300;
+// accepts up to 4000 chars per answer (`REVIEW_TEXT_MAX_CHARS`). J5.3 — all
+// three layers (loader cap, builder re-harden, schema `.max()`) now share
+// MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS (2000) as one source of truth, so a whole
+// real answer survives instead of being clipped at 300 mid-sentence. The builder
+// re-hardens (trim + `safeFreeText`); this cap only keeps the slice lean — it is
+// NOT the sanitization layer.
+const MEMBER_WEEKLY_REVIEW_LOADER_MAX_CHARS = MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS;
 
 /**
  * V1.8 REFLECT — the member's OWN completed weekly review for the report week.

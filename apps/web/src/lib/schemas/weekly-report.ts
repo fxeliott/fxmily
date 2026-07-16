@@ -45,6 +45,16 @@ export const RISKS_MAX = 5;
 export const RECOMMENDATIONS_MIN = 1;
 export const RECOMMENDATIONS_MAX = 5;
 export const PATTERN_VALUE_MAX_CHARS = 400;
+/**
+ * J5.3 — dedicated ceiling for the 5 member weekly-review free-text answers
+ * (biggestWin, biggestMistake, bestPractice, lessonLearned, nextWeekFocus).
+ * Separate from PATTERN_VALUE_MAX_CHARS (shared by the short derived patterns +
+ * journalExcerpts + morningIntentions, which must stay tight). 2000 chars ≈ 350
+ * words carries a whole real review answer (the old 300 cap truncated
+ * mid-sentence); stays 2× under the DB ceiling REVIEW_TEXT_MAX_CHARS=4000.
+ * Loader + builder align to this single constant (import = one source of truth).
+ */
+export const MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS = 2000;
 
 // Free-text item — free-form string with anti-injection hardening.
 const safeItemSchema = z
@@ -73,6 +83,20 @@ const safePatternValueSchema = z
   .string()
   .trim()
   .max(PATTERN_VALUE_MAX_CHARS)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — strip em/en dashes from Claude output
+  // before it is persisted / shown to a member. AI output only (not member input).
+  .transform(normalizeAiTypography);
+
+// J5.3 — exact mirror of safePatternValueSchema (same trim + bidi/zero-width
+// refine + safeFreeText + typography belt), only the .max() ceiling differs.
+// Dedicated to the 5 member weekly-review answers so they can carry a whole
+// real review (2000 chars) without loosening PATTERN_VALUE_MAX_CHARS.
+const safeMemberWeeklyReviewValueSchema = z
+  .string()
+  .trim()
+  .max(MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .transform(safeFreeText)
   // Deterministic typography belt (F-J1) — strip em/en dashes from Claude output
@@ -302,17 +326,19 @@ const freeTextSliceSchema = z
     morningIntentions: z.array(safePatternValueSchema).max(5),
     /// V1.8 REFLECT — the member's own weekly-review answers (their words about
     /// their week), builder re-hardened (trim + truncate + safeFreeText) then
-    /// re-validated here (`safePatternValueSchema` = bidi refine + safeFreeText
-    /// + typography). `bestPractice` is the wizard's only optional answer →
-    /// honest `null`. Optional: absent when the member submitted no review
-    /// (honest empty state — historical snapshots re-parse unchanged).
+    /// re-validated here (`safeMemberWeeklyReviewValueSchema` = bidi refine +
+    /// safeFreeText + typography, ceiling MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS =
+    /// 2000 so a whole real answer survives — J5.3). `bestPractice` is the
+    /// wizard's only optional answer → honest `null`. Optional: absent when the
+    /// member submitted no review (honest empty state — historical snapshots
+    /// re-parse unchanged).
     memberWeeklyReview: z
       .object({
-        biggestWin: safePatternValueSchema,
-        biggestMistake: safePatternValueSchema,
-        bestPractice: safePatternValueSchema.nullable(),
-        lessonLearned: safePatternValueSchema,
-        nextWeekFocus: safePatternValueSchema,
+        biggestWin: safeMemberWeeklyReviewValueSchema,
+        biggestMistake: safeMemberWeeklyReviewValueSchema,
+        bestPractice: safeMemberWeeklyReviewValueSchema.nullable(),
+        lessonLearned: safeMemberWeeklyReviewValueSchema,
+        nextWeekFocus: safeMemberWeeklyReviewValueSchema,
       })
       .strict()
       .optional(),

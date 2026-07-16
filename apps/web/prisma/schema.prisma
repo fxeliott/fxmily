@@ -2979,6 +2979,16 @@ enum ProofOcrStatus {
   failed
 }
 
+/// S3 / J4.1 — why an MT5 proof was terminally refused (ocrStatus='failed').
+/// Drives the calm, legible member-facing message on the /verification screen
+/// (see lib/verification/failure-reason.ts). Additive enum — new refusal
+/// categories append here.
+enum ProofFailureReason {
+  LOGIN_NOT_FOUND
+  NOT_MT5_SCREEN
+  ANALYSIS_UNREADABLE
+}
+
 /// S3 — provenance of an extracted position. Single value today (vision OCR
 /// of an MT5 history screenshot); a future V3 broker-API import becomes an
 /// additive enum value, not a new model.
@@ -3149,6 +3159,12 @@ model Mt5AccountProof {
   ocrStatus   ProofOcrStatus @default(pending) @map("ocr_status")
   /// Vision batch run identifier (mirror of the other pipelines' audit trail).
   claudeRunId String?        @map("claude_run_id")
+
+  /// J4.1 — why the proof was terminally refused (ocrStatus='failed'). Null for
+  /// pending/done proofs AND for pre-J4.1 rows; the UI reads it defensively and
+  /// falls back to the generic « Lecture impossible » label when absent.
+  /// Additive + nullable — never blocks a persist.
+  failureReason ProofFailureReason? @map("failure_reason")
 
   /// Tour 13 — when the stored screenshot bytes were deleted after a COMPLETE
   /// analysis (done, or terminal failure). The proof ROW stays (audit trail +

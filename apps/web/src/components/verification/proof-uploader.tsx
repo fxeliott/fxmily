@@ -1,10 +1,11 @@
 'use client';
 
-import { Image as ImageIcon, Upload } from 'lucide-react';
+import { FileWarning, Image as ImageIcon, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useId, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/spinner';
+import { CaptureGuide } from '@/components/verification/capture-guide';
 import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
 import { compressProofImage } from '@/lib/uploads/compress-proof-client';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/uploads/heic.client';
@@ -97,9 +98,16 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
   // Taille du fichier en cours d'envoi, affichée pendant l'upload (rassure sur
   // « c'est bien parti », null hors upload).
   const [uploadingSize, setUploadingSize] = useState<number | null>(null);
+  // J4.3 — vrai quand l'erreur courante vient du sniff %PDF client (affiche un
+  // message dédié + le déclencheur du mini-guide de capture au lieu de l'erreur
+  // brute). J4.4 — état d'ouverture du bottom-sheet mini-guide.
+  const [isPdfError, setIsPdfError] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const upload = useCallback(
     async (file: File) => {
+      // Clear any prior %PDF hint before re-evaluating this file.
+      setIsPdfError(false);
       // Client-side guards — server re-validates regardless.
       if (file.size === 0) {
         setStatus('error');
@@ -123,6 +131,24 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       ) {
         setStatus('error');
         setMessage(errorLabel('invalid_mime'));
+        return;
+      }
+
+      // J4.3 — client-side %PDF sniff. Members sometimes "export" their MT5
+      // history as a PDF instead of a screenshot; catch it here (zero network,
+      // before any POST) with a dedicated, actionable message + the capture
+      // mini-guide, so the file never leaves the phone. Purely additive — the
+      // size / MIME / HEIC guards above are untouched. A PDF starts with the
+      // magic bytes 25 50 44 46 ("%PDF"); reading 5 bytes is cheap and any
+      // shorter file (already size-guarded > 0) simply won't match.
+      const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+      const isPdf = head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46;
+      if (isPdf) {
+        setStatus('error');
+        setIsPdfError(true);
+        setMessage(
+          'On dirait un PDF. On a besoin d’une capture d’écran (image), pas d’un export PDF.',
+        );
         return;
       }
 
@@ -326,14 +352,34 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       ) : null}
 
       {message ? (
-        <p
-          id={errorId}
-          role="alert"
-          className="inline-flex items-center gap-1.5 text-[11px] text-[var(--bad)]"
-        >
-          {message}
-        </p>
+        isPdfError ? (
+          // J4.3/J4.4 — dedicated PDF block: calm message + guide trigger.
+          <div id={errorId} role="alert" className="flex flex-col items-start gap-2">
+            <p className="inline-flex items-start gap-1.5 text-[11px] leading-[1.5] text-[var(--bad)]">
+              <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <span>{message}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              aria-haspopup="dialog"
+              className="rounded-control inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--acc)] underline decoration-[var(--b-acc)] underline-offset-2 transition-colors hover:text-[var(--acc-hi)] hover:decoration-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              Comment faire une capture ?
+            </button>
+          </div>
+        ) : (
+          <p
+            id={errorId}
+            role="alert"
+            className="inline-flex items-center gap-1.5 text-[11px] text-[var(--bad)]"
+          >
+            {message}
+          </p>
+        )
       ) : null}
+
+      <CaptureGuide open={guideOpen} onOpenChange={setGuideOpen} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { ZodError } from 'zod';
 
+import type { ProofFailureReason } from '@/generated/prisma/enums';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { selectStorage } from '@/lib/storage';
@@ -384,10 +385,14 @@ export async function persistVisionResults(
   const flipProofToFailedAndPurge = async (
     proofRow: { id: string; fileKey: string; filePurgedAt: Date | null },
     userId: string,
+    failureReason: ProofFailureReason,
   ): Promise<void> => {
     await db.mt5AccountProof.update({
       where: { id: proofRow.id },
-      data: { ocrStatus: 'failed', claudeRunId: ranAt },
+      // J4.1 — the failure reason is written in the SAME update that flips the
+      // proof to terminal `failed`, so the /verification screen can render a
+      // calm, specific message instead of the generic « Lecture impossible ».
+      data: { ocrStatus: 'failed', claudeRunId: ranAt, failureReason },
     });
     bumpVerdict(userId, 'failed');
     await purgeProofFile({
@@ -450,7 +455,7 @@ export async function persistVisionResults(
           proofForCap.memberId === rawEntry.userId &&
           proofForCap.ocrStatus === 'pending'
         ) {
-          await flipProofToFailedAndPurge(proofForCap, rawEntry.userId);
+          await flipProofToFailedAndPurge(proofForCap, rawEntry.userId, 'ANALYSIS_UNREADABLE');
           await logAudit({
             action: 'verification.batch.skipped',
             userId: rawEntry.userId,
@@ -509,7 +514,7 @@ export async function persistVisionResults(
         // Terminal `failed` → the member learns the capture could not be read
         // (they re-shoot via a fresh upload — the screen is purged, never
         // retried from storage); counted toward this run's verdict push.
-        await flipProofToFailedAndPurge(proof, entry.userId);
+        await flipProofToFailedAndPurge(proof, entry.userId, 'NOT_MT5_SCREEN');
       }
       await logAudit({
         action: 'verification.batch.skipped',
@@ -557,7 +562,7 @@ export async function persistVisionResults(
       // Attempt cap — mirror of Gate 0 (ownership already proven by Gate 2,
       // `done` already excluded by Gate 3, so only `pending` needs checking).
       if (attempt >= INVALID_OUTPUT_MAX_ATTEMPTS && proof.ocrStatus === 'pending') {
-        await flipProofToFailedAndPurge(proof, entry.userId);
+        await flipProofToFailedAndPurge(proof, entry.userId, 'ANALYSIS_UNREADABLE');
         await logAudit({
           action: 'verification.batch.skipped',
           userId: entry.userId,
@@ -585,7 +590,7 @@ export async function persistVisionResults(
     if (output.account.login === null) {
       skipped += 1;
       if (proof.ocrStatus === 'pending') {
-        await flipProofToFailedAndPurge(proof, entry.userId);
+        await flipProofToFailedAndPurge(proof, entry.userId, 'LOGIN_NOT_FOUND');
       }
       await logAudit({
         action: 'verification.batch.skipped',

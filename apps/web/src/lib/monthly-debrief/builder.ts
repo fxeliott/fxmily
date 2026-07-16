@@ -30,6 +30,8 @@ import {
   PREVIOUS_DEBRIEF_RECO_MAX_CHARS,
   PREVIOUS_DEBRIEF_RECO_MAX_ITEMS,
   PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS,
+  REFLECTION_FIELD_MAX_CHARS,
+  REFLECTION_PROMPT_MAX_ENTRIES,
   WEEKLY_CONTEXT_MAX,
   type MonthlySnapshot,
 } from '@/lib/schemas/monthly-debrief';
@@ -133,6 +135,10 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // TASK D — recent member journal verbatim (auto-declared DATA, never
     // instructions — wrapped untrusted at the prompt boundary).
     journalExcerpts: collectJournalExcerpts(input),
+    // J5.1 — reflexions ABCD recentes (CBT Ellis) du membre : free-text auto-
+    // declare (A/B/C/D), jamais des instructions -> wrapped untrusted au prompt.
+    // Le helper borne aux N plus recentes + `safeFreeText`. [] quand aucune.
+    reflections: buildReflections(input),
     // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
     // untrusted at the prompt boundary.
@@ -199,6 +205,33 @@ function buildPreviousDebrief(
     .filter((rec) => rec.length > 0)
     .slice(0, PREVIOUS_DEBRIEF_RECO_MAX_ITEMS);
   return { monthStart: prev.monthStart, summaryReal, recommendations };
+}
+
+/**
+ * J5.1 — coerce the loader's raw ABCD reflections into the BOUNDED slice: keep
+ * the N most recent (loader already ordered desc), hard-slice each field to
+ * `REFLECTION_FIELD_MAX_CHARS`, `safeFreeText` re-hardens (defense-in-depth:
+ * validated at write, but member-authored). Drops an entry whose any ABCD field
+ * is empty post-sanitize (never a half-rendered reflection).
+ */
+function buildReflections(input: MonthlyBuilderInput): MonthlySnapshot['reflections'] {
+  const clamp = (s: string): string => safeFreeText(s.trim()).slice(0, REFLECTION_FIELD_MAX_CHARS);
+  return (input.reflections ?? [])
+    .slice(0, REFLECTION_PROMPT_MAX_ENTRIES)
+    .map((r) => ({
+      date: r.date,
+      triggerEvent: clamp(r.triggerEvent),
+      beliefAuto: clamp(r.beliefAuto),
+      consequence: clamp(r.consequence),
+      disputation: clamp(r.disputation),
+    }))
+    .filter(
+      (r) =>
+        r.triggerEvent.length > 0 &&
+        r.beliefAuto.length > 0 &&
+        r.consequence.length > 0 &&
+        r.disputation.length > 0,
+    );
 }
 
 // =============================================================================

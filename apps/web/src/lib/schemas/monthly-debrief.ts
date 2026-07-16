@@ -519,6 +519,16 @@ export const PREVIOUS_DEBRIEF_RECO_MAX_CHARS = 200;
 export const PREVIOUS_DEBRIEF_RECO_MAX_ITEMS = 3;
 
 /**
+ * J5.1 — bornes DURES de la slice « reflexions ABCD » (CBT Ellis : A declencheur,
+ * B croyance, C consequence, D recadrage). Free-text MEMBRE -> rendu untrusted au
+ * prompt. On borne aux N plus recentes du mois, chaque champ tronque a M chars
+ * (source : 2000 max au write ; 240 = signal, pas l'essai complet). Budget ajoute
+ * ~ 3 x 4 x 240 ~ 2,9 KB / membre*mois. SSOT partagee schema+builder.
+ */
+export const REFLECTION_PROMPT_MAX_ENTRIES = 3;
+export const REFLECTION_FIELD_MAX_CHARS = 240;
+
+/**
  * J5.4 — slice « debrief du mois precedent (N-1) » : NOTRE propre sortie IA du
  * mois dernier (`summaryReal` cote REEL uniquement — §21.5, jamais le training —
  * + les `recommendations`), reinjectee BORNEE pour la continuite du suivi.
@@ -546,6 +556,34 @@ const previousDebriefSchema = z
           .transform(safeFreeText),
       )
       .max(PREVIOUS_DEBRIEF_RECO_MAX_ITEMS),
+  })
+  .strict();
+
+/**
+ * J5.1 — champ ABCD borne partage (A/B/C/D). Free-text MEMBRE : `safeFreeText`
+ * + `.max()` defense-in-depth (deja borne au write 10-2000, re-borne ici a M).
+ */
+const reflectionFieldSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(REFLECTION_FIELD_MAX_CHARS)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caracteres de controle interdits.')
+  .transform(safeFreeText);
+
+/**
+ * J5.1 — slice « reflexions ABCD recentes » : les entrees CBT (Ellis) du membre
+ * sur le mois (A/B/C/D), bornees aux N plus recentes, chaque champ <= M chars.
+ * Free-text MEMBRE -> rendu untrusted au prompt boundary. `.strict()` rejette
+ * tout champ non declare.
+ */
+const reflectionSliceSchema = z
+  .object({
+    date: z.string().min(1).max(40),
+    triggerEvent: reflectionFieldSchema,
+    beliefAuto: reflectionFieldSchema,
+    consequence: reflectionFieldSchema,
+    disputation: reflectionFieldSchema,
   })
   .strict();
 
@@ -700,6 +738,10 @@ export const monthlySnapshotSchema = z
     /// J5.4 — continuite N-1 : rappel BORNE de notre debrief du mois precedent
     /// (REEL only §21.5). Absent -> le prompt omet le bloc (retrocompat totale).
     previousDebrief: previousDebriefSchema.optional(),
+    /// J5.1 — reflexions ABCD recentes du membre (CBT Ellis), bornees aux N plus
+    /// recentes. Free-text MEMBRE -> rendu untrusted au prompt. Toujours present
+    /// (array vide si aucune -> le prompt omet la section, retrocompat).
+    reflections: z.array(reflectionSliceSchema).max(REFLECTION_PROMPT_MAX_ENTRIES),
   })
   .strict();
 

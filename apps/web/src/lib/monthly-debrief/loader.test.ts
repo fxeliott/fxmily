@@ -45,6 +45,9 @@ vi.mock('@/lib/db', () => ({
     // `null` par defaut = aucun debrief anterieur (les slices existantes restent
     // byte-identiques : previousDebrief est simplement omis).
     monthlyDebrief: { findFirst: vi.fn(async () => null) },
+    // J5.1 — le loader interroge les reflexions ABCD du mois. `[]` par defaut
+    // = aucune reflexion (les slices existantes restent byte-identiques).
+    reflectionEntry: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -357,5 +360,50 @@ describe('loadMonthlySliceForUser — J5.4 previousDebrief (continuite N-1)', ()
     vi.mocked(db.monthlyDebrief.findFirst).mockResolvedValue(null as never);
     const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
     expect(slice!.builderInput.previousDebrief).toBeUndefined();
+  });
+});
+
+describe('loadMonthlySliceForUser — J5.1 reflexions ABCD (CBT Ellis)', () => {
+  it('charge les reflexions ABCD dans builderInput.reflections (mappees + date locale)', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([
+      {
+        date: new Date('2026-04-15T00:00:00.000Z'),
+        triggerEvent: 'Gros gap a l ouverture',
+        beliefAuto: 'Je vais rater le move',
+        consequence: 'FOMO, entree impulsive',
+        disputation: 'Attendre le retest, mon plan tient',
+      },
+    ] as never);
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+    const refs = slice!.builderInput.reflections;
+    expect(refs).toBeDefined();
+    expect(refs).toHaveLength(1);
+    expect(refs![0]!.date).toBe('2026-04-15');
+    expect(refs![0]!.triggerEvent).toBe('Gros gap a l ouverture');
+    expect(refs![0]!.disputation).toBe('Attendre le retest, mon plan tient');
+  });
+
+  it('interroge la fenetre du mois (date gte/lte), bornee + ordonnee desc', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([] as never);
+    await loadMonthlySliceForUser('user-1', { now: NOW });
+    const call = vi.mocked(db.reflectionEntry.findMany).mock.calls[0];
+    expect(call, 'un findMany reflectionEntry doit avoir eu lieu').toBeDefined();
+    const arg = call![0] as {
+      where: { userId: string; date: { gte: Date; lte: Date } };
+      orderBy: unknown;
+      take: number;
+    };
+    expect(arg.where.userId).toBe('user-1');
+    expect(arg.where.date.gte).toBeInstanceOf(Date);
+    expect(arg.where.date.lte).toBeInstanceOf(Date);
+    expect(arg.take).toBe(3);
+    expect(arg.orderBy).toEqual([{ date: 'desc' }, { createdAt: 'desc' }]);
+  });
+
+  it('retrocompat : aucune reflexion -> builderInput.reflections === []', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([] as never);
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+    expect(slice!.builderInput.reflections).toEqual([]);
   });
 });

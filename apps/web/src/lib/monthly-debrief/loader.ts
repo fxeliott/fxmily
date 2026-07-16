@@ -61,7 +61,7 @@ import { listConstancyScoresInRange, currentPeriodStart } from '@/lib/verificati
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
-import { WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
+import { REFLECTION_PROMPT_MAX_ENTRIES, WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
 // J-AI corrections echo — the axis FR label prefixes each coach correction so the
 // debrief can theme them. Pure data module (no DB/edge), §2-safe (process axes).
 import { getAxisLabel } from '@/lib/tracking/axes';
@@ -339,6 +339,37 @@ export async function loadMonthlySliceForUser(
       }
     : undefined;
 
+  // J5.1 — reflexions ABCD (CBT Ellis) du membre sur la fenetre du mois civil.
+  // Requete indexee (@@index([userId, date(sort: Desc)])) bornee aux N plus
+  // recentes ; on ne selectionne QUE les 4 champs A/B/C/D + la date (aucune PII).
+  // Free-text MEMBRE -> le builder borne + `safeFreeText`, rendu untrusted au
+  // prompt. `[]` quand aucune -> le prompt omet la section (retrocompat).
+  const reflectionRows = await db.reflectionEntry.findMany({
+    where: {
+      userId,
+      date: {
+        gte: parseLocalDate(window.monthStartLocal),
+        lte: parseLocalDate(window.monthEndLocal),
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    take: REFLECTION_PROMPT_MAX_ENTRIES,
+    select: {
+      date: true,
+      triggerEvent: true,
+      beliefAuto: true,
+      consequence: true,
+      disputation: true,
+    },
+  });
+  const reflections = reflectionRows.map((row) => ({
+    date: row.date.toISOString().slice(0, 10),
+    triggerEvent: row.triggerEvent,
+    beliefAuto: row.beliefAuto,
+    consequence: row.consequence,
+    disputation: row.disputation,
+  }));
+
   // Tour 14 — count the off days inside the civil-month window [monthStartLocal,
   // monthEndLocal] (both inclusive, civil-local). Weekends off-by-default are
   // folded in via `offCtx.weekendsOff`, exactly like the scoring/weekly count.
@@ -477,6 +508,8 @@ export async function loadMonthlySliceForUser(
     coaching,
     // J5.4 — continuite N-1 (spread conditionnel, exactOptionalPropertyTypes).
     ...(previousDebrief ? { previousDebrief } : {}),
+    // J5.1 — reflexions ABCD recentes (toujours present ; [] quand aucune).
+    reflections,
   };
 
   return {

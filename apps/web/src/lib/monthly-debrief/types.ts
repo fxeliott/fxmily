@@ -181,6 +181,25 @@ export interface MonthlyBuilderInput {
     recommendations: string[];
   };
   /**
+   * J5.1 — reflexions ABCD (CBT Ellis) du membre sur le mois, pre-chargees par
+   * le loader (`db.reflectionEntry.findMany` les N plus recentes de la fenetre).
+   * Le builder borne (N entrees, chaque champ <= M chars) + `safeFreeText`.
+   * Absente (`?:`) quand aucune reflexion -> le builder produit `[]` -> le prompt
+   * omet la section (retrocompat).
+   */
+  reflections?: Array<{
+    /// Date civile locale de la reflexion (YYYY-MM-DD), rendue telle quelle.
+    date: string;
+    /// A — declencheur (evenement factuel).
+    triggerEvent: string;
+    /// B — croyance automatique.
+    beliefAuto: string;
+    /// C — consequence (emotion + comportement).
+    consequence: string;
+    /// D — recadrage / disputation.
+    disputation: string;
+  }>;
+  /**
    * J-AI corrections echo — the coach's corrections on the member's REAL trades
    * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`
    * (only corrections the admin TAGGED with a `TrackingAxis` — the label prefixes

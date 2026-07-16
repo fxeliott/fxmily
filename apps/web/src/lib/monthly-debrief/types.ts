@@ -200,6 +200,18 @@ export interface MonthlyBuilderInput {
     disputation: string;
   }>;
   /**
+   * J5.7 — objectifs de PROCESS du membre (anneaux 0-100 + axe de coaching hebdo
+   * + objectif de methode derive), pre-charges par le loader via le SSOT
+   * `getProcessObjectives` (ce que le membre voit sur /objectifs). Le builder
+   * borne + `safeFreeText` (coachingAxis AI-derived). Absente (`?:`) -> le prompt
+   * omet la section (retrocompat). §2-safe (process/psycho), hors firewall §21.5.
+   */
+  objectives?: {
+    rings: Array<{ label: string; current: number | null; target: number; reached: boolean }>;
+    coachingAxis: string | null;
+    methodGoal: { label: string; hint: string; current: number; target: number } | null;
+  };
+  /**
    * J-AI corrections echo — the coach's corrections on the member's REAL trades
    * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`
    * (only corrections the admin TAGGED with a `TrackingAxis` — the label prefixes

@@ -27,6 +27,8 @@ import { safeFreeText } from '@/lib/text/safe';
 import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 
 import {
+  OBJECTIVES_RING_MAX,
+  OBJECTIVES_TEXT_MAX_CHARS,
   PREVIOUS_DEBRIEF_RECO_MAX_CHARS,
   PREVIOUS_DEBRIEF_RECO_MAX_ITEMS,
   PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS,
@@ -139,6 +141,14 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // declare (A/B/C/D), jamais des instructions -> wrapped untrusted au prompt.
     // Le helper borne aux N plus recentes + `safeFreeText`. [] quand aucune.
     reflections: buildReflections(input),
+    // J5.7 — objectifs de process (anneaux + axe + methodGoal), via le SSOT
+    // getProcessObjectives (ce que le membre voit sur /objectifs). Le helper borne
+    // + safeFreeText ; `null` -> slice omise (exactOptionalPropertyTypes ->
+    // conditional spread). Retrocompat : sans donnee d'objectif -> meme snapshot.
+    ...(() => {
+      const objectives = buildObjectives(input);
+      return objectives ? { objectives } : {};
+    })(),
     // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
     // untrusted at the prompt boundary.
@@ -232,6 +242,41 @@ function buildReflections(input: MonthlyBuilderInput): MonthlySnapshot['reflecti
         r.consequence.length > 0 &&
         r.disputation.length > 0,
     );
+}
+
+/**
+ * J5.7 — coerce the loader's raw process objectives into the BOUNDED slice: keep
+ * the rings (<=4, numeric labels), clamp the AI/deterministic text fields to
+ * `OBJECTIVES_TEXT_MAX_CHARS` (+ safeFreeText), null-ify any empty text so the
+ * schema's `.min(1)` never rejects. Returns `null` when there is NOTHING
+ * meaningful (no scored ring, no axis, no method goal) so the caller omits the
+ * slice entirely (honest empty state — never a fabricated objectives block).
+ */
+function buildObjectives(
+  input: MonthlyBuilderInput,
+): NonNullable<MonthlySnapshot['objectives']> | null {
+  const src = input.objectives;
+  if (!src) return null;
+  const clamp = (s: string): string => safeFreeText(s.trim()).slice(0, OBJECTIVES_TEXT_MAX_CHARS);
+  const rings = src.rings.slice(0, OBJECTIVES_RING_MAX).map((r) => ({
+    label: r.label.trim().slice(0, 60),
+    current: r.current,
+    target: r.target,
+    reached: r.reached,
+  }));
+  const axis = src.coachingAxis ? clamp(src.coachingAxis) : '';
+  const coachingAxis = axis.length > 0 ? axis : null;
+  let methodGoal: NonNullable<MonthlySnapshot['objectives']>['methodGoal'] = null;
+  if (src.methodGoal) {
+    const label = clamp(src.methodGoal.label);
+    const hint = clamp(src.methodGoal.hint);
+    if (label.length > 0 && hint.length > 0) {
+      methodGoal = { label, hint, current: src.methodGoal.current, target: src.methodGoal.target };
+    }
+  }
+  const hasScoredRing = rings.some((r) => r.current !== null);
+  if (!hasScoredRing && coachingAxis === null && methodGoal === null) return null;
+  return { rings, coachingAxis, methodGoal };
 }
 
 // =============================================================================

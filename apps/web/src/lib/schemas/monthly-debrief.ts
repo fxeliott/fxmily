@@ -529,6 +529,15 @@ export const REFLECTION_PROMPT_MAX_ENTRIES = 3;
 export const REFLECTION_FIELD_MAX_CHARS = 240;
 
 /**
+ * J5.7 — bornes DURES de la slice « objectifs de process » (anneaux 0-100, axe de
+ * coaching hebdo, objectif de methode derive). Anneaux = 4 dimensions (structural).
+ * Champs texte (coachingAxis AI-derived, methodGoal deterministe) tronques a M
+ * chars + `safeFreeText`. SSOT partagee schema+builder. Budget minuscule (~1 KB).
+ */
+export const OBJECTIVES_RING_MAX = 4;
+export const OBJECTIVES_TEXT_MAX_CHARS = 200;
+
+/**
  * J5.4 — slice « debrief du mois precedent (N-1) » : NOTRE propre sortie IA du
  * mois dernier (`summaryReal` cote REEL uniquement — §21.5, jamais le training —
  * + les `recommendations`), reinjectee BORNEE pour la continuite du suivi.
@@ -584,6 +593,53 @@ const reflectionSliceSchema = z
     beliefAuto: reflectionFieldSchema,
     consequence: reflectionFieldSchema,
     disputation: reflectionFieldSchema,
+  })
+  .strict();
+
+/**
+ * J5.7 — champ texte borne des objectifs (axe de coaching / libelle+hint de
+ * methodGoal). `safeFreeText` + `.max()` defense-in-depth. min(1) : le builder
+ * null-ifie tout champ vide avant qu'il n'atteigne le schema.
+ */
+const objectivesTextSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(OBJECTIVES_TEXT_MAX_CHARS)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caracteres de controle interdits.')
+  .transform(safeFreeText);
+
+/**
+ * J5.7 — un anneau d'objectif de process (une dimension comportementale : score
+ * actuel 0-100 ou null, cible, atteinte). Libelle FIXE (DIMENSION_META).
+ */
+const objectiveRingSchema = z
+  .object({
+    label: z.string().trim().min(1).max(60),
+    current: z.number().int().min(0).max(100).nullable(),
+    target: z.number().int().min(0).max(100),
+    reached: z.boolean(),
+  })
+  .strict();
+
+/**
+ * J5.7 — slice « objectifs de process » : les anneaux (<=4), l'axe de coaching de
+ * la semaine (AI-derived, nullable), l'objectif de methode derive (deterministe,
+ * nullable). Contexte DESCRIPTIF (posture §2). `.strict()` rejette tout extra.
+ */
+const objectivesSliceSchema = z
+  .object({
+    rings: z.array(objectiveRingSchema).max(OBJECTIVES_RING_MAX),
+    coachingAxis: objectivesTextSchema.nullable(),
+    methodGoal: z
+      .object({
+        label: objectivesTextSchema,
+        hint: objectivesTextSchema,
+        current: z.number().int().min(0).max(100),
+        target: z.number().int().min(0).max(100),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
@@ -742,6 +798,10 @@ export const monthlySnapshotSchema = z
     /// recentes. Free-text MEMBRE -> rendu untrusted au prompt. Toujours present
     /// (array vide si aucune -> le prompt omet la section, retrocompat).
     reflections: z.array(reflectionSliceSchema).max(REFLECTION_PROMPT_MAX_ENTRIES),
+    /// J5.7 — objectifs de process (anneaux + axe de coaching + objectif de
+    /// methode), issus du SSOT `getProcessObjectives`. Absent -> le prompt omet
+    /// la section (retrocompat, aucune cible fabriquee). Posture §2 (descriptif).
+    objectives: objectivesSliceSchema.optional(),
   })
   .strict();
 

@@ -27,6 +27,11 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 // there is 0 cross-member leak. NOT a §21.5-isolated symbol (onboarding answers
 // are real self-declaration, not training-backtest P&L) — unrestricted import.
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
+// J5.7 — SSOT des objectifs de process (anneaux + axe de coaching + objectif de
+// methode). Read-only (scoring + profil + miroir de methode) ; process/psycho
+// §2-safe, hors firewall §21.5 comme scoring/coaching. Le membre voit ces memes
+// valeurs sur /objectifs.
+import { getProcessObjectives } from '@/lib/objectives/service';
 // D1 (SPEC §25.2) — the sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross the member boundary. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -457,6 +462,28 @@ export async function loadMonthlySliceForUser(
   // section — no fabricated axes, §33.6).
   const memberProfile = toMemberProfileReference(memberProfileRow);
 
+  // J5.7 — objectifs de process du membre via le SSOT `getProcessObjectives`
+  // (read-only). On ne relaie que les 3 signaux demandes (anneaux, axe, methodGoal)
+  // — le builder borne + `safeFreeText`, `null`/vide -> le prompt omet la section.
+  const objectivesView = await getProcessObjectives(userId, user.timezone);
+  const objectives = {
+    rings: objectivesView.objectives.map((o) => ({
+      label: o.label,
+      current: o.current,
+      target: o.target,
+      reached: o.reached,
+    })),
+    coachingAxis: objectivesView.coachingAxis,
+    methodGoal: objectivesView.methodGoal
+      ? {
+          label: objectivesView.methodGoal.label,
+          hint: objectivesView.methodGoal.hint,
+          current: objectivesView.methodGoal.current,
+          target: objectivesView.methodGoal.target,
+        }
+      : null,
+  };
+
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude
     // boundary (8-char hex, salted via env.MEMBER_LABEL_SALT in prod).
@@ -510,6 +537,8 @@ export async function loadMonthlySliceForUser(
     ...(previousDebrief ? { previousDebrief } : {}),
     // J5.1 — reflexions ABCD recentes (toujours present ; [] quand aucune).
     reflections,
+    // J5.7 — objectifs de process (anneaux + axe + methodGoal, SSOT objectifs).
+    objectives,
   };
 
   return {

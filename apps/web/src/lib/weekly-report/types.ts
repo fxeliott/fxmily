@@ -114,6 +114,25 @@ export interface BuilderInput {
    */
   memberScreenNotes?: MemberScreenNote[];
   /**
+   * J5.1 — reflexions ABCD (CBT Ellis) du membre sur la SEMAINE, pre-chargees par
+   * le loader (`db.reflectionEntry.findMany` les N plus recentes de la fenetre).
+   * Le builder borne (N entrees, chaque champ <= M chars) + `safeFreeText`.
+   * Absente (`?:`) quand aucune reflexion -> le builder produit `[]` -> le prompt
+   * omet la section (retrocompat, twin du debrief mensuel).
+   */
+  reflections?: Array<{
+    /// Date civile locale de la reflexion (YYYY-MM-DD), rendue telle quelle.
+    date: string;
+    /// A — declencheur (evenement factuel).
+    triggerEvent: string;
+    /// B — croyance automatique.
+    beliefAuto: string;
+    /// C — consequence (emotion + comportement).
+    consequence: string;
+    /// D — recadrage / disputation.
+    disputation: string;
+  }>;
+  /**
    * SPEC §21 J-T4 — number of the member's backtests in the report week
    * ("volume de pratique"). Optional: absent → the builder defaults it to 0
    * (existing fixtures + pre-J-T4 callers stay valid). 🚨 §21.5: an integer

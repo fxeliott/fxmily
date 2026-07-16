@@ -27,7 +27,11 @@ import type { TradeSession } from '@/generated/prisma/client.js';
 
 import { computeMaxConsecutiveLoss } from '@/lib/analytics/streaks';
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
-import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
+import {
+  MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS,
+  REFLECTION_FIELD_MAX_CHARS,
+  REFLECTION_PROMPT_MAX_ENTRIES,
+} from '@/lib/schemas/weekly-report';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import {
   EMOTION_ARC_MIN_TO_SURFACE,
@@ -644,8 +648,40 @@ function buildFreeText(input: BuilderInput): WeeklySnapshot['freeText'] {
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
     // untrusted at the prompt boundary.
     morningIntentions: collectMorningIntentions(input),
+    // J5.1 — reflexions ABCD recentes (CBT Ellis) du membre : free-text auto-
+    // declare (A/B/C/D), jamais des instructions -> wrapped untrusted au prompt.
+    // Le helper borne aux N plus recentes + `safeFreeText`. [] quand aucune.
+    reflections: buildReflections(input),
     ...(memberWeeklyReview ? { memberWeeklyReview } : {}),
   };
+}
+
+/**
+ * J5.1 — coerce the loader's raw ABCD reflections into the BOUNDED weekly slice:
+ * keep the N most recent (loader already ordered desc), hard-slice each field to
+ * `REFLECTION_FIELD_MAX_CHARS`, `safeFreeText` re-hardens (defense-in-depth:
+ * validated at write, but member-authored). Drops an entry whose any ABCD field
+ * is empty post-sanitize (never a half-rendered reflection). Twin of the monthly
+ * `buildReflections`.
+ */
+function buildReflections(input: BuilderInput): WeeklySnapshot['freeText']['reflections'] {
+  const clamp = (s: string): string => safeFreeText(s.trim()).slice(0, REFLECTION_FIELD_MAX_CHARS);
+  return (input.reflections ?? [])
+    .slice(0, REFLECTION_PROMPT_MAX_ENTRIES)
+    .map((r) => ({
+      date: r.date,
+      triggerEvent: clamp(r.triggerEvent),
+      beliefAuto: clamp(r.beliefAuto),
+      consequence: clamp(r.consequence),
+      disputation: clamp(r.disputation),
+    }))
+    .filter(
+      (r) =>
+        r.triggerEvent.length > 0 &&
+        r.beliefAuto.length > 0 &&
+        r.consequence.length > 0 &&
+        r.disputation.length > 0,
+    );
 }
 
 function collectEmotionTags(input: BuilderInput): string[] {

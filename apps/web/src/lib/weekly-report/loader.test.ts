@@ -42,6 +42,9 @@ vi.mock('@/lib/db', () => ({
     // (getOffDaySet). No explicit off days by default, keeping counters
     // byte-identical (weekendsOff: false is pinned on the user mock below).
     memberOffDay: { findMany: vi.fn(async () => []) },
+    // J5.1 — the loader reads the member's ABCD reflections of the week.
+    // `[]` by default = none (existing slices stay byte-identical).
+    reflectionEntry: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -235,5 +238,50 @@ describe('loadWeeklySliceForUser — V1.8 member weekly review injection', () =>
       lessonLearned: 'y'.repeat(500),
       nextWeekFocus: 'Une seule session par jour.',
     });
+  });
+});
+
+describe('loadWeeklySliceForUser — J5.1 reflexions ABCD (CBT Ellis)', () => {
+  it('charge les reflexions ABCD dans builderInput.reflections (mappees + date locale)', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([
+      {
+        date: new Date('2026-06-03T00:00:00.000Z'),
+        triggerEvent: 'Gros gap a l ouverture',
+        beliefAuto: 'Je vais rater le move',
+        consequence: 'FOMO, entree impulsive',
+        disputation: 'Attendre le retest, mon plan tient',
+      },
+    ] as never);
+
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    const refs = slice?.builderInput.reflections;
+    expect(refs).toBeDefined();
+    expect(refs).toHaveLength(1);
+    expect(refs![0]!.date).toBe('2026-06-03');
+    expect(refs![0]!.triggerEvent).toBe('Gros gap a l ouverture');
+    expect(refs![0]!.disputation).toBe('Attendre le retest, mon plan tient');
+  });
+
+  it('interroge la fenetre de la semaine (date gte/lte), bornee + ordonnee desc', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([] as never);
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    const call = vi.mocked(db.reflectionEntry.findMany).mock.calls[0];
+    expect(call, 'un findMany reflectionEntry doit avoir eu lieu').toBeDefined();
+    const arg = call![0] as {
+      where: { userId: string; date: { gte: Date; lte: Date } };
+      orderBy: unknown;
+      take: number;
+    };
+    expect(arg.where.userId).toBe('user-1');
+    expect(arg.where.date.gte).toBeInstanceOf(Date);
+    expect(arg.where.date.lte).toBeInstanceOf(Date);
+    expect(arg.take).toBe(3);
+    expect(arg.orderBy).toEqual([{ date: 'desc' }, { createdAt: 'desc' }]);
+  });
+
+  it('retrocompat : aucune reflexion -> builderInput.reflections === []', async () => {
+    vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([] as never);
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    expect(slice?.builderInput.reflections).toEqual([]);
   });
 });

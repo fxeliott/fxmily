@@ -21,6 +21,10 @@ import { reportWarning } from '@/lib/observability';
 // profile) weights the same-priority tie-break in `pickBestMatch`. Read-only,
 // deterministic; `null` for un-profiled members → historical pick order.
 import { getDominantMentalAxis } from '@/lib/coaching/service';
+// J5.8 — the member's favorited card categories weight the picker tie-break BELOW
+// priority + profile-axis. SSOT `listMyFavorites` (published-only, read-only);
+// empty for members who starred nothing → byte-identical historical pick order.
+import { listMyFavorites } from '@/lib/cards/service';
 import type { DouglasCategory } from '@/generated/prisma/enums';
 
 import {
@@ -214,6 +218,7 @@ export async function evaluateAndDispatchForUser(
     scoreHistory,
     dominantAxis,
     offDayRows,
+    favoritesList,
   ] = await Promise.all([
     db.trade.findMany({
       where: {
@@ -277,6 +282,9 @@ export async function evaluateAndDispatchForUser(
       where: { userId, date: { gte: checkinsWindowStart } },
       select: { date: true },
     }),
+    // J5.8 — the member's favorited cards (published-only, SSOT), read in parallel
+    // so it adds no wall-clock. Empty ⇒ the picker keeps its historical order.
+    listMyFavorites(userId),
   ]);
 
   // --- 3. Build TriggerContext -----------------------------------------------
@@ -397,6 +405,10 @@ export async function evaluateAndDispatchForUser(
   const eligible = matches.filter((m) => !isOnCooldown(m.cardId, m.hatClass, history, now));
   const skippedCooldown = matches.length - eligible.length;
 
+  // J5.8 — the DISTINCT categories the member favorited, for the picker's
+  // favorites-aware tie-break (below priority + profile-axis). Empty ⇒ no boost.
+  const favoriteCategories = new Set(favoritesList.map((f) => f.cardCategory));
+
   const picked = pickBestMatch({
     matched: eligible.map((m) => ({
       id: m.cardId,
@@ -408,6 +420,8 @@ export async function evaluateAndDispatchForUser(
     now,
     // Tour 12 (action 3) — profile-aware tie-break AFTER priority + cooldown.
     dominantAxis,
+    // J5.8 — favorites-aware tie-break, one level below the profile-axis.
+    favoriteCategories,
   });
   if (!picked) {
     return { delivered: null, matched: matches.length, evaluated, skippedCooldown };

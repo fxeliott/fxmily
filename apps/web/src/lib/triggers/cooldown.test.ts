@@ -293,3 +293,89 @@ describe('isRoutineSaturated (TASK C — adaptive routine cadence)', () => {
     expect(isRoutineSaturated([rEntry(1), rEntry(2), rEntry(3)], 0)).toBe(false);
   });
 });
+
+describe('pickBestMatch — favorites-aware tie-break (J5.8)', () => {
+  it('same priority + no profile signal → the favorited-category card wins', () => {
+    // id ASC would pick 'a-clean'; the member favorited the 'tilt' category, so
+    // 'z-fav' (category tilt) wins the same-priority tie.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-clean', priority: 5, hatClass: 'white', category: 'discipline' },
+        { id: 'z-fav', priority: 5, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [],
+      now: NOW,
+      favoriteCategories: new Set(['tilt' as const]),
+    });
+    expect(r?.cardId).toBe('z-fav');
+  });
+
+  it('without favoriteCategories → identical to historical order (id ASC on ties)', () => {
+    const matched = [
+      { id: 'a-clean', priority: 5, hatClass: 'white' as const, category: 'discipline' as const },
+      { id: 'z-fav', priority: 5, hatClass: 'white' as const, category: 'tilt' as const },
+    ];
+    expect(pickBestMatch({ matched, history: [], now: NOW })?.cardId).toBe('a-clean');
+    expect(
+      pickBestMatch({ matched, history: [], now: NOW, favoriteCategories: null })?.cardId,
+    ).toBe('a-clean');
+  });
+
+  it('never overrides a higher-priority card (tie-break is AFTER priority)', () => {
+    const r = pickBestMatch({
+      matched: [
+        { id: 'high', priority: 9, hatClass: 'white', category: 'discipline' },
+        { id: 'low-fav', priority: 3, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [],
+      now: NOW,
+      favoriteCategories: new Set(['tilt' as const]),
+    });
+    expect(r?.cardId).toBe('high');
+  });
+
+  it('never resurrects a card on cooldown (tie-break is AFTER the cooldown filter)', () => {
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-clean', priority: 5, hatClass: 'white', category: 'discipline' },
+        { id: 'z-fav', priority: 5, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [entry('z-fav', 2)], // z-fav on cooldown → dropped before tie-break
+      now: NOW,
+      favoriteCategories: new Set(['tilt' as const]),
+    });
+    expect(r?.cardId).toBe('a-clean');
+  });
+
+  it('runs BELOW the profile-axis tie-break (Tour 12 wins over a favorite)', () => {
+    // card A is profile-aligned (ego) but not favorited; card B is favorited but
+    // not aligned. The profile-axis tie-break has higher precedence → A wins.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-aligned', priority: 5, hatClass: 'white', category: 'tilt' }, // maps to ego
+        { id: 'b-fav', priority: 5, hatClass: 'white', category: 'consistency' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'ego',
+      favoriteCategories: new Set(['consistency' as const]),
+    });
+    expect(r?.cardId).toBe('a-aligned');
+  });
+
+  it('breaks a tie among equally-aligned cards (favorite among a same-axis pair)', () => {
+    // Both 'discipline' and 'process' map to the discipline axis, so with a
+    // discipline-dominant member the profile tie-break is a wash → favorites decides.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-discipline', priority: 5, hatClass: 'white', category: 'discipline' },
+        { id: 'z-process', priority: 5, hatClass: 'white', category: 'process' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'discipline',
+      favoriteCategories: new Set(['process' as const]),
+    });
+    expect(r?.cardId).toBe('z-process');
+  });
+});

@@ -182,6 +182,14 @@ export interface PickerInput {
    * to the historical `priority DESC, id ASC` order.
    */
   dominantAxis?: MentalAxis | null;
+  /**
+   * J5.8 — the DouglasCategory set the member has favorited (starred). Used as a
+   * tie-break AFTER priority + cooldown + the profile-axis alignment: among cards
+   * still tied, one whose category the member favorited is surfaced first. Empty /
+   * absent ⇒ byte-identical to the pre-J5.8 order (no boost). Explicit member
+   * signal, §2-safe (a display-ordering preference, never a score input).
+   */
+  favoriteCategories?: ReadonlySet<DouglasCategory> | null;
 }
 
 export interface PickedCard {
@@ -196,8 +204,11 @@ export interface PickedCard {
  *      the member's dominant mental axis (profile-aware). This runs AFTER priority
  *      and the cooldown filter, so it never overrides a higher-priority card and
  *      never resurrects a card on cooldown — it only reorders same-priority ties.
- *   4. Final tie-break by `id` ASC (determinism).
- *   5. Return the head, or `null` if nothing eligible.
+ *   4. J5.8 — among cards STILL tied, prefer one whose category the member has
+ *      favorited (starred). Additive, BELOW priority + the profile-axis tie-break;
+ *      byte-identical when the member favorited nothing.
+ *   5. Final tie-break by `id` ASC (determinism).
+ *   6. Return the head, or `null` if nothing eligible.
  *
  * Pure — no DB, no clock. Engine layer handles persistence. Without `dominantAxis`
  * the ordering is byte-identical to before (no regression for un-profiled members).
@@ -210,6 +221,10 @@ export function pickBestMatch(input: PickerInput): PickedCard | null {
   const dominantAxis = input.dominantAxis ?? null;
   const isAligned = (c: PickerCard): boolean =>
     dominantAxis !== null && axisForCategory(c.category) === dominantAxis;
+  // J5.8 — favorites-aware tie-break signal (below priority + profile-axis).
+  const favoriteCategories = input.favoriteCategories ?? null;
+  const isFavorited = (c: PickerCard): boolean =>
+    favoriteCategories !== null && c.category !== undefined && favoriteCategories.has(c.category);
   eligible.sort((a, b) => {
     // 1) Priority DESC — the curated gravity, never overridden by the profile.
     if (a.priority !== b.priority) return b.priority - a.priority;
@@ -217,7 +232,11 @@ export function pickBestMatch(input: PickerInput): PickedCard | null {
     const alignedA = isAligned(a);
     const alignedB = isAligned(b);
     if (alignedA !== alignedB) return alignedA ? -1 : 1;
-    // 3) Deterministic final tie-break.
+    // 3) J5.8 favorites-aware tie-break — a favorited-category card wins a still-tie.
+    const favA = isFavorited(a);
+    const favB = isFavorited(b);
+    if (favA !== favB) return favA ? -1 : 1;
+    // 4) Deterministic final tie-break.
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   return { cardId: eligible[0]!.id };

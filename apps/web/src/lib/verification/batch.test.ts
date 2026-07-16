@@ -1020,3 +1020,72 @@ describe('null-login terminal skip + attempt cap (P1 MT5 mobile, 2026-07-10)', (
     expect(m.storageDelete).not.toHaveBeenCalled();
   });
 });
+
+describe('J4.6 — each terminal rejection persists its specific ProofFailureReason', () => {
+  // These helpers mirror the ones scoped inside the null-login describe above;
+  // re-declared here so this block is self-contained. The terminal flip is the
+  // FIRST `mt5AccountProof.update` call (`proofUpdate` call 0), which carries
+  // `data: { ocrStatus: 'failed', failureReason }`. The Tour 13 purge stamp is
+  // a separate, later update — hence asserting on `mock.calls[0]`.
+  function accountWithLogin(login: string | null) {
+    return {
+      login,
+      broker: 'FTMO S.R.O.',
+      currency: 'USD',
+      label: null,
+      accountTypeGuess: 'prop_firm' as const,
+    };
+  }
+
+  function malformedEntry() {
+    return {
+      proofId: PROOF,
+      userId: MEMBER,
+      output: { ...probeOutput(), confidence: 42 },
+    };
+  }
+
+  it("persists NOT_MT5_SCREEN when the capture wasn't an MT5 history", async () => {
+    seedHappyMocks();
+
+    const result = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, error: 'not_mt5_history' }],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.where).toEqual({ id: PROOF });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.failureReason).toBe('NOT_MT5_SCREEN');
+  });
+
+  it('persists LOGIN_NOT_FOUND when the account number was not visible', async () => {
+    seedHappyMocks();
+
+    const result = await persistVisionResults({
+      results: [
+        {
+          proofId: PROOF,
+          userId: MEMBER,
+          output: probeOutput({ account: accountWithLogin(null) }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.failureReason).toBe('LOGIN_NOT_FOUND');
+  });
+
+  it('persists ANALYSIS_UNREADABLE once the invalid-output attempt cap is reached', async () => {
+    seedHappyMocks();
+    // Prior attempts already logged in the window → THIS attempt hits the cap →
+    // terminal flip rather than another soft retry.
+    m.auditCount.mockResolvedValue(INVALID_OUTPUT_MAX_ATTEMPTS - 1);
+
+    const result = await persistVisionResults({ results: [malformedEntry()] });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.failureReason).toBe('ANALYSIS_UNREADABLE');
+  });
+});

@@ -1047,3 +1047,30 @@ describe('buildMonthlyDebriefUserPrompt — member screen notes section', () => 
     expect(prompt).not.toContain('## Ce que tu dis de tes screens');
   });
 });
+
+describe('buildMonthlyDebriefUserPrompt — J5.4 continuite N-1 (debrief precedent)', () => {
+  const prevMonthStart = new Date('2026-03-31T22:00:00.000Z'); // Paris 2026-04-01
+
+  it('injecte le bloc « Contexte du mois precedent » avec summary + recommandations', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          previousDebrief: {
+            monthStart: prevMonthStart,
+            summaryReal: 'Avril : gestion du risque en nette amelioration.',
+            recommendations: ['Tenir le journal chaque matin', 'Reduire la taille apres 2 pertes'],
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('Contexte du mois precedent (N-1');
+    expect(prompt).toContain('gestion du risque en nette amelioration');
+    expect(prompt).toContain('Tenir le journal chaque matin');
+    expect(prompt).toContain('Reduire la taille apres 2 pertes');
+  });
+
+  it('retrocompat : sans debrief N-1, aucun bloc de continuite', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Contexte du mois precedent');
+  });
+});

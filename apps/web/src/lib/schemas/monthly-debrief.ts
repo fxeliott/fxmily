@@ -509,6 +509,46 @@ const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
 
+/**
+ * J5.4 — bornes DURES de la slice de continuite N-1 (notre debrief du mois
+ * precedent reinjecte). SSOT partagee schema+builder (le builder tronque, le
+ * schema `.max()` re-valide). Budget ajoute ~ 600 + 3x200 ~ 1,2 KB / membre*mois.
+ */
+export const PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS = 600;
+export const PREVIOUS_DEBRIEF_RECO_MAX_CHARS = 200;
+export const PREVIOUS_DEBRIEF_RECO_MAX_ITEMS = 3;
+
+/**
+ * J5.4 — slice « debrief du mois precedent (N-1) » : NOTRE propre sortie IA du
+ * mois dernier (`summaryReal` cote REEL uniquement — §21.5, jamais le training —
+ * + les `recommendations`), reinjectee BORNEE pour la continuite du suivi.
+ * `safeFreeText` + `.max()` = defense-in-depth (contenu deja valide au write mais
+ * member-derived). `.strict()` rejette tout champ non declare.
+ */
+const previousDebriefSchema = z
+  .object({
+    monthStart: z.date(),
+    summaryReal: z
+      .string()
+      .trim()
+      .min(1)
+      .max(PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS)
+      .refine((s) => !containsBidiOrZeroWidth(s), 'Caracteres de controle interdits.')
+      .transform(safeFreeText),
+    recommendations: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(PREVIOUS_DEBRIEF_RECO_MAX_CHARS)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caracteres de controle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(PREVIOUS_DEBRIEF_RECO_MAX_ITEMS),
+  })
+  .strict();
+
 export const monthlySnapshotSchema = z
   .object({
     pseudonymLabel: pseudonymLabelSchema,
@@ -657,6 +697,9 @@ export const monthlySnapshotSchema = z
     /// (`Trade.exitReason`). OPTIONAL : omitted when no closed trade carried an
     /// exitReason (feature récente — honest empty state). Posture §2 (factual).
     exitReasonDistribution: exitReasonDistributionSchema.optional(),
+    /// J5.4 — continuite N-1 : rappel BORNE de notre debrief du mois precedent
+    /// (REEL only §21.5). Absent -> le prompt omet le bloc (retrocompat totale).
+    previousDebrief: previousDebriefSchema.optional(),
   })
   .strict();
 

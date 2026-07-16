@@ -26,7 +26,13 @@ import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import { safeFreeText } from '@/lib/text/safe';
 import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 
-import { WEEKLY_CONTEXT_MAX, type MonthlySnapshot } from '@/lib/schemas/monthly-debrief';
+import {
+  PREVIOUS_DEBRIEF_RECO_MAX_CHARS,
+  PREVIOUS_DEBRIEF_RECO_MAX_ITEMS,
+  PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS,
+  WEEKLY_CONTEXT_MAX,
+  type MonthlySnapshot,
+} from '@/lib/schemas/monthly-debrief';
 
 import type { MonthlyBuilderInput } from './types';
 
@@ -158,7 +164,41 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
       const exitReasonDistribution = buildExitReasonDistribution(input);
       return exitReasonDistribution ? { exitReasonDistribution } : {};
     })(),
+    // J5.4 — continuite N-1 : rappel BORNE du debrief du mois precedent (notre
+    // propre sortie IA deja validee). Le helper tronque aux bornes + re-harden
+    // safeFreeText ; `null`/absent -> slice omise (exactOptionalPropertyTypes ->
+    // conditional spread). Retrocompat : un membre sans debrief N-1 produit le
+    // meme snapshot qu'avant.
+    ...(() => {
+      const previousDebrief = input.previousDebrief
+        ? buildPreviousDebrief(input.previousDebrief)
+        : null;
+      return previousDebrief ? { previousDebrief } : {};
+    })(),
   };
+}
+
+/**
+ * J5.4 — coerce the loader's raw previous-month debrief into the BOUNDED N-1
+ * continuity slice. `safeFreeText` re-hardens (defense-in-depth: validated at
+ * write, but member-derived) + hard slice to the shared ceilings (SSOT
+ * `PREVIOUS_DEBRIEF_*`, the schema `.max()` re-validates). Returns `null` when
+ * the summary is empty post-sanitize (never a fabricated block) so the caller
+ * omits the slice entirely.
+ */
+function buildPreviousDebrief(
+  prev: NonNullable<MonthlyBuilderInput['previousDebrief']>,
+): NonNullable<MonthlySnapshot['previousDebrief']> | null {
+  const summaryReal = safeFreeText(prev.summaryReal.trim()).slice(
+    0,
+    PREVIOUS_DEBRIEF_SUMMARY_MAX_CHARS,
+  );
+  if (summaryReal.length === 0) return null;
+  const recommendations = prev.recommendations
+    .map((rec) => safeFreeText(rec.trim()).slice(0, PREVIOUS_DEBRIEF_RECO_MAX_CHARS))
+    .filter((rec) => rec.length > 0)
+    .slice(0, PREVIOUS_DEBRIEF_RECO_MAX_ITEMS);
+  return { monthStart: prev.monthStart, summaryReal, recommendations };
 }
 
 // =============================================================================

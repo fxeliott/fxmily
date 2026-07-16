@@ -41,6 +41,10 @@ vi.mock('@/lib/db', () => ({
     // (getOffDaySet). No explicit off days by default, keeping counters
     // byte-identical (weekendsOff: false is pinned on the user mock below).
     memberOffDay: { findMany: vi.fn(async () => []) },
+    // J5.4 — continuite N-1 : le loader interroge le debrief du mois precedent.
+    // `null` par defaut = aucun debrief anterieur (les slices existantes restent
+    // byte-identiques : previousDebrief est simplement omis).
+    monthlyDebrief: { findFirst: vi.fn(async () => null) },
   },
 }));
 
@@ -314,5 +318,44 @@ describe('loadMonthlySliceForUser — coach corrections corpus (J-AI corrections
     vi.mocked(db.tradeAnnotation.findMany).mockResolvedValue([] as never);
     const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
     expect(slice!.builderInput.coachCorrections).toEqual([]);
+  });
+});
+
+describe('loadMonthlySliceForUser — J5.4 previousDebrief (continuite N-1)', () => {
+  const prevMonthStart = new Date('2026-03-31T22:00:00.000Z'); // Paris 2026-04-01
+
+  it('charge le debrief du mois precedent dans builderInput.previousDebrief', async () => {
+    vi.mocked(db.monthlyDebrief.findFirst).mockResolvedValue({
+      monthStart: prevMonthStart,
+      summaryReal: 'Avril : discipline en hausse.',
+      recommendations: ['Tenir le journal', 42, null, 'Reduire le sizing'],
+    } as never);
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+    const prev = slice!.builderInput.previousDebrief;
+    expect(prev).toBeDefined();
+    expect(prev!.summaryReal).toBe('Avril : discipline en hausse.');
+    // Les valeurs non-string du JSON Prisma sont defensivement filtrees.
+    expect(prev!.recommendations).toEqual(['Tenir le journal', 'Reduire le sizing']);
+  });
+
+  it('interroge le debrief le plus recent strictement avant le mois rapporte', async () => {
+    vi.mocked(db.monthlyDebrief.findFirst).mockResolvedValue(null as never);
+    await loadMonthlySliceForUser('user-1', { now: NOW });
+    const call = vi.mocked(db.monthlyDebrief.findFirst).mock.calls[0];
+    expect(call, 'un findFirst previousDebrief doit avoir eu lieu').toBeDefined();
+    const arg = call![0] as {
+      where: { userId: string; monthStart: { lt: Date } };
+      orderBy: { monthStart: string };
+    };
+    expect(arg.where.userId).toBe('user-1');
+    expect(arg.where.monthStart.lt).toBeInstanceOf(Date);
+    expect(arg.orderBy).toEqual({ monthStart: 'desc' });
+  });
+
+  it('retrocompat : aucun debrief anterieur -> previousDebrief absent', async () => {
+    vi.mocked(db.monthlyDebrief.findFirst).mockResolvedValue(null as never);
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+    expect(slice!.builderInput.previousDebrief).toBeUndefined();
   });
 });

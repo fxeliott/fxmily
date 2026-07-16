@@ -1032,3 +1032,46 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildMonthlySnapshot — J5.4 previousDebrief (continuite N-1, borne)', () => {
+  const prevMonthStart = new Date('2026-03-31T22:00:00.000Z'); // Paris 2026-04-01
+
+  it('relaie le debrief N-1 (summary + recommandations) et safeParse passe', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        previousDebrief: {
+          monthStart: prevMonthStart,
+          summaryReal: 'Mois solide : discipline en hausse, moins de FOMO.',
+          recommendations: ['Garder le sizing constant', 'Documenter chaque sortie'],
+        },
+      }),
+    );
+    expect(snap.previousDebrief).toBeDefined();
+    expect(snap.previousDebrief?.summaryReal).toContain('discipline en hausse');
+    expect(snap.previousDebrief?.recommendations).toHaveLength(2);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne : summary tronque a 600, recommandations cap 3 x 200 chars', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        previousDebrief: {
+          monthStart: prevMonthStart,
+          summaryReal: 'a'.repeat(1200),
+          recommendations: ['b'.repeat(500), 'c'.repeat(10), 'd', 'e', 'f'],
+        },
+      }),
+    );
+    expect(snap.previousDebrief?.summaryReal.length).toBe(600);
+    expect(snap.previousDebrief?.recommendations).toHaveLength(3);
+    expect(snap.previousDebrief?.recommendations[0]?.length).toBe(200);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans previousDebrief, la slice est absente + safeParse passe', () => {
+    const snap = buildMonthlySnapshot(baseInput());
+    expect(snap.previousDebrief).toBeUndefined();
+    expect('previousDebrief' in snap).toBe(false);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

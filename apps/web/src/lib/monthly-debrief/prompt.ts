@@ -118,6 +118,27 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   );
   lines.push(``);
 
+  // J5.4 — continuite N-1 : rappel BORNE de NOTRE debrief du mois precedent
+  // (contenu systeme deja valide + re-sanitize, pas du free-text membre -> rendu
+  // en clair). Omis si absent -> un membre sans debrief N-1 produit exactement le
+  // meme prompt qu'avant (retrocompat).
+  if (snapshot.previousDebrief) {
+    const pd = snapshot.previousDebrief;
+    lines.push(`## Contexte du mois precedent (N-1 — ${formatDate(pd.monthStart)})`);
+    lines.push(
+      `Rappel de TON debrief du mois precedent, pour assurer la continuite du suivi ` +
+        `(compare l'evolution, felicite ou relance sur ces axes ; ne te repete pas mot pour mot) :`,
+    );
+    lines.push(`- Synthese reelle (N-1) : ${pd.summaryReal}`);
+    if (pd.recommendations.length > 0) {
+      lines.push(`- Axes/recommandations donnes le mois precedent :`);
+      for (const rec of pd.recommendations) {
+        lines.push(`  - ${rec}`);
+      }
+    }
+    lines.push(``);
+  }
+
   // --- (A) Section RÉELLE — coaching P&L légitime (le produit) -------------
   lines.push(`## SECTION 1 — Trading réel (coaching du risque réel)`);
   lines.push(`- Total trades : **${r.tradesTotal}** (ouverts ${r.tradesOpen}, clôturés ${closed})`);

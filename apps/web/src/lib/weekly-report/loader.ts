@@ -21,6 +21,11 @@ import { countMeetingAttendance } from '@/lib/meeting/service';
 // who joined mid-week is never charged for meetings scheduled before they
 // existed (byte-identical for everyone past their first week).
 import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
+// J5.7 — SSOT des objectifs de process (anneaux + axe de coaching + objectif de
+// methode). Read-only (scoring + profil + miroir de methode) ; process/psycho
+// §2-safe, hors firewall §21.5 comme scoring/coaching. Le membre voit ces memes
+// valeurs sur /objectifs.
+import { getProcessObjectives } from '@/lib/objectives/service';
 // C4 (tour 10) — the two sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross into the prompt. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -319,6 +324,28 @@ export async function loadWeeklySliceForUser(
     disputation: row.disputation,
   }));
 
+  // J5.7 — objectifs de process du membre via le SSOT `getProcessObjectives`
+  // (read-only). On ne relaie que les 3 signaux demandes (anneaux, axe, methodGoal)
+  // — le builder borne + `safeFreeText`, `null`/vide -> le prompt omet la section.
+  const objectivesView = await getProcessObjectives(user.id, user.timezone);
+  const objectives = {
+    rings: objectivesView.objectives.map((o) => ({
+      label: o.label,
+      current: o.current,
+      target: o.target,
+      reached: o.reached,
+    })),
+    coachingAxis: objectivesView.coachingAxis,
+    methodGoal: objectivesView.methodGoal
+      ? {
+          label: objectivesView.methodGoal.label,
+          hint: objectivesView.methodGoal.hint,
+          current: objectivesView.methodGoal.current,
+          target: objectivesView.methodGoal.target,
+        }
+      : null,
+  };
+
   const builderInput: BuilderInput = {
     userId: user.id,
     timezone: user.timezone,
@@ -361,6 +388,8 @@ export async function loadWeeklySliceForUser(
     // J5.1 — reflexions ABCD recentes (toujours present cote input ; [] quand
     // aucune). Le builder borne + rend untrusted au prompt.
     reflections,
+    // J5.7 — objectifs de process (anneaux + axe + methodGoal, SSOT objectifs).
+    objectives,
   };
 
   return {

@@ -29,6 +29,8 @@ import { computeMaxConsecutiveLoss } from '@/lib/analytics/streaks';
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import {
   MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS,
+  OBJECTIVES_RING_MAX,
+  OBJECTIVES_TEXT_MAX_CHARS,
   REFLECTION_FIELD_MAX_CHARS,
   REFLECTION_PROMPT_MAX_ENTRIES,
 } from '@/lib/schemas/weekly-report';
@@ -184,6 +186,14 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
     // §2-safe : la copie est curée par le moteur (jamais un terme de marché).
     ...(input.coaching ? { coaching: renderCoachingContextSection(input.coaching) } : {}),
+    // J5.7 — objectifs de process (anneaux + axe + methodGoal), via le SSOT
+    // getProcessObjectives (ce que le membre voit sur /objectifs). Le helper borne
+    // + safeFreeText ; `null` -> slice omise (exactOptionalPropertyTypes ->
+    // conditional spread). Retrocompat : sans donnee d'objectif -> meme snapshot.
+    ...(() => {
+      const objectives = buildObjectives(input);
+      return objectives ? { objectives } : {};
+    })(),
     // Quick win — the coach's TAGGED corrections on this member's REAL trades this
     // week, relayed verbatim from the loader (`« Axe » : commentaire`), capped ≤20 +
     // re-hardened defense-in-depth. ADMIN free-text → wrapped untrusted at the prompt
@@ -682,6 +692,40 @@ function buildReflections(input: BuilderInput): WeeklySnapshot['freeText']['refl
         r.consequence.length > 0 &&
         r.disputation.length > 0,
     );
+}
+
+/**
+ * J5.7 — coerce the loader's raw process objectives into the BOUNDED slice: keep
+ * the rings (<=4, numeric labels), clamp the AI/deterministic text fields to
+ * `OBJECTIVES_TEXT_MAX_CHARS` (+ safeFreeText), null-ify any empty text so the
+ * schema's `.min(1)` never rejects. Returns `null` when there is NOTHING
+ * meaningful (no scored ring, no axis, no method goal) so the caller omits the
+ * slice entirely (honest empty state — never a fabricated objectives block).
+ * Twin of the monthly `buildObjectives`.
+ */
+function buildObjectives(input: BuilderInput): NonNullable<WeeklySnapshot['objectives']> | null {
+  const src = input.objectives;
+  if (!src) return null;
+  const clamp = (s: string): string => safeFreeText(s.trim()).slice(0, OBJECTIVES_TEXT_MAX_CHARS);
+  const rings = src.rings.slice(0, OBJECTIVES_RING_MAX).map((r) => ({
+    label: r.label.trim().slice(0, 60),
+    current: r.current,
+    target: r.target,
+    reached: r.reached,
+  }));
+  const axis = src.coachingAxis ? clamp(src.coachingAxis) : '';
+  const coachingAxis = axis.length > 0 ? axis : null;
+  let methodGoal: NonNullable<WeeklySnapshot['objectives']>['methodGoal'] = null;
+  if (src.methodGoal) {
+    const label = clamp(src.methodGoal.label);
+    const hint = clamp(src.methodGoal.hint);
+    if (label.length > 0 && hint.length > 0) {
+      methodGoal = { label, hint, current: src.methodGoal.current, target: src.methodGoal.target };
+    }
+  }
+  const hasScoredRing = rings.some((r) => r.current !== null);
+  if (!hasScoredRing && coachingAxis === null && methodGoal === null) return null;
+  return { rings, coachingAxis, methodGoal };
 }
 
 function collectEmotionTags(input: BuilderInput): string[] {

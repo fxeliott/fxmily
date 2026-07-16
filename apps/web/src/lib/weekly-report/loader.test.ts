@@ -82,8 +82,18 @@ vi.mock('@/lib/coaching/service', () => ({
 vi.mock('@/lib/weekly-review/service', () => ({
   getWeeklyReview: vi.fn(async () => null),
 }));
+// J5.7 — objectifs de process (SSOT). Stubbed inert (empty rings, null axis/goal)
+// so the builder omits the slice and existing assertions stay byte-identical.
+vi.mock('@/lib/objectives/service', () => ({
+  getProcessObjectives: vi.fn(async () => ({
+    objectives: [],
+    coachingAxis: null,
+    methodGoal: null,
+  })),
+}));
 
 import { db } from '@/lib/db';
+import { getProcessObjectives } from '@/lib/objectives/service';
 import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
@@ -283,5 +293,61 @@ describe('loadWeeklySliceForUser — J5.1 reflexions ABCD (CBT Ellis)', () => {
     vi.mocked(db.reflectionEntry.findMany).mockResolvedValue([] as never);
     const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
     expect(slice?.builderInput.reflections).toEqual([]);
+  });
+});
+
+describe('loadWeeklySliceForUser — J5.7 objectifs de process (SSOT getProcessObjectives)', () => {
+  it('relaie anneaux + coachingAxis + methodGoal dans builderInput.objectives', async () => {
+    vi.mocked(getProcessObjectives).mockResolvedValue({
+      objectives: [
+        {
+          key: 'discipline',
+          label: 'Discipline',
+          hint: '',
+          current: 72,
+          target: 80,
+          gap: 8,
+          reached: false,
+        },
+        {
+          key: 'consistency',
+          label: 'Constance',
+          hint: '',
+          current: 65,
+          target: 80,
+          gap: 15,
+          reached: false,
+        },
+      ],
+      coachingAxis: 'Patience sur les entrees',
+      methodGoal: {
+        rule: 'session_window',
+        label: 'Fenetre 13h-16h',
+        hint: 'Trader la bonne fenetre',
+        current: 60,
+        target: 75,
+        good: 12,
+        total: 20,
+        windowDays: 30,
+      },
+    } as never);
+
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    const obj = slice!.builderInput.objectives;
+    expect(obj).toBeDefined();
+    expect(obj!.rings).toHaveLength(2);
+    expect(obj!.rings[0]!.label).toBe('Discipline');
+    expect(obj!.coachingAxis).toBe('Patience sur les entrees');
+    expect(obj!.methodGoal?.label).toBe('Fenetre 13h-16h');
+  });
+
+  it('interroge getProcessObjectives avec userId + timezone', async () => {
+    vi.mocked(getProcessObjectives).mockResolvedValue({
+      objectives: [],
+      coachingAxis: null,
+      methodGoal: null,
+    } as never);
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    expect(getProcessObjectives).toHaveBeenCalledWith('user-1', expect.any(String));
   });
 });

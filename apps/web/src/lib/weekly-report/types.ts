@@ -133,6 +133,18 @@ export interface BuilderInput {
     disputation: string;
   }>;
   /**
+   * J5.7 — objectifs de PROCESS du membre (anneaux 0-100 + axe de coaching hebdo
+   * + objectif de methode derive), pre-charges par le loader via le SSOT
+   * `getProcessObjectives` (ce que le membre voit sur /objectifs). Le builder
+   * borne + `safeFreeText` (coachingAxis AI-derived). Absente (`?:`) -> le prompt
+   * omet la section (retrocompat). §2-safe (process/psycho), hors firewall §21.5.
+   */
+  objectives?: {
+    rings: Array<{ label: string; current: number | null; target: number; reached: boolean }>;
+    coachingAxis: string | null;
+    methodGoal: { label: string; hint: string; current: number; target: number } | null;
+  };
+  /**
    * SPEC §21 J-T4 — number of the member's backtests in the report week
    * ("volume de pratique"). Optional: absent → the builder defaults it to 0
    * (existing fixtures + pre-J-T4 callers stay valid). 🚨 §21.5: an integer

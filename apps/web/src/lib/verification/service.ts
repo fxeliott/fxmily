@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { selectStorage } from '@/lib/storage';
 import { safeFreeText } from '@/lib/text/safe';
 import type { BrokerAccountCreateInput } from '@/lib/schemas/verification';
+import type { ProofFailureReason } from '@/generated/prisma/enums';
 
 /**
  * S3 — Vérification & Honnêteté radicale (SPEC §33) : member-facing service
@@ -87,6 +88,15 @@ export interface VerificationProofView {
    * uploaded themselves.
    */
   readonly fileHash: string;
+  /**
+   * J4.1 — machine-readable refusal reason, set by the vision pipeline when a
+   * capture is rejected (`markProofFailed`, lib/verification/batch.ts). Null for
+   * pending/done proofs AND for pre-J4.1 failed rows (the column was added
+   * later). J4.2 resolves it to calm member-facing copy via
+   * `describeFailureReason`, falling back to the generic « Lecture impossible »
+   * pill when null.
+   */
+  readonly failureReason: ProofFailureReason | null;
 }
 
 export interface VerificationAccountView {
@@ -143,6 +153,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
         uploadedAt: true,
         filePurgedAt: true,
         brokerAccountId: true,
+        failureReason: true,
       },
     }),
     db.extractedPosition.groupBy({
@@ -187,6 +198,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
       brokerAccountId: p.brokerAccountId,
       extractedPositionsCount: positionsCountByProof.get(p.id) ?? 0,
       fileHash: p.fileHash,
+      failureReason: p.failureReason,
     })),
     pendingProofsCount: proofs.filter((p) => p.ocrStatus === 'pending').length,
   };

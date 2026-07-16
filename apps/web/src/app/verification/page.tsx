@@ -1,4 +1,4 @@
-import { ArrowLeft, ScanSearch, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ScanSearch, ShieldCheck, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -26,6 +26,7 @@ import {
   listRecentConstancyScores,
   listRecentScoreEvents,
 } from '@/lib/verification/constancy';
+import { describeFailureReason } from '@/lib/verification/failure-reason';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 import { NextStepRail } from '@/components/nav/next-step-rail';
 
@@ -439,7 +440,7 @@ export default async function VerificationPage() {
             L’analyse lit les positions affichées et les confronte à ton journal. Une capture reste
             une capture, c’est la régularité de tes preuves qui construit la confiance.
           </p>
-          <Card className="flex w-full max-w-xl flex-col gap-3 p-4">
+          <Card id="proof-uploader" className="flex w-full max-w-xl scroll-mt-6 flex-col gap-3 p-4">
             <ProofUploader
               accounts={overview.accounts.map((a) => ({ id: a.id, label: a.label }))}
             />
@@ -481,6 +482,12 @@ export default async function VerificationPage() {
                 const account = proof.brokerAccountId
                   ? overview.accounts.find((a) => a.id === proof.brokerAccountId)
                   : undefined;
+                // J4.2 — quand la lecture a échoué, on résout le motif lisible.
+                // `null` = ancienne ligne sans `failureReason` OU statut non-échec :
+                // on retombe alors sur le libellé générique de la pill (« Lecture
+                // impossible »), jamais de crash. Lecture défensive du helper.
+                const failureCopy =
+                  proof.ocrStatus === 'failed' ? describeFailureReason(proof.failureReason) : null;
                 return (
                   <li key={proof.id}>
                     <Card className="wow-hover-glow flex flex-wrap items-center gap-3 p-4">
@@ -500,6 +507,42 @@ export default async function VerificationPage() {
                         <span>
                           <Pill tone={statusMeta.tone}>{statusMeta.label}</Pill>
                         </span>
+                        {proof.ocrStatus === 'failed' ? (
+                          /* J4.2 — quand la lecture a échoué, on surface le motif
+                             lisible EN PLUS de la pill « Lecture impossible » + un
+                             CTA de renvoi qui réutilise le ProofUploader déjà
+                             monté (ancre #proof-uploader). Callout neutre, ton
+                             calme « miroir, pas sanction » (§33.2) : jamais de
+                             rouge honte, on explique et on rouvre le chemin. */
+                          <div className="rounded-card flex flex-col gap-1.5 border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2.5">
+                            {failureCopy ? (
+                              <>
+                                <span className="text-[13px] font-semibold text-[var(--t-1)]">
+                                  {failureCopy.label}
+                                </span>
+                                <span className="t-body leading-[1.5] text-[var(--t-3)]">
+                                  {failureCopy.instruction}
+                                </span>
+                              </>
+                            ) : (
+                              /* Ancienne ligne sans `failureReason` (colonne ajoutée
+                                 en J4.1) : `describeFailureReason` retourne null, on
+                                 reste sur la pill générique + une consigne neutre,
+                                 sans crash. */
+                              <span className="t-body leading-[1.5] text-[var(--t-3)]">
+                                Reprends une capture nette et bien cadrée de ton historique MT5,
+                                puis renvoie-la.
+                              </span>
+                            )}
+                            <a
+                              href="#proof-uploader"
+                              className="rounded-card mt-1 inline-flex min-h-9 w-fit items-center gap-1.5 self-start border border-[var(--b-default)] bg-[var(--bg-3)] px-3 py-1.5 text-[12px] font-medium text-[var(--t-1)] transition-colors hover:border-[var(--b-acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                            >
+                              <Upload className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                              Renvoyer une capture
+                            </a>
+                          </div>
+                        ) : null}
                         {proof.filePurgedAt !== null ? (
                           /* Tour 13 — le fichier a été purgé du stockage après
                              analyse : la vignette est un placeholder et cette

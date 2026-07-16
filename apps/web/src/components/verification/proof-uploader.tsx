@@ -36,6 +36,21 @@ const ACCEPTED_INPUT_MIME = [
 ] as const;
 const MAX_PROOF_INPUT_BYTES = 20 * 1024 * 1024;
 
+/**
+ * J4.5 — network retry. A flaky mobile uplink can make the POST throw (offline,
+ * DNS hiccup, connection reset) *before* any HTTP response comes back. Instead
+ * of failing on the first attempt we retry up to 3 times with a growing
+ * backoff, showing an "en attente du reseau" state in between. Only fetch-level
+ * throws are retried: once the server answers — even with a 4xx like 410
+ * `uploads_closed` or 400 — the outcome is definitive and never retried.
+ */
+const MAX_UPLOAD_ATTEMPTS = 3;
+// One entry per gap between attempts, indexed by the attempt that just failed
+// (1-based -> 0-based). The 3rd value is headroom if MAX_UPLOAD_ATTEMPTS grows.
+const RETRY_BACKOFF_MS = [500, 1500, 3000] as const;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const ERROR_LABELS = {
   unauthorized: 'Session expirée, reconnecte-toi.',
   invalid_form: 'Formulaire invalide.',
@@ -92,12 +107,17 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
 
   const [accountId, setAccountId] = useState<string>('');
   const [accountType, setAccountType] = useState<string>('');
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'retrying' | 'success' | 'error'>(
+    'idle',
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   // Taille du fichier en cours d'envoi, affichée pendant l'upload (rassure sur
   // « c'est bien parti », null hors upload).
   const [uploadingSize, setUploadingSize] = useState<number | null>(null);
+  // J4.5 — the attempt number we're about to (re)try, shown during the
+  // "en attente du reseau" backoff so the member sees progress (null off-retry).
+  const [retryAttempt, setRetryAttempt] = useState<number | null>(null);
   // J4.3 — vrai quand l'erreur courante vient du sniff %PDF client (affiche un
   // message dédié + le déclencheur du mini-guide de capture au lieu de l'erreur
   // brute). J4.4 — état d'ouverture du bottom-sheet mini-guide.
@@ -106,8 +126,9 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
 
   const upload = useCallback(
     async (file: File) => {
-      // Clear any prior %PDF hint before re-evaluating this file.
+      // Clear any prior %PDF hint + retry counter before re-evaluating this file.
       setIsPdfError(false);
+      setRetryAttempt(null);
       // Client-side guards — server re-validates regardless.
       if (file.size === 0) {
         setStatus('error');
@@ -188,25 +209,55 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       if (accountId) fd.append('accountId', accountId);
       if (accountType) fd.append('accountType', accountType);
 
-      try {
-        const res = await fetch('/api/uploads', { method: 'POST', body: fd });
-        const payload = (await res.json().catch(() => ({}))) as {
-          proofId?: string;
-          error?: string;
-        };
-        if (!res.ok || !payload.proofId) {
+      // J4.5 — retry the POST on a network-level failure (fetch throws) with a
+      // growing backoff, so a flaky mobile uplink doesn't lose the upload on the
+      // first hiccup. An HTTP response — even a 4xx like 410 `uploads_closed` or
+      // 400 — is never retried: the server was reached, so the result is final.
+      for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt++) {
+        // Actively sending this attempt (resets the "en attente du reseau"
+        // state left by a prior backoff).
+        setStatus('uploading');
+        try {
+          const res = await fetch('/api/uploads', { method: 'POST', body: fd });
+          const payload = (await res.json().catch(() => ({}))) as {
+            proofId?: string;
+            error?: string;
+          };
+          if (!res.ok || !payload.proofId) {
+            // The server answered (410 uploads_closed, 400, …): definitive.
+            setStatus('error');
+            setMessage(errorLabel(payload.error));
+            setUploadingSize(null);
+            setRetryAttempt(null);
+            return;
+          }
+          setStatus('success');
+          setMessage(null);
+          setUploadingSize(null);
+          setRetryAttempt(null);
+          if (inputRef.current) inputRef.current.value = '';
+          router.refresh();
+          return;
+        } catch (err) {
+          console.error(
+            `[ProofUploader] fetch failed (attempt ${attempt}/${MAX_UPLOAD_ATTEMPTS})`,
+            err,
+          );
+          if (attempt < MAX_UPLOAD_ATTEMPTS) {
+            // Wait for the network to settle, then retry.
+            setRetryAttempt(attempt + 1);
+            setStatus('retrying');
+            setMessage(null);
+            await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 3000);
+            continue;
+          }
+          // Every attempt failed on the network — calm, definitive error.
           setStatus('error');
-          setMessage(errorLabel(payload.error));
+          setMessage('Connexion instable, réessaie plus tard.');
+          setUploadingSize(null);
+          setRetryAttempt(null);
           return;
         }
-        setStatus('success');
-        setMessage(null);
-        if (inputRef.current) inputRef.current.value = '';
-        router.refresh();
-      } catch (err) {
-        console.error('[ProofUploader] fetch failed', err);
-        setStatus('error');
-        setMessage('Erreur réseau. Réessaie.');
       }
     },
     [accountId, accountType, router],
@@ -224,6 +275,10 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
     if (file) void upload(file);
   };
 
+  // Busy = actively sending or waiting out a network backoff. Locks the inputs
+  // in both states so a second file can't race an in-flight retry.
+  const isBusy = status === 'uploading' || status === 'retrying';
+
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -232,7 +287,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
           <select
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
-            disabled={status === 'uploading'}
+            disabled={isBusy}
             className="rounded-control h-11 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
           >
             <option value="">À rattacher plus tard</option>
@@ -248,7 +303,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
           <select
             value={accountType}
             onChange={(e) => setAccountType(e.target.value)}
-            disabled={status === 'uploading'}
+            disabled={isBusy}
             className="rounded-control h-11 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
           >
             <option value="">Non précisé</option>
@@ -284,25 +339,41 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
           accept={ACCEPT}
           className="sr-only"
           onChange={onFileChange}
-          disabled={status === 'uploading'}
+          disabled={isBusy}
           aria-invalid={message ? 'true' : undefined}
           aria-describedby={[hintId, message ? errorId : null].filter(Boolean).join(' ')}
         />
 
-        {status === 'uploading' ? (
+        {isBusy ? (
           <>
             <div className="grid h-12 w-12 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
-              <Spinner size={20} label="Envoi en cours" />
+              <Spinner
+                size={20}
+                label={status === 'retrying' ? 'En attente du réseau' : 'Envoi en cours'}
+              />
             </div>
             <div className="flex flex-col items-center gap-1">
-              <span className="t-body text-[var(--t-2)]">
-                Envoi en cours, ne ferme pas encore cette page.
-              </span>
-              {uploadingSize !== null ? (
-                <span className="t-cap text-[var(--t-4)]">
-                  {formatFileSize(uploadingSize)} en cours de transfert
-                </span>
-              ) : null}
+              {status === 'retrying' ? (
+                <>
+                  <span className="t-body text-[var(--t-2)]">Connexion instable, on réessaie.</span>
+                  <span className="t-cap text-[var(--t-4)]">
+                    {retryAttempt !== null
+                      ? `Nouvelle tentative ${retryAttempt} sur ${MAX_UPLOAD_ATTEMPTS}, ne ferme pas cette page.`
+                      : 'Ne ferme pas cette page.'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="t-body text-[var(--t-2)]">
+                    Envoi en cours, ne ferme pas encore cette page.
+                  </span>
+                  {uploadingSize !== null ? (
+                    <span className="t-cap text-[var(--t-4)]">
+                      {formatFileSize(uploadingSize)} en cours de transfert
+                    </span>
+                  ) : null}
+                </>
+              )}
             </div>
           </>
         ) : (

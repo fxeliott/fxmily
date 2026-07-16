@@ -91,9 +91,15 @@ vi.mock('@/lib/objectives/service', () => ({
     methodGoal: null,
   })),
 }));
+// J5.8 — favoris Douglas (SSOT). Stubbed inert ([]) so the builder omits the slice
+// and existing assertions stay byte-identical.
+vi.mock('@/lib/cards/service', () => ({
+  listMyFavorites: vi.fn(async () => []),
+}));
 
 import { db } from '@/lib/db';
 import { getProcessObjectives } from '@/lib/objectives/service';
+import { listMyFavorites } from '@/lib/cards/service';
 import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
@@ -349,5 +355,40 @@ describe('loadWeeklySliceForUser — J5.7 objectifs de process (SSOT getProcessO
     } as never);
     await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
     expect(getProcessObjectives).toHaveBeenCalledWith('user-1', expect.any(String));
+  });
+});
+
+describe('loadWeeklySliceForUser — J5.8 favoris Douglas (SSOT listMyFavorites)', () => {
+  it('relaie titre + categorie dans builderInput.favorites', async () => {
+    vi.mocked(listMyFavorites).mockResolvedValue([
+      {
+        userId: 'user-1',
+        cardId: 'c1',
+        cardSlug: 'penser-proba',
+        cardTitle: 'Penser en probabilites',
+        cardCategory: 'probabilities',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      },
+      {
+        userId: 'user-1',
+        cardId: 'c2',
+        cardSlug: 'accepter-risque',
+        cardTitle: 'Accepter le risque',
+        cardCategory: 'acceptance',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    ] as never);
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    const favs = slice!.builderInput.favorites;
+    expect(favs).toBeDefined();
+    expect(favs).toHaveLength(2);
+    expect(favs![0]!.title).toBe('Penser en probabilites');
+    expect(favs![0]!.category).toBe('probabilities');
+  });
+
+  it('interroge listMyFavorites avec le userId', async () => {
+    vi.mocked(listMyFavorites).mockResolvedValue([] as never);
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    expect(listMyFavorites).toHaveBeenCalledWith('user-1');
   });
 });

@@ -27,6 +27,8 @@ import { safeFreeText } from '@/lib/text/safe';
 import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 
 import {
+  FAVORITE_TITLE_MAX_CHARS,
+  FAVORITES_PROMPT_MAX_ENTRIES,
   OBJECTIVES_RING_MAX,
   OBJECTIVES_TEXT_MAX_CHARS,
   PREVIOUS_DEBRIEF_RECO_MAX_CHARS,
@@ -148,6 +150,13 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     ...(() => {
       const objectives = buildObjectives(input);
       return objectives ? { objectives } : {};
+    })(),
+    // J5.8 — fiches Mark Douglas favorites (titre + categorie), via le SSOT
+    // listMyFavorites. Le helper borne + safeFreeText ; [] -> slice omise
+    // (conditional spread). Retrocompat : sans favori -> meme snapshot.
+    ...(() => {
+      const favorites = buildFavorites(input);
+      return favorites.length > 0 ? { favorites } : {};
     })(),
     // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
@@ -277,6 +286,22 @@ function buildObjectives(
   const hasScoredRing = rings.some((r) => r.current !== null);
   if (!hasScoredRing && coachingAxis === null && methodGoal === null) return null;
   return { rings, coachingAxis, methodGoal };
+}
+
+/**
+ * J5.8 — coerce the loader's raw favorites into the BOUNDED slice: keep the N
+ * most-recent (loader already ordered desc), clamp each title to
+ * `FAVORITE_TITLE_MAX_CHARS` + safeFreeText, drop any whose title is empty
+ * post-sanitize. Returns [] when none (caller omits the slice). Twin weekly/monthly.
+ */
+function buildFavorites(input: MonthlyBuilderInput): NonNullable<MonthlySnapshot['favorites']> {
+  return (input.favorites ?? [])
+    .slice(0, FAVORITES_PROMPT_MAX_ENTRIES)
+    .map((f) => ({
+      title: safeFreeText(f.title.trim()).slice(0, FAVORITE_TITLE_MAX_CHARS),
+      category: f.category.trim().slice(0, 40),
+    }))
+    .filter((f) => f.title.length > 0);
 }
 
 // =============================================================================

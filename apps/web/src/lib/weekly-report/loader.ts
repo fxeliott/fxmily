@@ -26,6 +26,7 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 // §2-safe, hors firewall §21.5 comme scoring/coaching. Le membre voit ces memes
 // valeurs sur /objectifs.
 import { getProcessObjectives } from '@/lib/objectives/service';
+import { listMyFavorites } from '@/lib/cards/service';
 // C4 (tour 10) — the two sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross into the prompt. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -346,6 +347,14 @@ export async function loadWeeklySliceForUser(
       : null,
   };
 
+  // J5.8 — fiches Mark Douglas favorites du membre via le SSOT `listMyFavorites`
+  // (read-only, published-only, recency-desc). Le builder borne (N + safeFreeText),
+  // [] -> le prompt omet la section.
+  const favorites = (await listMyFavorites(user.id)).map((f) => ({
+    title: f.cardTitle,
+    category: f.cardCategory,
+  }));
+
   const builderInput: BuilderInput = {
     userId: user.id,
     timezone: user.timezone,
@@ -390,6 +399,8 @@ export async function loadWeeklySliceForUser(
     reflections,
     // J5.7 — objectifs de process (anneaux + axe + methodGoal, SSOT objectifs).
     objectives,
+    // J5.8 — fiches Mark Douglas favorites (titre + categorie, SSOT favoris).
+    favorites,
   };
 
   return {

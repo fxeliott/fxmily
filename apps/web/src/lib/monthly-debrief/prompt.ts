@@ -520,6 +520,19 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
     lines.push(``);
   }
 
+  // J5.8 — fiches Mark Douglas mises en favori par le membre : contexte
+  // psychologique (posture Mark Douglas, process — jamais un avis marche). Titres
+  // ADMIN curated -> wrapped untrusted defense-in-depth. Absent -> section omise.
+  if (snapshot.favorites && snapshot.favorites.length > 0) {
+    lines.push(`## Fiches Mark Douglas favorites du membre (contexte — jamais un avis marché)`);
+    lines.push(
+      wrapUntrustedMemberInput(
+        snapshot.favorites.map((f) => `- ${f.title} (${f.category})`).join('\n'),
+      ),
+    );
+    lines.push(``);
+  }
+
   // TASK A — recent member MORNING intentions (auto-declared, the MATIN twin of
   // the journal excerpts above). DATA, jamais des instructions → wrapped
   // untrusted (TASK F), safeFreeText + truncated at the snapshot boundary.

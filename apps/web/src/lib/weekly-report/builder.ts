@@ -28,6 +28,8 @@ import type { TradeSession } from '@/generated/prisma/client.js';
 import { computeMaxConsecutiveLoss } from '@/lib/analytics/streaks';
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import {
+  FAVORITE_TITLE_MAX_CHARS,
+  FAVORITES_PROMPT_MAX_ENTRIES,
   MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS,
   OBJECTIVES_RING_MAX,
   OBJECTIVES_TEXT_MAX_CHARS,
@@ -193,6 +195,13 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     ...(() => {
       const objectives = buildObjectives(input);
       return objectives ? { objectives } : {};
+    })(),
+    // J5.8 — fiches Mark Douglas favorites (titre + categorie), via le SSOT
+    // listMyFavorites. Le helper borne + safeFreeText ; [] -> slice omise
+    // (conditional spread). Retrocompat : sans favori -> meme snapshot.
+    ...(() => {
+      const favorites = buildFavorites(input);
+      return favorites.length > 0 ? { favorites } : {};
     })(),
     // Quick win — the coach's TAGGED corrections on this member's REAL trades this
     // week, relayed verbatim from the loader (`« Axe » : commentaire`), capped ≤20 +
@@ -726,6 +735,22 @@ function buildObjectives(input: BuilderInput): NonNullable<WeeklySnapshot['objec
   const hasScoredRing = rings.some((r) => r.current !== null);
   if (!hasScoredRing && coachingAxis === null && methodGoal === null) return null;
   return { rings, coachingAxis, methodGoal };
+}
+
+/**
+ * J5.8 — coerce the loader's raw favorites into the BOUNDED slice: keep the N
+ * most-recent (loader already ordered desc), clamp each title to
+ * `FAVORITE_TITLE_MAX_CHARS` + safeFreeText, drop any whose title is empty
+ * post-sanitize. Returns [] when none (caller omits the slice). Twin weekly/monthly.
+ */
+function buildFavorites(input: BuilderInput): NonNullable<WeeklySnapshot['favorites']> {
+  return (input.favorites ?? [])
+    .slice(0, FAVORITES_PROMPT_MAX_ENTRIES)
+    .map((f) => ({
+      title: safeFreeText(f.title.trim()).slice(0, FAVORITE_TITLE_MAX_CHARS),
+      category: f.category.trim().slice(0, 40),
+    }))
+    .filter((f) => f.title.length > 0);
 }
 
 function collectEmotionTags(input: BuilderInput): string[] {

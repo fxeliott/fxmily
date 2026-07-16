@@ -32,6 +32,7 @@ import { getProfileForUser } from '@/lib/onboarding-interview/service';
 // §2-safe, hors firewall §21.5 comme scoring/coaching. Le membre voit ces memes
 // valeurs sur /objectifs.
 import { getProcessObjectives } from '@/lib/objectives/service';
+import { listMyFavorites } from '@/lib/cards/service';
 // D1 (SPEC §25.2) — the sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross the member boundary. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -484,6 +485,14 @@ export async function loadMonthlySliceForUser(
       : null,
   };
 
+  // J5.8 — fiches Mark Douglas favorites du membre via le SSOT `listMyFavorites`
+  // (read-only, published-only, recency-desc). Le builder borne (N + safeFreeText),
+  // [] -> le prompt omet la section.
+  const favorites = (await listMyFavorites(userId)).map((f) => ({
+    title: f.cardTitle,
+    category: f.cardCategory,
+  }));
+
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude
     // boundary (8-char hex, salted via env.MEMBER_LABEL_SALT in prod).
@@ -539,6 +548,8 @@ export async function loadMonthlySliceForUser(
     reflections,
     // J5.7 — objectifs de process (anneaux + axe + methodGoal, SSOT objectifs).
     objectives,
+    // J5.8 — fiches Mark Douglas favorites (titre + categorie, SSOT favoris).
+    favorites,
   };
 
   return {

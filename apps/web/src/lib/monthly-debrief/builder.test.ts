@@ -1201,3 +1201,45 @@ describe('buildMonthlySnapshot — J5.7 objectifs de process (borne)', () => {
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildMonthlySnapshot — J5.8 favoris Douglas (borne)', () => {
+  it('relaie les favoris et safeParse passe', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        favorites: [
+          { title: 'Penser en probabilites', category: 'probabilities' },
+          { title: 'Accepter le risque', category: 'acceptance' },
+        ],
+      }),
+    );
+    expect(snap.favorites).toHaveLength(2);
+    expect(snap.favorites?.[0]?.title).toBe('Penser en probabilites');
+    expect(snap.favorites?.[0]?.category).toBe('probabilities');
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne : garde les N plus recents (<=5) et tronque le titre a 120 chars', () => {
+    const mk = (i: number) => ({ title: 'T'.repeat(200) + i, category: 'discipline' });
+    const snap = buildMonthlySnapshot(
+      baseInput({ favorites: [mk(1), mk(2), mk(3), mk(4), mk(5), mk(6), mk(7)] }),
+    );
+    expect(snap.favorites).toHaveLength(5);
+    expect(snap.favorites?.[0]?.title.length).toBe(120);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('drop un favori dont le titre est vide apres sanitize', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({ favorites: [{ title: '   ', category: 'discipline' }] }),
+    );
+    expect(snap.favorites).toBeUndefined();
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans favoris, la slice est absente + safeParse passe', () => {
+    const snap = buildMonthlySnapshot(baseInput());
+    expect(snap.favorites).toBeUndefined();
+    expect('favorites' in snap).toBe(false);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

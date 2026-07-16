@@ -212,6 +212,13 @@ export interface MonthlyBuilderInput {
     methodGoal: { label: string; hint: string; current: number; target: number } | null;
   };
   /**
+   * J5.8 — fiches Mark Douglas mises en favori par le membre (titre + categorie),
+   * pre-chargees par le loader via le SSOT `listMyFavorites` (published-only,
+   * recency-desc). Le builder borne (N + safeFreeText). Absente (`?:`) -> le prompt
+   * omet la section (retrocompat). §2-safe (process/psycho), hors firewall §21.5.
+   */
+  favorites?: Array<{ title: string; category: string }>;
+  /**
    * J-AI corrections echo — the coach's corrections on the member's REAL trades
    * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`
    * (only corrections the admin TAGGED with a `TrackingAxis` — the label prefixes

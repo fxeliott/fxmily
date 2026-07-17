@@ -183,7 +183,7 @@ export const morningCheckinSchema = z
       .number({ message: 'Méditation invalide.' })
       .int('Entier requis.')
       .min(0, 'Au moins 0.')
-      .max(240, 'Maximum 240 min.'),
+      .max(180, 'Maximum 180 min.'),
 
     sportType: z
       .string()

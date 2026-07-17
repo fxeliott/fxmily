@@ -8,6 +8,7 @@ import {
   localDateSchema,
   morningCheckinSchema,
 } from './checkin';
+import { meditationValueSchema } from './habit-log';
 
 /**
  * Zod schemas for the daily check-in flows (J5, SPEC §6.4 + §7.4).
@@ -107,13 +108,28 @@ describe('morningCheckinSchema', () => {
     );
   });
 
-  it('caps meditationMin at 240', () => {
-    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '241' }).success).toBe(
+  it('caps meditationMin at 180 (aligned with the HabitLog meditation bound)', () => {
+    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '181' }).success).toBe(
       false,
     );
-    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '240' }).success).toBe(
+    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '180' }).success).toBe(
       true,
     );
+  });
+
+  it('keeps the meditation cap aligned across surfaces (no J5.2 cross-surface drift)', () => {
+    // Regression guard: the morning check-in must never accept a meditation the
+    // HabitLog value schema would then clamp/reject. Both cap at 180 min — the
+    // write-through (`mapCheckinToHabitLogs`) also mirrors 180. Raising one bound
+    // without the others re-opens the divergence this test exists to catch.
+    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '180' }).success).toBe(
+      true,
+    );
+    expect(morningCheckinSchema.safeParse({ ...validMorning, meditationMin: '181' }).success).toBe(
+      false,
+    );
+    expect(meditationValueSchema.safeParse({ durationMin: 180 }).success).toBe(true);
+    expect(meditationValueSchema.safeParse({ durationMin: 181 }).success).toBe(false);
   });
 
   it('caps intention at 200 chars', () => {

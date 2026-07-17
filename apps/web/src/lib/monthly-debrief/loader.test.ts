@@ -48,6 +48,7 @@ vi.mock('@/lib/db', () => ({
     // J5.1 — le loader interroge les reflexions ABCD du mois. `[]` par defaut
     // = aucune reflexion (les slices existantes restent byte-identiques).
     reflectionEntry: { findMany: vi.fn(async () => []) },
+    habitLog: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -98,17 +99,10 @@ vi.mock('@/lib/cards/service', () => ({
   listMyFavorites: vi.fn(async () => []),
 }));
 
-// J5.2 — piliers TRACK (SSOT HabitLog). Stubbed inert ([]) so the builder omits the
-// slice and existing assertions stay byte-identical.
-vi.mock('@/lib/habit/service', () => ({
-  listRecentHabitLogs: vi.fn(async () => []),
-}));
-
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
-import { listRecentHabitLogs } from '@/lib/habit/service';
 import { listConstancyScoresInRange, currentPeriodStart } from '@/lib/verification/constancy';
 
 import { db } from '@/lib/db';
@@ -522,9 +516,9 @@ describe('loadMonthlySliceForUser — J5.8 favoris Douglas (SSOT listMyFavorites
   });
 });
 
-describe('loadMonthlySliceForUser — J5.2 piliers TRACK (SSOT listRecentHabitLogs)', () => {
+describe('loadMonthlySliceForUser — J5.2 piliers TRACK (HabitLog scopé mois civil)', () => {
   it('agrege les logs en resume (moyenne + jours loggés) dans builderInput.habits', async () => {
-    vi.mocked(listRecentHabitLogs).mockResolvedValue([
+    vi.mocked(db.habitLog.findMany).mockResolvedValue([
       {
         id: 'h1',
         userId: 'user-1',
@@ -556,9 +550,19 @@ describe('loadMonthlySliceForUser — J5.2 piliers TRACK (SSOT listRecentHabitLo
     expect(habits![0]!.unit).toBe('h');
   });
 
-  it('interroge listRecentHabitLogs avec le userId + fenetre 30j', async () => {
-    vi.mocked(listRecentHabitLogs).mockResolvedValue([] as never);
+  it('interroge habitLog scopé au mois civil rapporté (aligné sur les réflexions ABCD)', async () => {
+    vi.mocked(db.habitLog.findMany).mockResolvedValue([] as never);
     await loadMonthlySliceForUser('user-1', { now: NOW });
-    expect(listRecentHabitLogs).toHaveBeenCalledWith('user-1', 30);
+    const habitCall = vi.mocked(db.habitLog.findMany).mock.calls[0]![0] as {
+      where: { userId: string; date: { gte: Date; lte: Date } };
+    };
+    const reflCall = vi.mocked(db.reflectionEntry.findMany).mock.calls[0]![0] as {
+      where: { date: { gte: Date; lte: Date } };
+    };
+    expect(habitCall.where.userId).toBe('user-1');
+    // Regression 2026-07-17 : la fenetre TRACK doit etre ALIGNEE sur le mois civil
+    // rapporte (memes bornes que l'ABCD), jamais un horizon glissant now-30j.
+    expect(habitCall.where.date.gte.getTime()).toBe(reflCall.where.date.gte.getTime());
+    expect(habitCall.where.date.lte.getTime()).toBe(reflCall.where.date.lte.getTime());
   });
 });

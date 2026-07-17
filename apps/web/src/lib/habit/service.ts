@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { habitLogInputSchema, type HabitKind, type HabitLogInput } from '@/lib/schemas/habit-log';
@@ -130,6 +130,72 @@ export async function upsertHabitLog(
     log: toSerialized(row as unknown as HabitLogRow),
     wasNew: existing == null,
   };
+}
+
+/**
+ * Create a habit log ONLY if none exists yet for `(userId, date, kind)` — the
+ * fill-only primitive behind the V2 morning check-in write-through (Option A:
+ * one input, not two).
+ *
+ * Unlike `upsertHabitLog`, this NEVER overwrites: a member who already logged
+ * this kind for this day in TRACK keeps their TRACK entry untouched. The
+ * check-in only *fills the gap* it would otherwise leave empty. This is the
+ * whole point of the fusion — projecting the morning check-in into TRACK must
+ * not clobber a richer, member-authored TRACK entry.
+ *
+ * Idempotence + race-safety are structural: the `(userId, date, kind)` unique
+ * constraint means a concurrent create that loses the race surfaces as Prisma
+ * `P2002`, which we swallow to `{ created: false }` (the row exists now — the
+ * fill-only contract still holds). The `findUnique` pre-check just spares the
+ * common case from throwing.
+ *
+ * NOTE (H1, same caveat as `upsertHabitLog`): this does NOT re-check the
+ * timezone-aware civil window. The write-through caller
+ * (`submitMorningCheckin`) MUST gate on `isHabitDateWithinLocalWindow(...)`
+ * before calling — a check-in backfilled beyond the habit window must SKIP the
+ * projection, never create an out-of-window habit row.
+ */
+export async function createHabitLogIfAbsent(
+  userId: string,
+  input: HabitLogInput,
+): Promise<{ created: boolean }> {
+  // Belt-and-suspenders re-parse (same trust-boundary rationale as
+  // `upsertHabitLog` V1.9 R2 M3) — the caller maps from a check-in, not a
+  // TRACK form, so the shape still gets pinned at this boundary.
+  const safe = habitLogInputSchema.parse(input);
+  const dateDb = parseLocalDate(safe.date);
+
+  const existing = await db.habitLog.findUnique({
+    where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
+    select: { id: true },
+  });
+  if (existing != null) {
+    // A TRACK entry (or an earlier projection) already owns this slot — leave
+    // it untouched. Fill-only.
+    return { created: false };
+  }
+
+  const valueJson = safe.value as unknown as Prisma.InputJsonValue;
+
+  try {
+    await db.habitLog.create({
+      data: {
+        userId,
+        date: dateDb,
+        kind: safe.kind,
+        value: valueJson,
+        notes: safe.notes ?? null,
+      },
+    });
+    return { created: true };
+  } catch (err) {
+    // Lost the create race against a concurrent writer between the pre-check
+    // and the insert — the row exists now, so fill-only is still honoured.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return { created: false };
+    }
+    throw err;
+  }
 }
 
 // =============================================================================

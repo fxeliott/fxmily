@@ -102,15 +102,31 @@ const isoDate = z
   .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), 'Date invalide.');
 
 /**
- * Refine a candidate date string against the `[-windowDays, +forwardDays]`
- * window measured from `now` (UTC midnight anchor). Mirrors the rule used by
- * reflection / weekly-review schemas.
+ * Slack applied to the coarse UTC-anchored `dateInWindow` bounds so that this
+ * stateless refine is NEVER stricter than the authoritative, timezone-exact
+ * `isHabitDateWithinLocalWindow`. A member off-UTC has a civil "today" up to
+ * ~13h from UTC midnight; without this ±1-day slack the UTC-anchored floor
+ * would silently reject a legitimate `today+1` / `today-14` entry near
+ * midnight (e.g. a Paris member checking in for "demain" at ~00:30 local).
+ * One full day > 13h, so the coarse check stays a strict *superset* of the TZ
+ * gate while still blocking a 1-year replay.
+ */
+const DATE_WINDOW_SLOP_DAYS = 1;
+
+/**
+ * Coarse UTC-anchored refine of a candidate date string against the
+ * `[-(HABIT_BACKFILL_WINDOW_DAYS + slop), +(HABIT_FORWARD_WINDOW_DAYS + slop)]`
+ * window measured from `now` (UTC midnight anchor). Defense-in-depth only — the
+ * authoritative bound is `isHabitDateWithinLocalWindow`. Mirrors the rule used
+ * by reflection / weekly-review schemas.
  */
 function dateInWindow(value: string, now: Date = new Date()): boolean {
   const dt = new Date(`${value}T00:00:00Z`);
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const minTs = today.getTime() - HABIT_BACKFILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  const maxTs = today.getTime() + HABIT_FORWARD_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const minTs =
+    today.getTime() - (HABIT_BACKFILL_WINDOW_DAYS + DATE_WINDOW_SLOP_DAYS) * 24 * 60 * 60 * 1000;
+  const maxTs =
+    today.getTime() + (HABIT_FORWARD_WINDOW_DAYS + DATE_WINDOW_SLOP_DAYS) * 24 * 60 * 60 * 1000;
   const ts = dt.getTime();
   return ts >= minTs && ts <= maxTs;
 }
@@ -156,13 +172,15 @@ const notesField = z
 
 /**
  * **Timezone caveat (V1.9 R2 security-auditor catch H1) — RESOLVED.**
- * `dateInWindow` anchors to UTC midnight via `getUTC*` and accepts ±13h
- * drift on the bounds for members off-UTC. This Zod refine is stateless
- * (no session) so it stays as **coarse defense-in-depth** — it still
- * blocks a 1-year replay even without a session. The authoritative,
- * timezone-exact bound is now enforced by `submitHabitLogAction`, which
- * re-validates `parsed.data.date` via `isHabitDateWithinLocalWindow`
- * with `session.user.timezone || 'Europe/Paris'`. Keep both layers.
+ * `dateInWindow` anchors to UTC midnight and widens each bound by
+ * `DATE_WINDOW_SLOP_DAYS` (±1 full day) so it is a strict *superset* of the
+ * TZ-exact gate — a member off-UTC (civil "today" up to ~13h from UTC
+ * midnight) is never wrongly rejected at the borders. This Zod refine is
+ * stateless (no session) so it stays as **coarse defense-in-depth** — it
+ * still blocks a 1-year replay even without a session. The authoritative,
+ * timezone-exact bound is enforced by `submitHabitLogAction` /
+ * `isHabitDateWithinLocalWindow` with `session.user.timezone ||
+ * 'Europe/Paris'`. Keep both layers.
  */
 const dateField = isoDate.refine((v) => dateInWindow(v), {
   message: `Date hors fenêtre autorisée (${HABIT_BACKFILL_WINDOW_DAYS}j en arrière → ${HABIT_FORWARD_WINDOW_DAYS}j en avant).`,

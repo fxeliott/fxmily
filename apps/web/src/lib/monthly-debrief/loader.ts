@@ -34,7 +34,6 @@ import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
 import { summarizeHabitPillars } from '@/lib/habit/pillars';
-import { listRecentHabitLogs } from '@/lib/habit/service';
 // D1 (SPEC §25.2) — the sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross the member boundary. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -496,12 +495,22 @@ export async function loadMonthlySliceForUser(
   }));
 
   // J5.2 — piliers TRACK (HabitLog : sommeil/nutrition/cafeine/sport/meditation).
-  // Le loader (touchpoint sanctionne) lit le SSOT `listRecentHabitLogs` et AGREGE via
-  // `summarizeHabitPillars` (domaine habit) : moyenne + jours loggés par pilier, borne
-  // <=5. Le builder pur ne recoit qu'un resume fini (firewall §21.5/§25.7). Fenetre 30j.
-  const habits = summarizeHabitPillars(
-    (await listRecentHabitLogs(userId, 30)).map((l) => ({ kind: l.kind, value: l.value })),
-  );
+  // Le loader (touchpoint sanctionne) lit HabitLog SCOPE AU MOIS CIVIL RAPPORTE
+  // (monthStartLocal..monthEndLocal, MEMES bornes que les reflexions ABCD — jamais un
+  // horizon glissant now-30j) puis AGREGE via `summarizeHabitPillars` (domaine habit) :
+  // moyenne + jours loggés par pilier, borne <=5. Le builder pur ne recoit qu'un resume
+  // fini (firewall §21.5/§25.7).
+  const habitRows = await db.habitLog.findMany({
+    where: {
+      userId,
+      date: {
+        gte: parseLocalDate(window.monthStartLocal),
+        lte: parseLocalDate(window.monthEndLocal),
+      },
+    },
+    select: { kind: true, value: true },
+  });
+  const habits = summarizeHabitPillars(habitRows.map((l) => ({ kind: l.kind, value: l.value })));
 
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude

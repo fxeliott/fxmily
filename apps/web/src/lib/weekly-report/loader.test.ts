@@ -45,6 +45,7 @@ vi.mock('@/lib/db', () => ({
     // J5.1 — the loader reads the member's ABCD reflections of the week.
     // `[]` by default = none (existing slices stay byte-identical).
     reflectionEntry: { findMany: vi.fn(async () => []) },
+    habitLog: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -97,16 +98,9 @@ vi.mock('@/lib/cards/service', () => ({
   listMyFavorites: vi.fn(async () => []),
 }));
 
-// J5.2 — piliers TRACK (SSOT HabitLog). Stubbed inert ([]) so the builder omits the
-// slice and existing assertions stay byte-identical.
-vi.mock('@/lib/habit/service', () => ({
-  listRecentHabitLogs: vi.fn(async () => []),
-}));
-
 import { db } from '@/lib/db';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
-import { listRecentHabitLogs } from '@/lib/habit/service';
 import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
@@ -400,9 +394,9 @@ describe('loadWeeklySliceForUser — J5.8 favoris Douglas (SSOT listMyFavorites)
   });
 });
 
-describe('loadWeeklySliceForUser — J5.2 piliers TRACK (SSOT listRecentHabitLogs)', () => {
+describe('loadWeeklySliceForUser — J5.2 piliers TRACK (HabitLog scopé fenêtre du rapport)', () => {
   it('agrege les logs en resume (moyenne + jours loggés) dans builderInput.habits', async () => {
-    vi.mocked(listRecentHabitLogs).mockResolvedValue([
+    vi.mocked(db.habitLog.findMany).mockResolvedValue([
       {
         id: 'h1',
         userId: 'user-1',
@@ -434,9 +428,19 @@ describe('loadWeeklySliceForUser — J5.2 piliers TRACK (SSOT listRecentHabitLog
     expect(habits![0]!.unit).toBe('h');
   });
 
-  it('interroge listRecentHabitLogs avec le userId + fenetre 7j', async () => {
-    vi.mocked(listRecentHabitLogs).mockResolvedValue([] as never);
+  it('interroge habitLog scopé à la fenêtre du rapport (aligné sur les réflexions ABCD)', async () => {
+    vi.mocked(db.habitLog.findMany).mockResolvedValue([] as never);
     await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
-    expect(listRecentHabitLogs).toHaveBeenCalledWith('user-1', 7);
+    const habitCall = vi.mocked(db.habitLog.findMany).mock.calls[0]![0] as {
+      where: { userId: string; date: { gte: Date; lte: Date } };
+    };
+    const reflCall = vi.mocked(db.reflectionEntry.findMany).mock.calls[0]![0] as {
+      where: { date: { gte: Date; lte: Date } };
+    };
+    expect(habitCall.where.userId).toBe('user-1');
+    // Regression 2026-07-17 : la fenetre TRACK doit etre ALIGNEE sur le report window
+    // (memes bornes que l'ABCD), jamais un horizon glissant now-7j.
+    expect(habitCall.where.date.gte.getTime()).toBe(reflCall.where.date.gte.getTime());
+    expect(habitCall.where.date.lte.getTime()).toBe(reflCall.where.date.lte.getTime());
   });
 });

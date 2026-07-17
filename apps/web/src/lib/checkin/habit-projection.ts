@@ -1,4 +1,4 @@
-import type { HabitLogInput } from '@/lib/schemas/habit-log';
+import { MEDITATION_MAX_MIN, type HabitLogInput } from '@/lib/schemas/habit-log';
 
 /**
  * Minimal projection source: the subset of morning check-in fields that also
@@ -22,7 +22,6 @@ export interface CheckinHabitSource {
 // projection still succeeds (best-effort) instead of being rejected by the
 // target schema and dropped.
 const SLEEP_MAX_MIN = 1440;
-const MEDITATION_MAX_MIN = 180;
 const SPORT_MAX_MIN = 600;
 
 function clamp(value: number, min: number, max: number): number {

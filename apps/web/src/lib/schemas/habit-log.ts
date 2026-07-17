@@ -83,10 +83,18 @@ export const sportValueSchema = z
   .strict();
 export type SportValue = z.infer<typeof sportValueSchema>;
 
+/**
+ * Canonical meditation duration bound (minutes). Single source of truth shared
+ * by the HabitLog value schema, the check-in schema, the check-in→TRACK mapper,
+ * and the edit-prefill clamp, so the cap can never drift across surfaces again
+ * (the J5.2 divergence: the check-in once accepted 240 while TRACK clamped 180).
+ */
+export const MEDITATION_MAX_MIN = 180;
+
 /** Meditation — duration + optional quality rating. */
 export const meditationValueSchema = z
   .object({
-    durationMin: z.number().int().min(0).max(180),
+    durationMin: z.number().int().min(0).max(MEDITATION_MAX_MIN),
     quality: z.number().int().min(1).max(10).optional(),
   })
   .strict();

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { CHECKIN_EMOTION_MAX_PER_SLOT, isCheckinEmotionSlug } from '@/lib/checkin/emotions';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
+import { MEDITATION_MAX_MIN } from './habit-log';
+
 /**
  * Daily check-in schemas (J5, SPEC §6.4 + §7.4).
  *
@@ -183,7 +185,7 @@ export const morningCheckinSchema = z
       .number({ message: 'Méditation invalide.' })
       .int('Entier requis.')
       .min(0, 'Au moins 0.')
-      .max(180, 'Maximum 180 min.'),
+      .max(MEDITATION_MAX_MIN, `Maximum ${MEDITATION_MAX_MIN} min.`),
 
     sportType: z
       .string()

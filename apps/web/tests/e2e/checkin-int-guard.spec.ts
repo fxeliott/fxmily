@@ -93,7 +93,7 @@ test.describe('PR #539 — sibling integer guards from the member seat', () => {
     // Both sport fields must be filled, else the type<->duration pairing error
     // fires first and masks the integer guard.
     await page.getByLabel(/Type de sport/i).fill('Course');
-    await page.getByLabel(/Durée du sport/i).fill('30,5');
+    await page.getByLabel(/Durée du sport/i).fill('30.5');
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     await expect(page.getByText(/Minutes entières uniquement\./)).toBeVisible();
@@ -127,7 +127,7 @@ test.describe('PR #539 — sibling integer guards from the member seat', () => {
     await loginAs(page, request, seeded.email, seeded.password);
     await gotoHydrationStep(page);
 
-    await page.getByLabel(/Caféine/i).fill('250,5');
+    await page.getByLabel(/Caféine totale/i).fill('250.5');
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     await expect(page.getByText(/Millilitres entiers uniquement\./)).toBeVisible();
@@ -143,7 +143,7 @@ test.describe('PR #539 — sibling integer guards from the member seat', () => {
     await loginAs(page, request, seeded.email, seeded.password);
     await gotoHydrationStep(page);
 
-    await page.getByLabel(/Caféine/i).fill('300');
+    await page.getByLabel(/Caféine totale/i).fill('300');
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     await expect(page.getByRole('heading', { name: /Stress/i })).toBeVisible();

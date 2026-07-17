@@ -79,8 +79,12 @@ test.describe('J5.2 — meditation bound (180) from the member seat', () => {
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     // Inline error is shown and the step does NOT advance (still on Corps,
-    // the Mental step never renders).
-    await expect(page.getByText('Entre 0 et 180 min.')).toBeVisible();
+    // the Mental step never renders). Regex (not a string literal) because the
+    // source copy is dynamic — `Entre 0 et ${MEDITATION_MAX_MIN} min.` — so the
+    // 180 is interpolated at runtime, not present verbatim in src. A stable
+    // regex is the guardrail-sanctioned matcher for interpolated copy
+    // (check-e2e-copy-sync.mjs skips regex assertions by design).
+    await expect(page.getByText(/Entre 0 et 180 min\./)).toBeVisible();
     await expect(page.getByRole('heading', { name: /Corps/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Mental/i })).toHaveCount(0);
   });

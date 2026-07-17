@@ -8,7 +8,7 @@ import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
 
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
-import { createHabitLogIfAbsent } from '@/lib/habit/service';
+import { projectHabitLogFromCheckin } from '@/lib/habit/service';
 import { reportWarning } from '@/lib/observability';
 import {
   MAX_BACKFILL_SUGGESTIONS,
@@ -308,8 +308,9 @@ export async function submitMorningCheckin(
 
   // Option A — write-through : projette les piliers sommeil / méditation / sport
   // du check-in matin dans TRACK (HabitLog) pour que le membre ne les saisisse
-  // qu'UNE fois. Fill-only (createHabitLogIfAbsent n'écrase JAMAIS une entrée
-  // TRACK existante), best-effort (un échec côté habit ne doit jamais casser le
+  // qu'UNE fois. Provenance-aware (projectHabitLogFromCheckin rafraîchit SA
+  // propre projection sur édition mais n'écrase JAMAIS une saisie membre TRACK),
+  // best-effort (un échec côté habit ne doit jamais casser le
   // check-in), et borné à la fenêtre civile HabitLog [-14j, +1j] — plus étroite
   // que le backfill 60 jours du check-in : un check-in rétro-rempli au-delà de 14
   // jours saute la projection au lieu de lever. Idempotent + race-safe par
@@ -325,8 +326,11 @@ export async function submitMorningCheckin(
     if (isHabitDateWithinLocalWindow(input.date, now, timezone)) {
       for (const habitLog of mapCheckinToHabitLogs(input)) {
         try {
-          const { created } = await createHabitLogIfAbsent(userId, habitLog);
-          if (created) {
+          const { outcome } = await projectHabitLogFromCheckin(userId, habitLog);
+          // Audit every actual write (created OR refreshed). A skipped
+          // member-owned slot is a no-op, nothing to record; `wasNew`
+          // distinguishes a fresh projection from an in-place refresh.
+          if (outcome !== 'skipped') {
             await logAudit({
               action: 'habit_log.upserted',
               userId,
@@ -334,7 +338,7 @@ export async function submitMorningCheckin(
                 kind: habitLog.kind,
                 date: input.date,
                 source: 'checkin_morning',
-                wasNew: true,
+                wasNew: outcome === 'created',
               },
             });
           }

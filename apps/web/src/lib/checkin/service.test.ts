@@ -25,10 +25,10 @@ vi.mock('@/lib/db', () => ({
 
 // Option A write-through — the morning submit projects sleep/meditation/sport
 // into TRACK. Mock the three collaborators so the projection is observable +
-// deterministic (the real `createHabitLogIfAbsent` is `server-only` + hits the
+// deterministic (the real `projectHabitLogFromCheckin` is `server-only` + hits the
 // DB). `logAudit` / `reportWarning` keep their real siblings via importOriginal.
 vi.mock('@/lib/habit/service', () => ({
-  createHabitLogIfAbsent: vi.fn(),
+  projectHabitLogFromCheckin: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/audit', async (importOriginal) => ({
@@ -56,7 +56,7 @@ import {
 import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
 
 // Option A write-through collaborators — asserted below via `vi.mocked(...)`.
-import { createHabitLogIfAbsent } from '@/lib/habit/service';
+import { projectHabitLogFromCheckin } from '@/lib/habit/service';
 import { logAudit } from '@/lib/auth/audit';
 import { reportWarning } from '@/lib/observability';
 
@@ -333,7 +333,7 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
   beforeEach(() => {
     // Runs AFTER the global `vi.resetAllMocks()` — re-arm the default happy path.
     vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(morningRow() as never);
-    vi.mocked(createHabitLogIfAbsent).mockResolvedValue({ created: true });
+    vi.mocked(projectHabitLogFromCheckin).mockResolvedValue({ outcome: 'created' });
   });
 
   it('projects the sleep pillar into HabitLog (same-day, in civil window)', async () => {
@@ -342,8 +342,8 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
       now: NOW_JUN10,
     });
 
-    expect(createHabitLogIfAbsent).toHaveBeenCalledTimes(1);
-    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+    expect(projectHabitLogFromCheckin).toHaveBeenCalledTimes(1);
+    expect(projectHabitLogFromCheckin).toHaveBeenCalledWith('user-1', {
       kind: 'sleep',
       date: '2026-06-10',
       value: { durationMin: 420, quality: 6 },
@@ -363,15 +363,15 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
     );
 
     const kinds = vi
-      .mocked(createHabitLogIfAbsent)
+      .mocked(projectHabitLogFromCheckin)
       .mock.calls.map((c) => (c[1] as { kind: string }).kind);
     expect(kinds).toEqual(['sleep', 'meditation', 'sport']);
-    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+    expect(projectHabitLogFromCheckin).toHaveBeenCalledWith('user-1', {
       kind: 'meditation',
       date: '2026-06-10',
       value: { durationMin: 20 },
     });
-    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+    expect(projectHabitLogFromCheckin).toHaveBeenCalledWith('user-1', {
       kind: 'sport',
       date: '2026-06-10',
       value: { type: 'cardio', durationMin: 45 },
@@ -380,17 +380,17 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
   });
 
   it('audits ONLY the habit logs it actually created (fill-only)', async () => {
-    // sleep is newly created, meditation already existed (created: false).
-    vi.mocked(createHabitLogIfAbsent)
-      .mockResolvedValueOnce({ created: true })
-      .mockResolvedValueOnce({ created: false });
+    // sleep is newly created, meditation slot is member-owned (skipped).
+    vi.mocked(projectHabitLogFromCheckin)
+      .mockResolvedValueOnce({ outcome: 'created' })
+      .mockResolvedValueOnce({ outcome: 'skipped' });
 
     await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10', meditationMin: 20 }), {
       timezone: TZ,
       now: NOW_JUN10,
     });
 
-    expect(createHabitLogIfAbsent).toHaveBeenCalledTimes(2);
+    expect(projectHabitLogFromCheckin).toHaveBeenCalledTimes(2);
     expect(logAudit).toHaveBeenCalledTimes(1);
     expect(logAudit).toHaveBeenCalledWith({
       action: 'habit_log.upserted',
@@ -400,6 +400,30 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
         date: '2026-06-10',
         source: 'checkin_morning',
         wasNew: true,
+      },
+    });
+  });
+
+  it('audits a refreshed projection with wasNew=false (member edited the check-in)', async () => {
+    // Re-submitting the morning check-in for the same day refreshes the sleep
+    // pillar it previously projected → outcome 'refreshed' → still audited, but
+    // as an in-place update (wasNew=false), not a fresh create.
+    vi.mocked(projectHabitLogFromCheckin).mockResolvedValue({ outcome: 'refreshed' });
+
+    await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10' }), {
+      timezone: TZ,
+      now: NOW_JUN10,
+    });
+
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    expect(logAudit).toHaveBeenCalledWith({
+      action: 'habit_log.upserted',
+      userId: 'user-1',
+      metadata: {
+        kind: 'sleep',
+        date: '2026-06-10',
+        source: 'checkin_morning',
+        wasNew: false,
       },
     });
   });
@@ -414,12 +438,12 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
     );
 
     expect(db.dailyCheckin.upsert).toHaveBeenCalledTimes(1);
-    expect(createHabitLogIfAbsent).not.toHaveBeenCalled();
+    expect(projectHabitLogFromCheckin).not.toHaveBeenCalled();
     expect(logAudit).not.toHaveBeenCalled();
   });
 
   it('is best-effort: a habit failure never breaks the check-in', async () => {
-    vi.mocked(createHabitLogIfAbsent).mockRejectedValue(new Error('habit db down'));
+    vi.mocked(projectHabitLogFromCheckin).mockRejectedValue(new Error('habit db down'));
 
     const out = await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10' }), {
       timezone: TZ,
@@ -442,7 +466,7 @@ describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)'
       { timezone: TZ, now: NOW_JUN10 },
     );
 
-    expect(createHabitLogIfAbsent).not.toHaveBeenCalled();
+    expect(projectHabitLogFromCheckin).not.toHaveBeenCalled();
   });
 });
 

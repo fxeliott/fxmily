@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
+import { HabitSource } from '@/generated/prisma/enums';
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { habitLogInputSchema, type HabitKind, type HabitLogInput } from '@/lib/schemas/habit-log';
@@ -119,10 +120,15 @@ export async function upsertHabitLog(
       kind: safe.kind,
       value: valueJson,
       notes: safe.notes ?? null,
+      source: HabitSource.member_track,
     },
     update: {
       value: valueJson,
       notes: safe.notes ?? null,
+      // A member editing via TRACK claims ownership of this slot: promote a
+      // previously check-in-projected row to `member_track` so a later
+      // projection can never clobber the member's own edit (J5.2 provenance).
+      source: HabitSource.member_track,
     },
   });
 
@@ -133,32 +139,31 @@ export async function upsertHabitLog(
 }
 
 /**
- * Create a habit log ONLY if none exists yet for `(userId, date, kind)` — the
- * fill-only primitive behind the V2 morning check-in write-through (Option A:
- * one input, not two).
+ * Project a check-in-sourced habit log into TRACK (`HabitLog`), refreshing its
+ * OWN prior projection but NEVER a member-authored TRACK entry. The primitive
+ * behind the V2 morning check-in write-through (Option A: one input, not two).
  *
- * Unlike `upsertHabitLog`, this NEVER overwrites: a member who already logged
- * this kind for this day in TRACK keeps their TRACK entry untouched. The
- * check-in only *fills the gap* it would otherwise leave empty. This is the
- * whole point of the fusion — projecting the morning check-in into TRACK must
- * not clobber a richer, member-authored TRACK entry.
+ * Provenance-aware (J5.2 `source` column):
+ * - **absent** → create with `source = checkin_morning` → `'created'`;
+ * - **present & `source = checkin_morning`** → the member edited the check-in
+ *   (e.g. sleep 7h→8h) → refresh this row's value/notes in place → `'refreshed'`;
+ * - **present & `source = member_track`** (or any non-projection provenance,
+ *   incl. legacy pre-`source` rows read defensively) → the slot is member-owned
+ *   → leave it untouched → `'skipped'`. This is the fill-only guarantee: the
+ *   projection must never clobber a richer, member-authored TRACK entry.
  *
- * Idempotence + race-safety are structural: the `(userId, date, kind)` unique
- * constraint means a concurrent create that loses the race surfaces as Prisma
- * `P2002`, which we swallow to `{ created: false }` (the row exists now — the
- * fill-only contract still holds). The `findUnique` pre-check just spares the
- * common case from throwing.
+ * Race-safety is structural: the `(userId, date, kind)` unique constraint means
+ * a concurrent create that loses the race surfaces as Prisma `P2002`, which we
+ * swallow to `'skipped'` (the row exists now — we leave whatever won the race).
  *
  * NOTE (H1, same caveat as `upsertHabitLog`): this does NOT re-check the
- * timezone-aware civil window. The write-through caller
- * (`submitMorningCheckin`) MUST gate on `isHabitDateWithinLocalWindow(...)`
- * before calling — a check-in backfilled beyond the habit window must SKIP the
- * projection, never create an out-of-window habit row.
+ * timezone-aware civil window. The write-through caller (`submitMorningCheckin`)
+ * MUST gate on `isHabitDateWithinLocalWindow(...)` before calling.
  */
-export async function createHabitLogIfAbsent(
+export async function projectHabitLogFromCheckin(
   userId: string,
   input: HabitLogInput,
-): Promise<{ created: boolean }> {
+): Promise<{ outcome: 'created' | 'refreshed' | 'skipped' }> {
   // Belt-and-suspenders re-parse (same trust-boundary rationale as
   // `upsertHabitLog` V1.9 R2 M3) — the caller maps from a check-in, not a
   // TRACK form, so the shape still gets pinned at this boundary.
@@ -167,15 +172,28 @@ export async function createHabitLogIfAbsent(
 
   const existing = await db.habitLog.findUnique({
     where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
-    select: { id: true },
+    select: { id: true, source: true },
   });
-  if (existing != null) {
-    // A TRACK entry (or an earlier projection) already owns this slot — leave
-    // it untouched. Fill-only.
-    return { created: false };
-  }
 
   const valueJson = safe.value as unknown as Prisma.InputJsonValue;
+
+  if (existing != null) {
+    // Only a row THIS write-through previously projected may be refreshed.
+    // Anything else — a member_track TRACK entry, or a legacy row whose
+    // provenance predates the `source` column (read defensively) — is
+    // member-owned and is left untouched. Fill-only.
+    if (existing.source !== HabitSource.checkin_morning) {
+      return { outcome: 'skipped' };
+    }
+    await db.habitLog.update({
+      where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
+      data: {
+        value: valueJson,
+        notes: safe.notes ?? null,
+      },
+    });
+    return { outcome: 'refreshed' };
+  }
 
   try {
     await db.habitLog.create({
@@ -185,14 +203,15 @@ export async function createHabitLogIfAbsent(
         kind: safe.kind,
         value: valueJson,
         notes: safe.notes ?? null,
+        source: HabitSource.checkin_morning,
       },
     });
-    return { created: true };
+    return { outcome: 'created' };
   } catch (err) {
     // Lost the create race against a concurrent writer between the pre-check
-    // and the insert — the row exists now, so fill-only is still honoured.
+    // and the insert — the row exists now, so we leave it untouched.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return { created: false };
+      return { outcome: 'skipped' };
     }
     throw err;
   }

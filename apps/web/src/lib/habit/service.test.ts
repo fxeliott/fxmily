@@ -7,16 +7,20 @@ vi.mock('@/lib/db', () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
 
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 import {
   getHabitLogById,
   listHabitLogsByKind,
   listRecentHabitLogs,
+  projectHabitLogFromCheckin,
   upsertHabitLog,
 } from './service';
 
@@ -113,6 +117,101 @@ describe('upsertHabitLog', () => {
     const result = await upsertHabitLog('user-1', sportInput);
     expect(result.log.kind).toBe('sport');
     expect(result.log.date).toBe('2026-05-14');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// projectHabitLogFromCheckin (J5.2 provenance — refresh-own, never a member row)
+// ---------------------------------------------------------------------------
+
+describe('projectHabitLogFromCheckin', () => {
+  // Same civil-window freeze as upsertHabitLog: sleepInput is dated 2026-05-13,
+  // so pin "now" to 2026-05-14 to keep it inside the schema's back window.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-05-14T12:00:00Z') });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('creates a checkin_morning row when the slot is empty', async () => {
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.habitLog.create).mockResolvedValue(makeRow() as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('created');
+    expect(db.habitLog.create).toHaveBeenCalledOnce();
+    const arg = vi.mocked(db.habitLog.create).mock.calls[0]?.[0] as {
+      data: { source: string };
+    };
+    expect(arg.data.source).toBe('checkin_morning');
+    expect(db.habitLog.update).not.toHaveBeenCalled();
+  });
+
+  it('refreshes its OWN prior projection when the member edits the check-in', async () => {
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue({
+      id: 'hl-1',
+      source: 'checkin_morning',
+    } as never);
+    vi.mocked(db.habitLog.update).mockResolvedValue(makeRow() as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('refreshed');
+    expect(db.habitLog.update).toHaveBeenCalledOnce();
+    expect(db.habitLog.create).not.toHaveBeenCalled();
+  });
+
+  it('never touches a member-authored TRACK entry (member_track -> skipped)', async () => {
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue({
+      id: 'hl-1',
+      source: 'member_track',
+    } as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('skipped');
+    expect(db.habitLog.update).not.toHaveBeenCalled();
+    expect(db.habitLog.create).not.toHaveBeenCalled();
+  });
+
+  it('treats a legacy row with no provenance (null source) as member-owned', async () => {
+    // Defensive: any row whose source is not exactly `checkin_morning` — incl. a
+    // legacy null predating the column — is left untouched, never refreshed.
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue({
+      id: 'hl-legacy',
+      source: null,
+    } as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('skipped');
+    expect(db.habitLog.update).not.toHaveBeenCalled();
+    expect(db.habitLog.create).not.toHaveBeenCalled();
+  });
+
+  it('swallows a P2002 create race as skipped (the row exists now)', async () => {
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.habitLog.create).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('skipped');
+  });
+
+  it('rethrows a non-P2002 database error', async () => {
+    vi.mocked(db.habitLog.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.habitLog.create).mockRejectedValue(new Error('pool exhausted'));
+
+    await expect(projectHabitLogFromCheckin('user-1', sleepInput)).rejects.toThrow(
+      'pool exhausted',
+    );
   });
 });
 

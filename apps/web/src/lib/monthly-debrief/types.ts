@@ -20,6 +20,7 @@
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 import type { CoachingReportContext } from '@/lib/coaching/engine';
+import type { HabitKind } from '@/lib/schemas/habit-log';
 import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
 import type { SerializedTrade } from '@/lib/trades/service';
 // Notes membre TradingView (entrée / sortie) — même shape que le weekly. On
@@ -218,6 +219,19 @@ export interface MonthlyBuilderInput {
    * omet la section (retrocompat). §2-safe (process/psycho), hors firewall §21.5.
    */
   favorites?: Array<{ title: string; category: string }>;
+  /**
+   * J5.2 — piliers TRACK (HabitLog) DEJA agreges par le loader via le domaine
+   * habit (`summarizeHabitPillars`) : moyenne du scalaire + jours loggés par pilier,
+   * borne <=5. Le builder pur ne fait qu'un pass-through (firewall §21.5/§25.7 : le
+   * report ne couple pas @/lib/analytics ni @/lib/habit depuis le builder). Absente
+   * (`?:`) -> le prompt omet la section. §2-safe (hygiene de vie), hors §21.5.
+   */
+  habits?: Array<{
+    kind: HabitKind;
+    daysLogged: number;
+    average: number;
+    unit: 'h' | 'min' | 'repas' | 'cafés';
+  }>;
   /**
    * J-AI corrections echo — the coach's corrections on the member's REAL trades
    * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`

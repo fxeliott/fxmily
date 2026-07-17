@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { wrapUntrustedMemberInput } from '@/lib/ai/prompt-builder';
+import { HABIT_PILLAR_LABEL } from '@/lib/habit/pillars';
 import type { WeeklySnapshot } from '@/lib/schemas/weekly-report';
 import { emotionLabel } from '@/lib/trading/emotions';
 
@@ -560,6 +561,22 @@ export function buildWeeklyReportUserPrompt(
         snapshot.favorites.map((f) => `- ${f.title} (${f.category})`).join('\n'),
       ),
     );
+    lines.push(``);
+  }
+
+  // J5.2 — hygiène de vie (piliers TRACK) : résumé COUNT-ONLY (moyenne + jours
+  // loggés) sur la fenêtre. Donnée process §2-safe (hors firewall §21.5), agrégée
+  // et numérique → jamais du free-text membre, donc pas de wrap untrusted. Absente
+  // -> section omise (rétrocompat).
+  if (snapshot.habits && snapshot.habits.length > 0) {
+    lines.push(
+      `## Hygiène de vie du membre (piliers TRACK — contexte process, jamais un avis marché)`,
+    );
+    for (const h of snapshot.habits) {
+      lines.push(
+        `- ${HABIT_PILLAR_LABEL[h.kind]} : ${h.average} ${h.unit} en moyenne sur ${h.daysLogged} jour(s) loggé(s)`,
+      );
+    }
     lines.push(``);
   }
 

@@ -203,6 +203,13 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
       const favorites = buildFavorites(input);
       return favorites.length > 0 ? { favorites } : {};
     })(),
+    // J5.2 — piliers TRACK (HabitLog) : le loader a deja agrege + borne via le
+    // domaine habit ; le builder pur ne fait qu'un pass-through defensif. [] ->
+    // slice omise (conditional spread). Retrocompat : sans habit -> meme snapshot.
+    ...(() => {
+      const habits = buildHabits(input);
+      return habits.length > 0 ? { habits } : {};
+    })(),
     // Quick win — the coach's TAGGED corrections on this member's REAL trades this
     // week, relayed verbatim from the loader (`« Axe » : commentaire`), capped ≤20 +
     // re-hardened defense-in-depth. ADMIN free-text → wrapped untrusted at the prompt
@@ -751,6 +758,16 @@ function buildFavorites(input: BuilderInput): NonNullable<WeeklySnapshot['favori
       category: f.category.trim().slice(0, 40),
     }))
     .filter((f) => f.title.length > 0);
+}
+
+/**
+ * J5.2 — the loader (sanctioned touchpoint) already aggregated + bounded (<=5) the
+ * TRACK pillars via the habit domain. The PURE builder only re-clamps defensively
+ * (cap 5) — it MUST NOT couple to `@/lib/analytics` or `@/lib/habit` (§21.5/§25.7
+ * keeps the report generator decoupled from the real-edge / habit trees).
+ */
+function buildHabits(input: BuilderInput): NonNullable<WeeklySnapshot['habits']> {
+  return (input.habits ?? []).slice(0, 5);
 }
 
 function collectEmotionTags(input: BuilderInput): string[] {

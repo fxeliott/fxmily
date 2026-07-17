@@ -158,6 +158,13 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
       const favorites = buildFavorites(input);
       return favorites.length > 0 ? { favorites } : {};
     })(),
+    // J5.2 — piliers TRACK (HabitLog) : le loader a deja agrege + borne via le
+    // domaine habit ; le builder pur ne fait qu'un pass-through defensif. [] ->
+    // slice omise (conditional spread). Retrocompat : sans habit -> meme snapshot.
+    ...(() => {
+      const habits = buildHabits(input);
+      return habits.length > 0 ? { habits } : {};
+    })(),
     // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
     // MATIN free-text). Auto-declared DATA, never instructions — wrapped
     // untrusted at the prompt boundary.
@@ -302,6 +309,16 @@ function buildFavorites(input: MonthlyBuilderInput): NonNullable<MonthlySnapshot
       category: f.category.trim().slice(0, 40),
     }))
     .filter((f) => f.title.length > 0);
+}
+
+/**
+ * J5.2 — the loader (sanctioned touchpoint) already aggregated + bounded (<=5) the
+ * TRACK pillars via the habit domain. The PURE builder only re-clamps defensively
+ * (cap 5) — it MUST NOT couple to `@/lib/analytics` or `@/lib/habit` (§21.5/§25.7
+ * keeps the report generator decoupled from the real-edge / habit trees).
+ */
+function buildHabits(input: MonthlyBuilderInput): NonNullable<MonthlySnapshot['habits']> {
+  return (input.habits ?? []).slice(0, 5);
 }
 
 // =============================================================================

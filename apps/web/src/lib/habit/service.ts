@@ -145,16 +145,22 @@ export async function upsertHabitLog(
  *
  * Provenance-aware (J5.2 `source` column):
  * - **absent** → create with `source = checkin_morning` → `'created'`;
- * - **present & `source = checkin_morning`** → the member edited the check-in
+ * - **own `checkin_morning` row present** → the member edited the check-in
  *   (e.g. sleep 7h→8h) → refresh this row's value/notes in place → `'refreshed'`;
- * - **present & `source = member_track`** (or any non-projection provenance,
- *   incl. legacy pre-`source` rows read defensively) → the slot is member-owned
+ * - **`member_track` row present** (or any non-projection provenance, incl. a
+ *   legacy pre-`source` row whose `source` is null) → the slot is member-owned
  *   → leave it untouched → `'skipped'`. This is the fill-only guarantee: the
  *   projection must never clobber a richer, member-authored TRACK entry.
  *
- * Race-safety is structural: the `(userId, date, kind)` unique constraint means
- * a concurrent create that loses the race surfaces as Prisma `P2002`, which we
- * swallow to `'skipped'` (the row exists now — we leave whatever won the race).
+ * Race-safety is ATOMIC, not merely structural. The ownership check and the
+ * refresh are ONE statement: `updateMany` carries `source = checkin_morning` in
+ * its WHERE, so a member TRACK edit that promoted this slot to `member_track`
+ * concurrently simply matches zero rows and can never be clobbered — a separate
+ * `findUnique`-then-`update` would leave that TOCTOU window open. If no
+ * projection of ours matches, a `create` races the `(userId, date, kind)` unique
+ * constraint; on `P2002` we re-run the same source-scoped `updateMany` so a
+ * concurrent projection's newer value is refreshed rather than dropped, and a
+ * member-owned row is left as `'skipped'`.
  *
  * NOTE (H1, same caveat as `upsertHabitLog`): this does NOT re-check the
  * timezone-aware civil window. The write-through caller (`submitMorningCheckin`)
@@ -169,32 +175,32 @@ export async function projectHabitLogFromCheckin(
   // TRACK form, so the shape still gets pinned at this boundary.
   const safe = habitLogInputSchema.parse(input);
   const dateDb = parseLocalDate(safe.date);
-
-  const existing = await db.habitLog.findUnique({
-    where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
-    select: { id: true, source: true },
-  });
-
   const valueJson = safe.value as unknown as Prisma.InputJsonValue;
 
-  if (existing != null) {
-    // Only a row THIS write-through previously projected may be refreshed.
-    // Anything else — a member_track TRACK entry, or a legacy row whose
-    // provenance predates the `source` column (read defensively) — is
-    // member-owned and is left untouched. Fill-only.
-    if (existing.source !== HabitSource.checkin_morning) {
-      return { outcome: 'skipped' };
-    }
-    await db.habitLog.update({
-      where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
-      data: {
-        value: valueJson,
-        notes: safe.notes ?? null,
-      },
-    });
+  // Atomic refresh-own: update ONLY a row this write-through previously
+  // projected. Because `source = checkin_morning` is part of the WHERE, the
+  // ownership check and the write are a SINGLE statement — a member TRACK edit
+  // that promoted this slot to `member_track` concurrently matches zero rows
+  // and is never clobbered, and a legacy row whose provenance predates the
+  // column (null `source`) also matches zero, so it is treated as member-owned.
+  const refreshed = await db.habitLog.updateMany({
+    where: {
+      userId,
+      date: dateDb,
+      kind: safe.kind,
+      source: HabitSource.checkin_morning,
+    },
+    data: {
+      value: valueJson,
+      notes: safe.notes ?? null,
+    },
+  });
+  if (refreshed.count > 0) {
     return { outcome: 'refreshed' };
   }
 
+  // No projection of ours to refresh: the slot is either empty (→ create) or
+  // member-owned (→ the unique constraint rejects the create as `P2002`).
   try {
     await db.habitLog.create({
       data: {
@@ -208,10 +214,25 @@ export async function projectHabitLogFromCheckin(
     });
     return { outcome: 'created' };
   } catch (err) {
-    // Lost the create race against a concurrent writer between the pre-check
-    // and the insert — the row exists now, so we leave it untouched.
+    // Lost the create race — a row now exists at this slot. Re-run the
+    // source-scoped refresh: if a concurrent projection won the race the row is
+    // ours (`checkin_morning`) and we refresh it with our newer value; if it is
+    // a member_track/legacy row the updateMany matches nothing and we skip.
+    // Either way fill-only holds and no member entry is overwritten.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return { outcome: 'skipped' };
+      const rescued = await db.habitLog.updateMany({
+        where: {
+          userId,
+          date: dateDb,
+          kind: safe.kind,
+          source: HabitSource.checkin_morning,
+        },
+        data: {
+          value: valueJson,
+          notes: safe.notes ?? null,
+        },
+      });
+      return { outcome: rescued.count > 0 ? 'refreshed' : 'skipped' };
     }
     throw err;
   }

@@ -262,6 +262,8 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
       const med = parseLocaleNumber(draft.meditationMin);
       if (Number.isNaN(med) || med < 0 || med > MEDITATION_MAX_MIN) {
         errs.meditationMin = `Entre 0 et ${MEDITATION_MAX_MIN} min.`;
+      } else if (!Number.isInteger(med)) {
+        errs.meditationMin = 'Minutes entières uniquement.';
       }
       const hasType = draft.sportType.trim().length > 0;
       const hasDuration = draft.sportDurationMin.trim().length > 0;
@@ -287,7 +289,8 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
     }
     if (s === 2) {
       const med = parseLocaleNumber(draft.meditationMin);
-      if (Number.isNaN(med) || med < 0 || med > MEDITATION_MAX_MIN) return false;
+      if (Number.isNaN(med) || med < 0 || med > MEDITATION_MAX_MIN || !Number.isInteger(med))
+        return false;
       const hasType = draft.sportType.trim().length > 0;
       const hasDuration = draft.sportDurationMin.trim().length > 0;
       return hasType === hasDuration;

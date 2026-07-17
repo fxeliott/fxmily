@@ -1444,7 +1444,7 @@ model DailyCheckin {
   /// Did the member follow their personal morning routine? Tri-state: true
   /// (done), false (skipped), null (slot-N/A or unanswered).
   morningRoutineCompleted Boolean? @map("morning_routine_completed")
-  /// Meditation minutes (0 = "didn't meditate"). Capped at 240.
+  /// Meditation minutes (0 = "didn't meditate"). Capped at MEDITATION_MAX_MIN = 180 (src/lib/habit/bounds.ts).
   meditationMin           Int?     @map("meditation_min")
   /// Sport type label (free-text, FR — e.g. "course", "muscu", "yoga").
   sportType               String?  @map("sport_type")

@@ -156,3 +156,38 @@ describe('EveningCheckinWizard — P3 edit (prefill) mode', () => {
     expect(fd.getAll('gratitudeItems')).toEqual(['soleil', 'café', 'sport']);
   });
 });
+
+/**
+ * Caffeine integer guard — the client validation of the caffeine field now
+ * mirrors the server schema (`eveningCheckinSchema.caffeineMl` is `.int()`). A
+ * decimal like "250.5" used to pass the client range check (0..2000) then get
+ * rejected server-side ("Entier requis."). The guard blocks the step inline.
+ */
+describe('EveningCheckinWizard — caffeine integer guard', () => {
+  it('rejects a decimal caffeine value inline and blocks the step', () => {
+    // Prefill seeds Discipline valid → one Suivant lands on "Hydratation & caféine".
+    render(<EveningCheckinWizard today="2026-07-02" prefill={makeEveningPrefill()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 1 → 2
+    expect(screen.getByRole('heading', { name: /Hydratation/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Caféine/), { target: { value: '250.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+
+    // Inline error shown, and the step does NOT advance (still on Hydratation,
+    // the Stress step never renders under AnimatePresence mode="wait").
+    expect(screen.getByText('Millilitres entiers uniquement.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Hydratation/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Stress/ })).not.toBeInTheDocument();
+  });
+
+  it('accepts an integer caffeine value and advances to Stress', () => {
+    render(<EveningCheckinWizard today="2026-07-02" prefill={makeEveningPrefill()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 1 → 2
+
+    fireEvent.change(screen.getByLabelText(/Caféine/), { target: { value: '300' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+
+    expect(screen.getByRole('heading', { name: /Stress/ })).toBeInTheDocument();
+    expect(screen.queryByText('Millilitres entiers uniquement.')).not.toBeInTheDocument();
+  });
+});

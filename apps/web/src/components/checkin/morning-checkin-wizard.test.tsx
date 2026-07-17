@@ -270,3 +270,53 @@ describe('MorningCheckinWizard — meditation integer guard', () => {
     expect(screen.queryByText('Minutes entières uniquement.')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Sport duration integer guard — the client validation of the sport duration
+ * field now mirrors the server schema (`morningCheckinSchema.sportDurationMin`
+ * is `.int().min(0).max(600)`). A decimal like "30.5" used to pass the client
+ * (which only checked the type<->duration pairing) then get rejected
+ * server-side ("Entier requis."). The guard blocks the step inline instead.
+ */
+describe('MorningCheckinWizard — sport duration integer guard', () => {
+  // Drive Sommeil + Routine matinale so the wizard lands on "Corps" (step 3),
+  // where the sport fields live. Mirrors the meditation guard block above.
+  function gotoBodyStep() {
+    fireEvent.change(screen.getByLabelText('Heures de sommeil'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Pas aujourd/ })); // routine → false
+    fireEvent.click(screen.getByRole('radio', { name: /Pas encore/ })); // market → false
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+  }
+
+  it('rejects a decimal sport duration inline and blocks the step', () => {
+    render(<MorningCheckinWizard today="2026-06-10" />);
+    gotoBodyStep();
+    expect(screen.getByRole('heading', { name: /Corps/ })).toBeInTheDocument();
+
+    // Both sport fields must be filled, otherwise the type<->duration pairing
+    // error fires first and masks the integer guard. Meditation defaults to
+    // "0" (a valid integer), so it never blocks this step.
+    fireEvent.change(screen.getByLabelText(/Type de sport/), { target: { value: 'Course' } });
+    fireEvent.change(screen.getByLabelText(/Durée du sport/), { target: { value: '30.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+
+    // Inline error shown, and the step does NOT advance (still on Corps, the
+    // Mental step never renders under AnimatePresence mode="wait").
+    expect(screen.getByText('Minutes entières uniquement.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Corps/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Mental/ })).not.toBeInTheDocument();
+  });
+
+  it('accepts an integer sport duration and advances to Mental', () => {
+    render(<MorningCheckinWizard today="2026-06-10" />);
+    gotoBodyStep();
+
+    fireEvent.change(screen.getByLabelText(/Type de sport/), { target: { value: 'Course' } });
+    fireEvent.change(screen.getByLabelText(/Durée du sport/), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+
+    expect(screen.getByRole('heading', { name: /Mental/ })).toBeInTheDocument();
+    expect(screen.queryByText('Minutes entières uniquement.')).not.toBeInTheDocument();
+  });
+});

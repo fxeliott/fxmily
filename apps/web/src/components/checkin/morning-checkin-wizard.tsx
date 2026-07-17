@@ -269,6 +269,12 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
       const hasDuration = draft.sportDurationMin.trim().length > 0;
       if (hasType && !hasDuration) errs.sportDurationMin = 'Indique la durée.';
       if (!hasType && hasDuration) errs.sportType = 'Indique le type.';
+      if (hasDuration) {
+        const dur = parseLocaleNumber(draft.sportDurationMin);
+        if (Number.isNaN(dur) || dur < 0 || dur > 600)
+          errs.sportDurationMin = 'Entre 0 et 600 min.';
+        else if (!Number.isInteger(dur)) errs.sportDurationMin = 'Minutes entières uniquement.';
+      }
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -293,7 +299,12 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
         return false;
       const hasType = draft.sportType.trim().length > 0;
       const hasDuration = draft.sportDurationMin.trim().length > 0;
-      return hasType === hasDuration;
+      if (hasType !== hasDuration) return false;
+      if (hasDuration) {
+        const dur = parseLocaleNumber(draft.sportDurationMin);
+        if (Number.isNaN(dur) || dur < 0 || dur > 600 || !Number.isInteger(dur)) return false;
+      }
+      return true;
     }
     return true;
   };

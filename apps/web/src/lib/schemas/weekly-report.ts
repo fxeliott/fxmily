@@ -29,6 +29,7 @@
 
 import { z } from 'zod';
 
+import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
@@ -399,6 +400,21 @@ const favoriteCardSchema = z
   })
   .strict();
 
+/**
+ * J5.2 — one TRACK pillar summarised for the prompt: the average of the pillar's
+ * scalar over the window (`extractHabitScalar`) + the number of days logged.
+ * `kind` = HabitKind enum ; `unit` = the scalar's unit. Aggregated + bounded by
+ * the pure builder. `.strict()` rejects any undeclared field.
+ */
+const habitPillarSchema = z
+  .object({
+    kind: habitKindSchema,
+    daysLogged: z.number().int().min(1),
+    average: z.number().min(0),
+    unit: z.enum(['h', 'min', 'repas', 'cafés']),
+  })
+  .strict();
+
 const freeTextSliceSchema = z
   .object({
     /// Top emotion tags observed this week (deduped, frequency-sorted).
@@ -716,6 +732,12 @@ export const weeklySnapshotSchema = z
     /// via le SSOT `listMyFavorites`. Absent -> le prompt omet la section
     /// (retrocompat). Titres wrapped untrusted au prompt. Posture §2 (psycho).
     favorites: z.array(favoriteCardSchema).max(FAVORITES_PROMPT_MAX_ENTRIES).optional(),
+    /// J5.2 — piliers TRACK (HabitLog) resumes COUNT-ONLY : par pilier logge, la
+    /// moyenne du scalaire (sommeil h / sport + meditation min / nutrition repas /
+    /// cafeine tasses) + le nombre de jours loggés sur la fenetre. Agrege par le
+    /// builder pur, borne a 5 (taille de l'enum HabitKind). Absent -> le prompt omet
+    /// la section (retrocompat). Posture §2 (hygiene de vie), hors firewall §21.5.
+    habits: z.array(habitPillarSchema).max(5).optional(),
   })
   .strict();
 

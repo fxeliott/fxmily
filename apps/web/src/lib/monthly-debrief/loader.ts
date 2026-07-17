@@ -33,6 +33,8 @@ import { getProfileForUser } from '@/lib/onboarding-interview/service';
 // valeurs sur /objectifs.
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
+import { summarizeHabitPillars } from '@/lib/habit/pillars';
+import { listRecentHabitLogs } from '@/lib/habit/service';
 // D1 (SPEC §25.2) — the sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross the member boundary. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -493,6 +495,14 @@ export async function loadMonthlySliceForUser(
     category: f.cardCategory,
   }));
 
+  // J5.2 — piliers TRACK (HabitLog : sommeil/nutrition/cafeine/sport/meditation).
+  // Le loader (touchpoint sanctionne) lit le SSOT `listRecentHabitLogs` et AGREGE via
+  // `summarizeHabitPillars` (domaine habit) : moyenne + jours loggés par pilier, borne
+  // <=5. Le builder pur ne recoit qu'un resume fini (firewall §21.5/§25.7). Fenetre 30j.
+  const habits = summarizeHabitPillars(
+    (await listRecentHabitLogs(userId, 30)).map((l) => ({ kind: l.kind, value: l.value })),
+  );
+
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude
     // boundary (8-char hex, salted via env.MEMBER_LABEL_SALT in prod).
@@ -550,6 +560,8 @@ export async function loadMonthlySliceForUser(
     objectives,
     // J5.8 — fiches Mark Douglas favorites (titre + categorie, SSOT favoris).
     favorites,
+    // J5.2 — piliers TRACK deja agreges par le domaine habit (resume borne <=5).
+    habits,
   };
 
   return {

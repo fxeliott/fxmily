@@ -97,9 +97,16 @@ vi.mock('@/lib/cards/service', () => ({
   listMyFavorites: vi.fn(async () => []),
 }));
 
+// J5.2 — piliers TRACK (SSOT HabitLog). Stubbed inert ([]) so the builder omits the
+// slice and existing assertions stay byte-identical.
+vi.mock('@/lib/habit/service', () => ({
+  listRecentHabitLogs: vi.fn(async () => []),
+}));
+
 import { db } from '@/lib/db';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
+import { listRecentHabitLogs } from '@/lib/habit/service';
 import { MEMBER_WEEKLY_REVIEW_VALUE_MAX_CHARS } from '@/lib/schemas/weekly-report';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { listConstancyScoresInRange } from '@/lib/verification/constancy';
@@ -390,5 +397,46 @@ describe('loadWeeklySliceForUser — J5.8 favoris Douglas (SSOT listMyFavorites)
     vi.mocked(listMyFavorites).mockResolvedValue([] as never);
     await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
     expect(listMyFavorites).toHaveBeenCalledWith('user-1');
+  });
+});
+
+describe('loadWeeklySliceForUser — J5.2 piliers TRACK (SSOT listRecentHabitLogs)', () => {
+  it('agrege les logs en resume (moyenne + jours loggés) dans builderInput.habits', async () => {
+    vi.mocked(listRecentHabitLogs).mockResolvedValue([
+      {
+        id: 'h1',
+        userId: 'user-1',
+        date: '2026-06-06',
+        kind: 'sleep',
+        value: { durationMin: 480 },
+        notes: null,
+        createdAt: '2026-06-06T06:00:00.000Z',
+        updatedAt: '2026-06-06T06:00:00.000Z',
+      },
+      {
+        id: 'h2',
+        userId: 'user-1',
+        date: '2026-06-05',
+        kind: 'sleep',
+        value: { durationMin: 420 },
+        notes: null,
+        createdAt: '2026-06-05T06:00:00.000Z',
+        updatedAt: '2026-06-05T06:00:00.000Z',
+      },
+    ] as never);
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    const habits = slice!.builderInput.habits;
+    expect(habits).toBeDefined();
+    expect(habits).toHaveLength(1);
+    expect(habits![0]!.kind).toBe('sleep');
+    expect(habits![0]!.daysLogged).toBe(2);
+    expect(habits![0]!.average).toBe(7.5);
+    expect(habits![0]!.unit).toBe('h');
+  });
+
+  it('interroge listRecentHabitLogs avec le userId + fenetre 7j', async () => {
+    vi.mocked(listRecentHabitLogs).mockResolvedValue([] as never);
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+    expect(listRecentHabitLogs).toHaveBeenCalledWith('user-1', 7);
   });
 });

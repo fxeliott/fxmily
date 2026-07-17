@@ -1358,3 +1358,37 @@ describe('buildWeeklySnapshot — J5.8 favoris Douglas (borne)', () => {
     expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildWeeklySnapshot — J5.2 piliers TRACK (pass-through borne)', () => {
+  it('relaie le resume deja agrege par le loader et safeParse passe', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      habits: [
+        { kind: 'sleep', daysLogged: 2, average: 7.5, unit: 'h' },
+        { kind: 'sport', daysLogged: 1, average: 45, unit: 'min' },
+      ],
+    });
+    expect(snap.habits).toHaveLength(2);
+    expect(snap.habits?.[0]?.kind).toBe('sleep');
+    expect(snap.habits?.[0]?.average).toBe(7.5);
+    expect(snap.habits?.[1]?.unit).toBe('min');
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('borne defensive : au plus 5 piliers', () => {
+    const mk = () => ({ kind: 'sleep' as const, daysLogged: 1, average: 1, unit: 'h' as const });
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      habits: [mk(), mk(), mk(), mk(), mk(), mk()],
+    });
+    expect(snap.habits).toHaveLength(5);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('retrocompat : sans habits, la slice est absente + safeParse passe', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.habits).toBeUndefined();
+    expect('habits' in snap).toBe(false);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});

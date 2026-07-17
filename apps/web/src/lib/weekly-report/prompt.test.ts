@@ -766,3 +766,21 @@ describe('buildWeeklyReportUserPrompt — J5.8 favoris Douglas (wrapped untruste
     expect(prompt).not.toContain('Fiches Mark Douglas favorites du membre');
   });
 });
+
+describe('buildWeeklyReportUserPrompt — J5.2 piliers TRACK (hygiene de vie)', () => {
+  it('injecte la section hygiene de vie (moyenne + jours loggés)', () => {
+    const prompt = buildWeeklyReportUserPrompt(
+      buildWeeklySnapshot({
+        ...emptyInput(),
+        habits: [{ kind: 'sleep', daysLogged: 1, average: 8, unit: 'h' }],
+      }),
+    );
+    expect(prompt).toContain('Hygiène de vie du membre (piliers TRACK');
+    expect(prompt).toContain('Sommeil : 8 h en moyenne sur 1 jour(s) loggé(s)');
+  });
+
+  it('retrocompat : sans habits, aucune section', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()));
+    expect(prompt).not.toContain('Hygiène de vie du membre');
+  });
+});

@@ -1165,3 +1165,20 @@ describe('buildMonthlyDebriefUserPrompt — J5.8 favoris Douglas (wrapped untrus
     expect(prompt).not.toContain('Fiches Mark Douglas favorites du membre');
   });
 });
+
+describe('buildMonthlyDebriefUserPrompt — J5.2 piliers TRACK (hygiene de vie)', () => {
+  it('injecte la section hygiene de vie (moyenne + jours loggés)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({ habits: [{ kind: 'sleep', daysLogged: 1, average: 8, unit: 'h' }] }),
+      ),
+    );
+    expect(prompt).toContain('Hygiène de vie du membre (piliers TRACK');
+    expect(prompt).toContain('Sommeil : 8 h en moyenne sur 1 jour(s) loggé(s)');
+  });
+
+  it('retrocompat : sans habits, aucune section', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Hygiène de vie du membre');
+  });
+});

@@ -27,6 +27,8 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 // valeurs sur /objectifs.
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listMyFavorites } from '@/lib/cards/service';
+import { summarizeHabitPillars } from '@/lib/habit/pillars';
+import { listRecentHabitLogs } from '@/lib/habit/service';
 // C4 (tour 10) — the two sub-schemas that validate the member's onboarding
 // coaching REGISTER + learning STAGE before they cross into the prompt. We
 // `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
@@ -355,6 +357,14 @@ export async function loadWeeklySliceForUser(
     category: f.cardCategory,
   }));
 
+  // J5.2 — piliers TRACK (HabitLog : sommeil/nutrition/cafeine/sport/meditation).
+  // Le loader (touchpoint sanctionne) lit le SSOT `listRecentHabitLogs` et AGREGE via
+  // `summarizeHabitPillars` (domaine habit) : moyenne + jours loggés par pilier, borne
+  // <=5. Le builder pur ne recoit qu'un resume fini (firewall §21.5/§25.7). Fenetre 7j.
+  const habits = summarizeHabitPillars(
+    (await listRecentHabitLogs(user.id, 7)).map((l) => ({ kind: l.kind, value: l.value })),
+  );
+
   const builderInput: BuilderInput = {
     userId: user.id,
     timezone: user.timezone,
@@ -401,6 +411,8 @@ export async function loadWeeklySliceForUser(
     objectives,
     // J5.8 — fiches Mark Douglas favorites (titre + categorie, SSOT favoris).
     favorites,
+    // J5.2 — piliers TRACK deja agreges par le domaine habit (resume borne <=5).
+    habits,
   };
 
   return {

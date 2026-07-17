@@ -64,6 +64,9 @@ describe('mapCheckinToHabitLogs', () => {
     });
 
     it('clamps meditation duration to the 180min HabitLog bound', () => {
+      // Defensive: the morning check-in schema now also caps meditation at 180,
+      // so this over-bound input can only reach the pure mapper directly. The
+      // clamp stays as a belt-and-suspenders guard mirroring the HabitLog bound.
       const logs = mapCheckinToHabitLogs(source({ meditationMin: 240 }));
       const meditation = logs.find((l) => l.kind === 'meditation');
       expect(meditation?.value).toEqual({ durationMin: 180 });

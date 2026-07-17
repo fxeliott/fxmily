@@ -1,3 +1,4 @@
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 import type { HabitLogInput } from '@/lib/schemas/habit-log';
 
 /**
@@ -22,7 +23,6 @@ export interface CheckinHabitSource {
 // projection still succeeds (best-effort) instead of being rejected by the
 // target schema and dropped.
 const SLEEP_MAX_MIN = 1440;
-const MEDITATION_MAX_MIN = 180;
 const SPORT_MAX_MIN = 600;
 
 function clamp(value: number, min: number, max: number): number {

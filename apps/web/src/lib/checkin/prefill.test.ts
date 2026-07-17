@@ -93,6 +93,18 @@ describe('toMorningPrefill', () => {
     expect(prefill.intention).toBe('');
     expect(prefill.sportType).toBe('');
   });
+
+  it('clamps a legacy over-bound meditation to the domain cap so the edit form stays savable', () => {
+    // Regression guard (J5.2 cross-surface fix): a meditation stored under the
+    // old 240 cap must not seed the wizard with a value its now-180 validation
+    // rejects — that would block the WHOLE morning form on an untouched field.
+    // Clamping converges the legacy value onto the bound TRACK already shows.
+    expect(toMorningPrefill(makeCheckin({ meditationMin: 200 })).meditationMin).toBe('180');
+    expect(toMorningPrefill(makeCheckin({ meditationMin: 240 })).meditationMin).toBe('180');
+    // An in-bound value passes through untouched.
+    expect(toMorningPrefill(makeCheckin({ meditationMin: 180 })).meditationMin).toBe('180');
+    expect(toMorningPrefill(makeCheckin({ meditationMin: 45 })).meditationMin).toBe('45');
+  });
 });
 
 describe('toEveningPrefill', () => {

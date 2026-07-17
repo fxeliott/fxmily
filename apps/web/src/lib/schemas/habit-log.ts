@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { localDateOf, shiftLocalDate } from '@/lib/checkin/timezone';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 /**
@@ -86,7 +87,7 @@ export type SportValue = z.infer<typeof sportValueSchema>;
 /** Meditation — duration + optional quality rating. */
 export const meditationValueSchema = z
   .object({
-    durationMin: z.number().int().min(0).max(180),
+    durationMin: z.number().int().min(0).max(MEDITATION_MAX_MIN),
     quality: z.number().int().min(1).max(10).optional(),
   })
   .strict();

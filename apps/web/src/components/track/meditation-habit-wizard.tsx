@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
 import type { MeditationHabitPrefill } from '@/lib/habit/today-log';
 import { HABIT_NOTES_MAX_CHARS } from '@/lib/schemas/habit-log';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 import { cn } from '@/lib/utils';
 
 /**
@@ -149,7 +150,8 @@ function validateStep(step: StepIndex, draft: DraftState): string | null {
     const n = parseLocaleNumber(draft.durationMin);
     if (Number.isNaN(n)) return 'Saisis la durée de ta séance.';
     if (!Number.isInteger(n)) return 'Une durée en minutes entières est attendue.';
-    if (n < 0 || n > 180) return 'La durée doit être entre 0 et 180 min.';
+    if (n < 0 || n > MEDITATION_MAX_MIN)
+      return `La durée doit être entre 0 et ${MEDITATION_MAX_MIN} min.`;
   }
   return null;
 }
@@ -309,7 +311,7 @@ export function MeditationHabitWizard({ prefill }: MeditationHabitWizardProps = 
     !Number.isNaN(durationNum) &&
     Number.isInteger(durationNum) &&
     durationNum >= 0 &&
-    durationNum <= 180;
+    durationNum <= MEDITATION_MAX_MIN;
 
   // Micro-feedback: one-shot confirm flash on the step body + accent pulse on
   // the Suivant button the moment the current step flips valid (carbon

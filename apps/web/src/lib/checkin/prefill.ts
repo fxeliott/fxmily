@@ -19,6 +19,7 @@
 
 import { isCheckinEmotionSlug } from '@/lib/checkin/emotions';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 
 /**
  * Seed values for the morning wizard when editing an existing check-in. Field
@@ -61,6 +62,18 @@ function numToField(value: number | null): string {
 }
 
 /**
+ * Clamp a persisted meditation duration to the current domain bound before it
+ * seeds the edit wizard. A value stored under the old 240 cap would otherwise
+ * fail the wizard's now-180 validation and block the WHOLE morning form on an
+ * untouched historical field. Clamping converges that legacy value onto the
+ * bound TRACK already displays for it (the J5.2 cross-surface fix), keeping the
+ * edit savable. New over-bound input is still rejected live as the member types.
+ */
+function clampMeditationMin(value: number | null): number | null {
+  return value == null ? null : Math.min(value, MEDITATION_MAX_MIN);
+}
+
+/**
  * Keep only slugs the current picker still knows (a slug retired between the
  * fill and the edit would otherwise seed a ghost selection). Cap mirrors the
  * schema's per-slot max implicitly — we never seed more than were persisted.
@@ -78,7 +91,7 @@ export function toMorningPrefill(checkin: SerializedCheckin): MorningCheckinPref
     sleepQuality: checkin.sleepQuality ?? 6,
     morningRoutineCompleted: checkin.morningRoutineCompleted,
     marketAnalysisDone: checkin.marketAnalysisDone,
-    meditationMin: numToField(checkin.meditationMin),
+    meditationMin: numToField(clampMeditationMin(checkin.meditationMin)),
     sportType: checkin.sportType ?? '',
     sportDurationMin: numToField(checkin.sportDurationMin),
     moodScore: checkin.moodScore ?? 6,

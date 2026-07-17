@@ -7,16 +7,21 @@ vi.mock('@/lib/db', () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
 
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 import {
   getHabitLogById,
   listHabitLogsByKind,
   listRecentHabitLogs,
+  projectHabitLogFromCheckin,
   upsertHabitLog,
 } from './service';
 
@@ -86,11 +91,16 @@ describe('upsertHabitLog', () => {
     if (!call) throw new Error('expected upsert to be called');
     const arg = call[0] as {
       where: { userId_date_kind: { userId: string; date: Date; kind: string } };
-      create: { kind: string };
+      create: { kind: string; source: string };
+      update: { source: string };
     };
     expect(arg.where.userId_date_kind.userId).toBe('user-1');
     expect(arg.where.userId_date_kind.kind).toBe('sleep');
     expect(arg.where.userId_date_kind.date.toISOString().slice(0, 10)).toBe('2026-05-13');
+    // A TRACK write is member-authored: both branches stamp `member_track` so a
+    // later check-in projection can never clobber the member's own entry (J5.2).
+    expect(arg.create.source).toBe('member_track');
+    expect(arg.update.source).toBe('member_track');
     expect(result.wasNew).toBe(true);
     expect(result.log.date).toBe('2026-05-13');
   });
@@ -113,6 +123,123 @@ describe('upsertHabitLog', () => {
     const result = await upsertHabitLog('user-1', sportInput);
     expect(result.log.kind).toBe('sport');
     expect(result.log.date).toBe('2026-05-14');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// projectHabitLogFromCheckin (J5.2 provenance — refresh-own, never a member row)
+// ---------------------------------------------------------------------------
+
+describe('projectHabitLogFromCheckin', () => {
+  // Same civil-window freeze as upsertHabitLog: sleepInput is dated 2026-05-13,
+  // so pin "now" to 2026-05-14 to keep it inside the schema's back window.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-05-14T12:00:00Z') });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('creates a checkin_morning row when the slot is empty', async () => {
+    vi.mocked(db.habitLog.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(db.habitLog.create).mockResolvedValue(makeRow() as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('created');
+    // The source-scoped refresh runs first and matches nothing (empty slot).
+    expect(db.habitLog.updateMany).toHaveBeenCalledOnce();
+    const upd = vi.mocked(db.habitLog.updateMany).mock.calls[0]?.[0] as {
+      where: { source: string };
+    };
+    expect(upd.where.source).toBe('checkin_morning');
+    // Then a create stamps the full projected payload with checkin_morning
+    // provenance — value + notes must persist (they feed the AI digest).
+    expect(db.habitLog.create).toHaveBeenCalledOnce();
+    const arg = vi.mocked(db.habitLog.create).mock.calls[0]?.[0] as {
+      data: { source: string; value: unknown; notes: string | null };
+    };
+    expect(arg.data.source).toBe('checkin_morning');
+    expect(arg.data.value).toEqual(sleepInput.value);
+    expect(arg.data.notes).toBe(sleepInput.notes);
+    expect(db.habitLog.update).not.toHaveBeenCalled();
+  });
+
+  it('refreshes its OWN prior projection in place, without re-stamping source', async () => {
+    // A checkin_morning row already exists → the source-scoped updateMany
+    // matches it (count 1) → refreshed, no create.
+    vi.mocked(db.habitLog.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('refreshed');
+    expect(db.habitLog.updateMany).toHaveBeenCalledOnce();
+    expect(db.habitLog.create).not.toHaveBeenCalled();
+    const arg = vi.mocked(db.habitLog.updateMany).mock.calls[0]?.[0] as {
+      where: { source: string };
+      data: Record<string, unknown>;
+    };
+    // Ownership predicate is atomic — the WHERE is scoped to checkin_morning, so
+    // a member row promoted mid-flight would match 0 and be left untouched.
+    expect(arg.where.source).toBe('checkin_morning');
+    // Refresh the value/notes the digest reads, but do NOT re-stamp source: the
+    // row stays a projection so a future member TRACK edit can still promote it.
+    expect(arg.data.value).toEqual(sleepInput.value);
+    expect(arg.data.notes).toBe(sleepInput.notes);
+    expect('source' in arg.data).toBe(false);
+  });
+
+  it('never overwrites a pre-existing member-owned row (member_track / legacy null → skipped)', async () => {
+    // The slot holds a row we did NOT project (a member_track TRACK entry, or a
+    // legacy null-source row): the source-scoped updateMany matches 0, the
+    // create collides on the unique key (P2002), and the source-scoped rescue
+    // still matches 0 → skipped, with the member's row untouched. Fill-only.
+    vi.mocked(db.habitLog.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(db.habitLog.create).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('skipped');
+    expect(db.habitLog.create).toHaveBeenCalledOnce();
+    // Two source-scoped updateMany calls (initial refresh + P2002 rescue), both
+    // matching 0 — never a bare update that could clobber the member row.
+    expect(db.habitLog.updateMany).toHaveBeenCalledTimes(2);
+    expect(db.habitLog.update).not.toHaveBeenCalled();
+  });
+
+  it('rescues a lost create race by refreshing the concurrent projection (P2002 → refreshed)', async () => {
+    // Slot empty at first (updateMany count 0) → create races a concurrent
+    // projection and loses (P2002) → the rescue updateMany now matches the row
+    // the winner just projected (count 1) → refreshed with our newer value,
+    // rather than silently dropping it.
+    vi.mocked(db.habitLog.updateMany)
+      .mockResolvedValueOnce({ count: 0 } as never)
+      .mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(db.habitLog.create).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const result = await projectHabitLogFromCheckin('user-1', sleepInput);
+
+    expect(result.outcome).toBe('refreshed');
+    expect(db.habitLog.updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('rethrows a non-P2002 database error', async () => {
+    vi.mocked(db.habitLog.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(db.habitLog.create).mockRejectedValue(new Error('pool exhausted'));
+
+    await expect(projectHabitLogFromCheckin('user-1', sleepInput)).rejects.toThrow(
+      'pool exhausted',
+    );
   });
 });
 

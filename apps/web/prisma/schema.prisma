@@ -2091,6 +2091,12 @@ model HabitLog {
   date   DateTime  @db.Date
   kind   HabitKind
 
+  /// Row provenance (J5.2 write-through). `member_track` (default) =
+  /// member-authored via the TRACK form -> never auto-overwritten.
+  /// `checkin_morning` = projected from the morning check-in -> refreshed in
+  /// place when the member edits the source check-in.
+  source HabitSource @default(member_track)
+
   /// Kind-specific structured payload — see lib/schemas/habit-log.ts.
   value Json
   /// Optional free-text caveat ("manqué la sieste à cause d'une réunion").
@@ -2103,6 +2109,20 @@ model HabitLog {
   @@index([userId, date(sort: Desc)])
   @@index([userId, kind, date(sort: Desc)])
   @@map("habit_logs")
+}
+
+/// Provenance of a habit log row (J5.2 write-through). Distinguishes a
+/// member-authored TRACK entry from a row projected by the morning check-in,
+/// so the projection can refresh its OWN rows on a check-in edit without ever
+/// clobbering a member's TRACK entry. Defaults to `member_track` so every
+/// pre-existing row (and every TRACK write) is member-owned = never
+/// auto-overwritten.
+enum HabitSource {
+  /// Written by the member via the TRACK form (`upsertHabitLog`). Authoritative.
+  member_track
+  /// Projected from the morning check-in (`projectHabitLogFromCheckin`).
+  /// Safe to refresh in place when the member edits the source check-in.
+  checkin_morning
 }
 
 // =============================================================================

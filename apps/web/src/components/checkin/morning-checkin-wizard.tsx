@@ -24,6 +24,7 @@ import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 import type { MorningCheckinPrefill } from '@/lib/checkin/prefill';
 import { MORNING_ROUTINE_SUGGESTIONS } from '@/lib/checkin/routine';
 import { formatLocalDate } from '@/lib/checkin/timezone';
@@ -259,8 +260,8 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
     }
     if (s === 2) {
       const med = parseLocaleNumber(draft.meditationMin);
-      if (Number.isNaN(med) || med < 0 || med > 180) {
-        errs.meditationMin = 'Entre 0 et 180 min.';
+      if (Number.isNaN(med) || med < 0 || med > MEDITATION_MAX_MIN) {
+        errs.meditationMin = `Entre 0 et ${MEDITATION_MAX_MIN} min.`;
       }
       const hasType = draft.sportType.trim().length > 0;
       const hasDuration = draft.sportDurationMin.trim().length > 0;
@@ -286,7 +287,7 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
     }
     if (s === 2) {
       const med = parseLocaleNumber(draft.meditationMin);
-      if (Number.isNaN(med) || med < 0 || med > 180) return false;
+      if (Number.isNaN(med) || med < 0 || med > MEDITATION_MAX_MIN) return false;
       const hasType = draft.sportType.trim().length > 0;
       const hasDuration = draft.sportDurationMin.trim().length > 0;
       return hasType === hasDuration;

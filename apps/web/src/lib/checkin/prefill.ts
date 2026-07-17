@@ -19,7 +19,7 @@
 
 import { isCheckinEmotionSlug } from '@/lib/checkin/emotions';
 import type { SerializedCheckin } from '@/lib/checkin/service';
-import { MEDITATION_MAX_MIN } from '@/lib/schemas/habit-log';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 
 /**
  * Seed values for the morning wizard when editing an existing check-in. Field

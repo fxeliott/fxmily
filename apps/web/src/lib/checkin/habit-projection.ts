@@ -1,4 +1,5 @@
-import { MEDITATION_MAX_MIN, type HabitLogInput } from '@/lib/schemas/habit-log';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
+import type { HabitLogInput } from '@/lib/schemas/habit-log';
 
 /**
  * Minimal projection source: the subset of morning check-in fields that also

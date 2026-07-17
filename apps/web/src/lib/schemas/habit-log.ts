@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { localDateOf, shiftLocalDate } from '@/lib/checkin/timezone';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 /**
@@ -82,14 +83,6 @@ export const sportValueSchema = z
   })
   .strict();
 export type SportValue = z.infer<typeof sportValueSchema>;
-
-/**
- * Canonical meditation duration bound (minutes). Single source of truth shared
- * by the HabitLog value schema, the check-in schema, the check-in→TRACK mapper,
- * and the edit-prefill clamp, so the cap can never drift across surfaces again
- * (the J5.2 divergence: the check-in once accepted 240 while TRACK clamped 180).
- */
-export const MEDITATION_MAX_MIN = 180;
 
 /** Meditation — duration + optional quality rating. */
 export const meditationValueSchema = z

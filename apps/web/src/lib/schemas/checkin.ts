@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { CHECKIN_EMOTION_MAX_PER_SLOT, isCheckinEmotionSlug } from '@/lib/checkin/emotions';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
-import { MEDITATION_MAX_MIN } from './habit-log';
+import { MEDITATION_MAX_MIN } from '@/lib/habit/bounds';
 
 /**
  * Daily check-in schemas (J5, SPEC §6.4 + §7.4).

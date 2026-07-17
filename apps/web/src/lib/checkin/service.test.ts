@@ -23,6 +23,24 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
+// Option A write-through — the morning submit projects sleep/meditation/sport
+// into TRACK. Mock the three collaborators so the projection is observable +
+// deterministic (the real `createHabitLogIfAbsent` is `server-only` + hits the
+// DB). `logAudit` / `reportWarning` keep their real siblings via importOriginal.
+vi.mock('@/lib/habit/service', () => ({
+  createHabitLogIfAbsent: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/audit')>()),
+  logAudit: vi.fn(),
+}));
+
+vi.mock('@/lib/observability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/observability')>()),
+  reportWarning: vi.fn(),
+}));
+
 import { db } from '@/lib/db';
 
 import {
@@ -36,6 +54,11 @@ import {
   submitMorningCheckin,
 } from './service';
 import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
+
+// Option A write-through collaborators — asserted below via `vi.mocked(...)`.
+import { createHabitLogIfAbsent } from '@/lib/habit/service';
+import { logAudit } from '@/lib/auth/audit';
+import { reportWarning } from '@/lib/observability';
 
 /** A realistic post-Zod evening input (the schema already collapsed the form). */
 function eveningInput(formationFollowed: boolean | null): EveningCheckinInput {
@@ -279,6 +302,147 @@ describe('submit*Checkin — F7 rattrapage (past-day) justification rule', () =>
     // rattrapage justification (keeps the §33.2 repetition signal clean).
     expect(arg.create.lateJustification).toBeNull();
     expect(arg.create.backfilledAt).toBeNull();
+  });
+});
+
+// Option A — the morning check-in ALSO writes its sleep/meditation/sport pillars
+// into TRACK (HabitLog) via a fill-only, best-effort write-through, so the member
+// captures them once. The projection is gated by the tighter HabitLog civil
+// window [-14d, +1d]; a check-in backfilled beyond that persists but skips the
+// habit projection instead of throwing. Same-day fills at NOW_JUN10 use the
+// local date 2026-06-10 (Paris UTC+2 → 11:00 local, no rattrapage, in-window).
+describe('submitMorningCheckin — Option A write-through into TRACK (HabitLog)', () => {
+  const TZ = 'Europe/Paris';
+
+  /** The morning row the mocked upsert resolves to (serialises without a DB). */
+  function morningRow() {
+    return {
+      ...eveningRow(null),
+      slot: 'morning' as const,
+      sleepHours: 7,
+      sleepQuality: 6,
+      meditationMin: 0,
+      sportType: null,
+      sportDurationMin: null,
+      morningRoutineCompleted: true,
+      marketAnalysisDone: true,
+      moodScore: 6,
+    };
+  }
+
+  beforeEach(() => {
+    // Runs AFTER the global `vi.resetAllMocks()` — re-arm the default happy path.
+    vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(morningRow() as never);
+    vi.mocked(createHabitLogIfAbsent).mockResolvedValue({ created: true });
+  });
+
+  it('projects the sleep pillar into HabitLog (same-day, in civil window)', async () => {
+    await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10' }), {
+      timezone: TZ,
+      now: NOW_JUN10,
+    });
+
+    expect(createHabitLogIfAbsent).toHaveBeenCalledTimes(1);
+    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+      kind: 'sleep',
+      date: '2026-06-10',
+      value: { durationMin: 420, quality: 6 },
+    });
+  });
+
+  it('projects sleep + meditation + sport when all three are declared', async () => {
+    await submitMorningCheckin(
+      'user-1',
+      morningInput({
+        date: '2026-06-10',
+        meditationMin: 20,
+        sportType: 'course à pied',
+        sportDurationMin: 45,
+      }),
+      { timezone: TZ, now: NOW_JUN10 },
+    );
+
+    const kinds = vi
+      .mocked(createHabitLogIfAbsent)
+      .mock.calls.map((c) => (c[1] as { kind: string }).kind);
+    expect(kinds).toEqual(['sleep', 'meditation', 'sport']);
+    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+      kind: 'meditation',
+      date: '2026-06-10',
+      value: { durationMin: 20 },
+    });
+    expect(createHabitLogIfAbsent).toHaveBeenCalledWith('user-1', {
+      kind: 'sport',
+      date: '2026-06-10',
+      value: { type: 'cardio', durationMin: 45 },
+      notes: 'course à pied',
+    });
+  });
+
+  it('audits ONLY the habit logs it actually created (fill-only)', async () => {
+    // sleep is newly created, meditation already existed (created: false).
+    vi.mocked(createHabitLogIfAbsent)
+      .mockResolvedValueOnce({ created: true })
+      .mockResolvedValueOnce({ created: false });
+
+    await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10', meditationMin: 20 }), {
+      timezone: TZ,
+      now: NOW_JUN10,
+    });
+
+    expect(createHabitLogIfAbsent).toHaveBeenCalledTimes(2);
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    expect(logAudit).toHaveBeenCalledWith({
+      action: 'habit_log.upserted',
+      userId: 'user-1',
+      metadata: {
+        kind: 'sleep',
+        date: '2026-06-10',
+        source: 'checkin_morning',
+        wasNew: true,
+      },
+    });
+  });
+
+  it('skips the projection for a justified past-day fill outside the civil window', async () => {
+    // 2026-05-21 is 20 days back: a valid check-in backfill (needs justification)
+    // but OUTSIDE the tighter HabitLog window [-14d, +1d] → no habit write.
+    await submitMorningCheckin(
+      'user-1',
+      morningInput({ date: '2026-05-21', lateJustification: 'Rattrapage week-end.' }),
+      { timezone: TZ, now: NOW_JUN10 },
+    );
+
+    expect(db.dailyCheckin.upsert).toHaveBeenCalledTimes(1);
+    expect(createHabitLogIfAbsent).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  it('is best-effort: a habit failure never breaks the check-in', async () => {
+    vi.mocked(createHabitLogIfAbsent).mockRejectedValue(new Error('habit db down'));
+
+    const out = await submitMorningCheckin('user-1', morningInput({ date: '2026-06-10' }), {
+      timezone: TZ,
+      now: NOW_JUN10,
+    });
+
+    // The check-in itself still resolves with its serialised row.
+    expect(out.id).toBe('checkin-1');
+    expect(reportWarning).toHaveBeenCalledWith('checkin.habit_projection', 'write_through_failed', {
+      kind: 'sleep',
+    });
+  });
+
+  it('never projects from an evening check-in', async () => {
+    vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(eveningRow(null) as never);
+
+    await submitEveningCheckin(
+      'user-1',
+      { ...eveningInput(null), date: '2026-06-10' },
+      { timezone: TZ, now: NOW_JUN10 },
+    );
+
+    expect(createHabitLogIfAbsent).not.toHaveBeenCalled();
   });
 });
 

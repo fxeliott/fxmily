@@ -174,6 +174,10 @@ export async function submitMorningCheckinAction(
   revalidatePath('/checkin');
   revalidatePath('/checkin/history');
   revalidatePath('/dashboard');
+  // Option A — le check-in matin projette sommeil/méditation/sport dans TRACK
+  // (write-through best-effort côté service). On rafraîchit /track pour que la
+  // saisie unifiée y apparaisse immédiatement, sans attendre une revalidation.
+  revalidatePath('/track');
   scheduleScoreRecompute(
     session.user.id,
     'checkin.morning.submitted',

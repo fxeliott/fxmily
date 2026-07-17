@@ -6,14 +6,19 @@ import { Prisma } from '@/generated/prisma/client';
 import type { CheckinSlot } from '@/generated/prisma/enums';
 import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
 
+import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
+import { createHabitLogIfAbsent } from '@/lib/habit/service';
+import { reportWarning } from '@/lib/observability';
 import {
   MAX_BACKFILL_SUGGESTIONS,
   PAST_HORIZON_DAYS,
   type EveningCheckinInput,
   type MorningCheckinInput,
 } from '@/lib/schemas/checkin';
+import { isHabitDateWithinLocalWindow } from '@/lib/schemas/habit-log';
 
+import { mapCheckinToHabitLogs } from './habit-projection';
 import { getOffDaySet, isOffDay } from './off-days';
 import { computeStreak, type CheckinDay } from './streak';
 import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
@@ -300,6 +305,56 @@ export async function submitMorningCheckin(
     },
     update: updateData,
   });
+
+  // Option A — write-through : projette les piliers sommeil / méditation / sport
+  // du check-in matin dans TRACK (HabitLog) pour que le membre ne les saisisse
+  // qu'UNE fois. Fill-only (createHabitLogIfAbsent n'écrase JAMAIS une entrée
+  // TRACK existante), best-effort (un échec côté habit ne doit jamais casser le
+  // check-in), et borné à la fenêtre civile HabitLog [-14j, +1j] — plus étroite
+  // que le backfill 60 jours du check-in : un check-in rétro-rempli au-delà de 14
+  // jours saute la projection au lieu de lever. Idempotent + race-safe par
+  // construction (@@unique(userId, date, kind) + create + catch P2002).
+  const now = options.now ?? new Date();
+  // Best-effort STRUCTUREL : tout le bloc de projection est isolé dans un
+  // try/catch externe pour que même un throw hors de la boucle interne
+  // (isHabitDateWithinLocalWindow / mapCheckinToHabitLogs — aujourd'hui
+  // non-throwants) ne puisse jamais faire échouer la soumission du check-in.
+  // Le try/catch interne conserve l'isolation par-pilier : une projection
+  // ratée n'interrompt pas les suivantes.
+  try {
+    if (isHabitDateWithinLocalWindow(input.date, now, timezone)) {
+      for (const habitLog of mapCheckinToHabitLogs(input)) {
+        try {
+          const { created } = await createHabitLogIfAbsent(userId, habitLog);
+          if (created) {
+            await logAudit({
+              action: 'habit_log.upserted',
+              userId,
+              metadata: {
+                kind: habitLog.kind,
+                date: input.date,
+                source: 'checkin_morning',
+                wasNew: true,
+              },
+            });
+          }
+        } catch {
+          // Best-effort : un échec de projection ne doit jamais faire échouer la
+          // soumission du check-in. On le remonte en warning (pas error) pour
+          // qu'une panne durable du write-through reste visible sans page-out.
+          reportWarning('checkin.habit_projection', 'write_through_failed', {
+            kind: habitLog.kind,
+          });
+        }
+      }
+    }
+  } catch {
+    // Filet externe : couvre un throw inattendu du gate de fenêtre ou du mapper.
+    // Garantit que la promesse "1 saisie" ne peut jamais casser le check-in.
+    reportWarning('checkin.habit_projection', 'write_through_failed', {
+      kind: 'projection',
+    });
+  }
 
   return toSerialized(row);
 }

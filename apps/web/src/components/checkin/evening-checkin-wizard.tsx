@@ -276,6 +276,7 @@ export function EveningCheckinWizard({
       if (draft.caffeineMl !== '') {
         const n = parseLocaleNumber(draft.caffeineMl);
         if (Number.isNaN(n) || n < 0 || n > 2000) errs.caffeineMl = 'Entre 0 et 2000 mL.';
+        else if (!Number.isInteger(n)) errs.caffeineMl = 'Millilitres entiers uniquement.';
       }
       if (draft.waterLiters !== '') {
         const n = parseLocaleNumber(draft.waterLiters);
@@ -298,7 +299,7 @@ export function EveningCheckinWizard({
     if (s === 1) {
       if (draft.caffeineMl !== '') {
         const n = parseLocaleNumber(draft.caffeineMl);
-        if (Number.isNaN(n) || n < 0 || n > 2000) return false;
+        if (Number.isNaN(n) || n < 0 || n > 2000 || !Number.isInteger(n)) return false;
       }
       if (draft.waterLiters !== '') {
         const n = parseLocaleNumber(draft.waterLiters);

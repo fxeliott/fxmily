@@ -153,6 +153,38 @@ function isComplete(instrument: TrackingInstrument, draft: DraftState): boolean 
   return allRequiredAnswered && confidenceOk;
 }
 
+/**
+ * Client-side integer guard for a `numeric` question — the mirror of the
+ * server's `z.number().int()` (`lib/tracking/schema.ts`). Before this, a decimal
+ * typed into the free `<input type="number">` passed the client (only emptiness
+ * was checked) then bounced off the server's `.int()` after a round-trip. Returns
+ * a FR inline message for a non-integer value on an `integer` question, or
+ * `undefined` when the field is empty (→ handled by `isComplete`) or already an
+ * integer. `step={1}` on the input is only an HTML hint, never a guard.
+ */
+function numericIntegerError(q: NumericQuestion, raw: string | undefined): string | undefined {
+  if (!q.integer) return undefined;
+  const v = (raw ?? '').trim();
+  if (v === '') return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || Number.isInteger(n)) return undefined;
+  return 'Un nombre entier est attendu.';
+}
+
+/** All live client-side per-question errors (currently: the numeric integer guard). */
+function clientFieldErrors(
+  instrument: TrackingInstrument,
+  responses: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const q of instrument.questions) {
+    if (q.kind !== 'numeric') continue;
+    const err = numericIntegerError(q, responses[q.id]);
+    if (err) out[q.id] = err;
+  }
+  return out;
+}
+
 interface TrackingWizardProps {
   instrument: TrackingInstrument;
   /** Server-derived occurrence slot for the current cadence period. */
@@ -188,7 +220,10 @@ export function TrackingWizard({ instrument, occurrenceKey, prefill }: TrackingW
 
   const errors = state?.fieldErrors;
   const formError = state?.error;
-  const complete = isComplete(instrument, draft);
+  // Client pre-check (both paths): surface a non-integer inline AND keep the CTA
+  // inert until it's fixed — the server stays the sole authority on persistence.
+  const clientErrors = clientFieldErrors(instrument, draft.responses);
+  const complete = isComplete(instrument, draft) && Object.keys(clientErrors).length === 0;
 
   function setAnswer(id: string, value: string) {
     setDraft((d) => ({ ...d, responses: { ...d.responses, [id]: value } }));
@@ -259,7 +294,7 @@ export function TrackingWizard({ instrument, occurrenceKey, prefill }: TrackingW
             question={q}
             value={draft.responses[q.id]}
             onChange={(v) => setAnswer(q.id, v)}
-            error={errors?.[`responses.${q.id}`]}
+            error={clientErrors[q.id] ?? errors?.[`responses.${q.id}`]}
           />
         ))}
 

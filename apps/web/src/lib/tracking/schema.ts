@@ -41,7 +41,7 @@ function questionValueSchema(q: TrackingQuestion): z.ZodTypeAny {
     case 'scale':
       return z.number().int().min(q.min).max(q.max);
     case 'numeric': {
-      const base = q.integer ? z.number().int() : z.number();
+      const base = q.integer ? z.number().int({ message: 'Entier requis.' }) : z.number();
       return base.min(q.min).max(q.max);
     }
     case 'single_choice': {

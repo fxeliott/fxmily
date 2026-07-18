@@ -886,6 +886,14 @@ model Trade {
   // Partial-index predicate (`WHERE trade_quality IS NOT NULL`) is added in
   // the migration SQL since Prisma 7 doesn't model it declaratively.
   @@index([userId, tradeQuality])
+  // J6 — cohort-wide admin triage (NO userId filter): closedAt-leading indexes
+  // let the /admin/a-traiter loaders (listUncommentedClosedTrades /
+  // listStaleOpenTrades) sort across the whole cohort without an in-memory heap
+  // sort. Anchor: lib/admin/attention-service.ts:178-186 documents the gap.
+  // EXPLAIN target — TO VERIFY before scope 5a is "done" (dev DB, ~8k trades):
+  // expect Seq Scan + top-N heapsort → Index (Only) Scan. Not yet captured.
+  @@index([closedAt, id])
+  @@index([closedAt, enteredAt, id])
   @@map("trades")
 }
 
@@ -1787,6 +1795,12 @@ model MarkDouglasDelivery {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, seenAt])
   @@index([userId, cardId, createdAt(sort: Desc)])
+  // J6 — cohort-wide behavioral-signals window (createdAt-only, NO userId filter).
+  // The existing [userId, createdAt] index is userId-leading, so a createdAt-only
+  // range scan can't use it. Anchor: lib/admin/attention-service.ts:449-478.
+  // EXPLAIN target — TO VERIFY before 5a "done": expect Index Scan cost lower
+  // vs the userId-leading fallback. Not yet captured.
+  @@index([createdAt])
   @@map("mark_douglas_deliveries")
 }
 
@@ -3347,6 +3361,12 @@ model Discrepancy {
   // Member + admin views: open discrepancies first.
   @@index([memberId, status])
   @@index([memberId, detectedAt(sort: Desc)])
+  // J6 — cohort-wide admin triage: open discrepancies across ALL members,
+  // sorted oldest-first. Anchor: lib/admin/attention-service.ts:413-431.
+  // EXPLAIN target — TO VERIFY before 5a "done": expect this index chosen over
+  // the memberId-leading one for the status='open' ORDER BY detectedAt cohort
+  // query. Not yet captured.
+  @@index([status, detectedAt, id])
   @@map("discrepancies")
 }
 

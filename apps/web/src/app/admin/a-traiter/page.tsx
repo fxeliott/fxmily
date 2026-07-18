@@ -5,6 +5,7 @@ import {
   MessageSquarePlus,
   ScaleIcon,
   Timer,
+  UserX,
 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -15,6 +16,7 @@ import { Pill } from '@/components/ui/pill';
 import { TriageSection, type TriageRow } from '@/components/admin/a-traiter/triage-section';
 import {
   getTriageQueueCounts,
+  listDisengagedMembers,
   listOpenDiscrepancies,
   listRecentBehavioralSignals,
   listStaleOpenTrades,
@@ -57,8 +59,9 @@ function moreHref(
     to?: string | undefined;
     ec?: string | undefined;
     sg?: string | undefined;
+    dm?: string | undefined;
   },
-  key: 'tc' | 'to' | 'ec' | 'sg',
+  key: 'tc' | 'to' | 'ec' | 'sg' | 'dm',
   next: string,
 ): string {
   const params = new URLSearchParams();
@@ -67,12 +70,13 @@ function moreHref(
   if (merged.to) params.set('to', merged.to);
   if (merged.ec) params.set('ec', merged.ec);
   if (merged.sg) params.set('sg', merged.sg);
+  if (merged.dm) params.set('dm', merged.dm);
   const qs = params.toString();
   return qs ? `/admin/a-traiter?${qs}` : '/admin/a-traiter';
 }
 
 interface AtraiterPageProps {
-  searchParams: Promise<{ tc?: string; to?: string; ec?: string; sg?: string }>;
+  searchParams: Promise<{ tc?: string; to?: string; ec?: string; sg?: string; dm?: string }>;
 }
 
 /**
@@ -91,20 +95,22 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const { tc: rawTc, to: rawTo, ec: rawEc, sg: rawSg } = await searchParams;
+  const { tc: rawTc, to: rawTo, ec: rawEc, sg: rawSg, dm: rawDm } = await searchParams;
   const cursors = {
     tc: parseCursor(rawTc),
     to: parseCursor(rawTo),
     ec: parseCursor(rawEc),
     sg: parseCursor(rawSg),
+    dm: parseCursor(rawDm),
   };
 
-  const [counts, uncommented, staleOpen, gaps, signals] = await Promise.all([
+  const [counts, uncommented, staleOpen, gaps, signals, disengaged] = await Promise.all([
     getTriageQueueCounts(),
     listUncommentedClosedTrades({ cursor: cursors.tc }),
     listStaleOpenTrades({ cursor: cursors.to }),
     listOpenDiscrepancies({ cursor: cursors.ec }),
     listRecentBehavioralSignals({ cursor: cursors.sg }),
+    listDisengagedMembers({ cursor: cursors.dm }),
   ]);
 
   const uncommentedRows: TriageRow[] = uncommented.items.map((t) => {
@@ -171,6 +177,20 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
         {s.signals.length} signal{s.signals.length > 1 ? 'aux' : ''}
       </Pill>
     ),
+  }));
+
+  const disengagedRows: TriageRow[] = disengaged.items.map((m) => ({
+    id: m.id,
+    href: m.href,
+    title: m.memberLabel,
+    // Factual, never punitive (SPEC §2) : the last engagement instant, or — for a
+    // member who has never opened the app — the day they joined. The list is
+    // oldest-first (the natural « who to call this week » order).
+    meta:
+      m.lastSeenAt === null
+        ? `Jamais vu depuis son inscription le ${DATE_FMT.format(new Date(m.joinedAt))}`
+        : `Vu pour la dernière fois le ${DATE_FMT.format(new Date(m.lastSeenAt))}`,
+    ariaLabel: `Ouvrir la fiche de ${m.memberLabel} (membre en décrochage)`,
   }));
 
   const allClear = counts.total === 0;
@@ -265,6 +285,17 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
             shownCount={signalRows.length}
             moreHref={signals.nextCursor ? moreHref(cursors, 'sg', signals.nextCursor) : null}
             emptyLabel={`Aucun signal comportemental détecté ces ${BEHAVIORAL_SIGNAL_RECENT_DAYS} derniers jours. Le climat est calme.`}
+          />
+
+          <TriageSection
+            icon={UserX}
+            title="Membres en décrochage"
+            tone="warn"
+            count={counts.disengagedMembers}
+            rows={disengagedRows}
+            shownCount={disengagedRows.length}
+            moreHref={disengaged.nextCursor ? moreHref(cursors, 'dm', disengaged.nextCursor) : null}
+            emptyLabel="Chaque membre est passé récemment. Personne ne décroche en ce moment."
           />
         </div>
       )}

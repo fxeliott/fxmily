@@ -76,7 +76,6 @@ async function main() {
     log: [{ level: 'query', emit: 'event' }],
   });
   const events: Array<{ query: string; params: string }> = [];
-  // @ts-expect-error — the query event type depends on the log config generic.
   prisma.$on('query', (e: { query: string; params: string }) => {
     events.push({ query: e.query, params: e.params });
   });

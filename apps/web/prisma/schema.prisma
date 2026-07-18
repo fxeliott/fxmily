@@ -512,6 +512,12 @@ model User {
   /// 'deleted'` clause lives in the migration SQL (Prisma 7 doesn't expose
   /// partial-index predicates declaratively yet).
   @@index([status, deletedAt])
+  /// J6 — serves the « membres en décrochage » triage list + count
+  /// (`listDisengagedMembers` / `getTriageQueueCounts` / the daily brief). The
+  /// `status = 'active' AND deletedAt IS NULL` equality prefix + the `lastSeenAt`
+  /// sort column let Postgres walk the index in `lastSeenAt asc` order instead of
+  /// scanning + sorting the members table.
+  @@index([status, deletedAt, lastSeenAt])
   @@map("users")
 }
 

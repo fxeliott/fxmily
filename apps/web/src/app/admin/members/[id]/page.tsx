@@ -46,6 +46,8 @@ import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { countUnseenAnnotationsByMember } from '@/lib/admin/annotations-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
+import { getMembersAttention, isMemberDisengaged } from '@/lib/admin/attention-service';
+import { MemberSynthesisBanner } from '@/components/admin/member-synthesis-banner';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import {
   listTrainingTradesAsAdmin,
@@ -368,13 +370,32 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // `detail.timezone` already contains the value (added to MemberDetail), so
   // we no longer need a separate `findUnique` round-trip here.
   const memberTimezone = detail.timezone;
-  const [latestScore, analytics] =
+  // J6-admin-scale (scope 3) — the synthesis banner sits above the tabs on EVERY
+  // tab, so the triage signals + latest behavioral score are now loaded
+  // unconditionally (not just on overview). Both reuse services the page/cohort
+  // already rely on: getMembersAttention runs 4 bounded, indexed single-member
+  // queries and getLatestBehavioralScore is cache()-wrapped (no double-fetch when
+  // the overview tab reads it again). getDashboardAnalytics stays overview-only
+  // (it is the heavy fan-out) — no new N+1, no new schema.
+  const [attentionMap, latestScore, analytics] = await Promise.all([
+    getMembersAttention([memberId]),
+    getLatestBehavioralScore(memberId),
     tab === 'overview'
-      ? await Promise.all([
-          getLatestBehavioralScore(memberId),
-          getDashboardAnalytics(memberId, memberTimezone, '30d'),
-        ])
-      : [null, null];
+      ? getDashboardAnalytics(memberId, memberTimezone, '30d')
+      : Promise.resolve(null),
+  ]);
+  // getMembersAttention zeroes every requested id, so the get() is always defined
+  // for a passed id; the fallback keeps the type honest.
+  const attention = attentionMap.get(memberId) ?? {
+    tradesToComment: 0,
+    openDiscrepancies: 0,
+    constancyDeclining: false,
+  };
+  // Mirror the cohort-wide "décrochage" predicate (single-sourced in
+  // attention-service) so the banner flags a drifting member exactly like
+  // /admin/a-traiter does, without re-querying the cohort. The clock lives in
+  // the service, keeping this Server Component render pure.
+  const memberDisengaged = isMemberDisengaged(detail);
 
   await logAudit({
     action: 'admin.member.viewed',
@@ -519,6 +540,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           </div>
         </div>
       </Card>
+
+      {/* Synthesis banner (J6-admin-scale scope 3) — key signals at a glance,
+          above the tabs so it stays in view on every tab. */}
+      <MemberSynthesisBanner
+        memberId={memberId}
+        lastSeenAt={detail.lastSeenAt}
+        disengaged={memberDisengaged}
+        attention={attention}
+        score={latestScore}
+      />
 
       {/* Tabs */}
       <MemberTabs memberId={memberId} active={tab} />

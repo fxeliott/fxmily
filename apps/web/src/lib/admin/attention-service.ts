@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
+import type { UserStatus } from '@/generated/prisma/enums';
 import { db } from '@/lib/db';
 import { isConstancyDip } from '@/lib/admin/attention-logic';
 import { STALE_OPEN_TRADE_HOURS, STALE_OPEN_TRADE_MS } from '@/lib/trades/stale-open-threshold';
@@ -58,6 +59,27 @@ export function disengagedMembersWhere(floor: Date): Prisma.UserWhereInput {
     deletedAt: null,
     OR: [{ lastSeenAt: { lt: floor } }, { lastSeenAt: null, joinedAt: { lt: floor } }],
   };
+}
+
+/**
+ * The single-member mirror of `disengagedMembersWhere`, for surfaces that
+ * already hold the member row in memory (the member-fiche synthesis banner) and
+ * must not re-query the cohort just to learn one member's status. Same rule,
+ * single-sourced: active AND (last seen before the 7-day floor OR never seen
+ * while joined before it). `now` is a parameter (default = wall clock) so the
+ * clock lives here, in the service, and callers — including React Server
+ * Components — stay pure (no `Date.now()` in a render body). A deleted member
+ * never reaches this (the members-service throws first), so the `active` check
+ * is sufficient without re-testing `deletedAt`.
+ */
+export function isMemberDisengaged(
+  member: { status: UserStatus; lastSeenAt: string | Date | null; joinedAt: string | Date },
+  now: number = Date.now(),
+): boolean {
+  if (member.status !== 'active') return false;
+  const floorMs = now - DISENGAGED_AFTER_MS;
+  const lastSeenMs = member.lastSeenAt !== null ? new Date(member.lastSeenAt).getTime() : null;
+  return lastSeenMs !== null ? lastSeenMs < floorMs : new Date(member.joinedAt).getTime() < floorMs;
 }
 
 export interface MemberAttention {

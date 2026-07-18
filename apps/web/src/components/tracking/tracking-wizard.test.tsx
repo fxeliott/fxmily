@@ -216,4 +216,25 @@ describe('TrackingWizard — universal engine renders all six question kinds (Do
 
     expect(submit()).toBeEnabled();
   });
+
+  it('blocks a decimal on an integer numeric question (inline error + gated CTA)', () => {
+    render(<TrackingWizard instrument={ALL_KINDS} occurrenceKey={OCCURRENCE} />);
+    const submit = () => screen.getByRole('button', { name: /Enregistrer mon suivi/ });
+
+    // Answer everything else so the numeric field is the ONLY gate on submit.
+    answerAllRadiogroups();
+    fireEvent.click(screen.getByRole('button', { name: 'Calme' }));
+
+    // A decimal on an `integer: true` question is rejected inline by the client
+    // guard (no server round-trip) and keeps the CTA inert — mirror of #539.
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3.5' } });
+    expect(screen.getByText(/nombre entier est attendu/i)).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-invalid', 'true');
+    expect(submit()).toBeDisabled();
+
+    // Correcting to an integer clears the error and unlocks submit.
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '4' } });
+    expect(screen.queryByText(/nombre entier est attendu/i)).toBeNull();
+    expect(submit()).toBeEnabled();
+  });
 });

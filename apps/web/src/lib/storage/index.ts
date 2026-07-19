@@ -101,6 +101,7 @@ export {
 export {
   avatarKeyBelongsTo,
   keyBelongsTo,
+  localUploadPathFor,
   openLocalReadStream,
   trainingKeyBelongsTo,
 } from './local';

@@ -429,6 +429,8 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   weekly_review_reminder: 'Ta revue hebdo t’attend · Fxmily',
   // J2 — fires when the member's weekly adaptive calendar is published.
   calendar_ready: 'Ton plan de la semaine est prêt · Fxmily',
+  // J6 (admin-scale, scope 6) — asynchronous RGPD export ready to download.
+  data_export_ready: 'Ton export de données est prêt · Fxmily',
 };
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -455,6 +457,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
     'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
   weekly_review_reminder: 'Prends un moment pour faire le point sur ta semaine, tranquillement.',
   calendar_ready: 'Ton calendrier de la semaine vient d’être publié.',
+  data_export_ready:
+    'Ton export complet (toutes tes données + tes photos) a été préparé. Il t’attend, prêt à télécharger, sur ta page « Mes données ».',
 };
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -471,6 +475,7 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   training_reply_received: 'Voir la réponse',
   weekly_review_reminder: 'Faire ma revue',
   calendar_ready: 'Voir mon calendrier',
+  data_export_ready: 'Télécharger mon export',
 };
 
 export interface SendNotificationFallbackParams {

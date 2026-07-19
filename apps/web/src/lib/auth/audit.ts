@@ -50,6 +50,7 @@ export type AuditAction =
   | 'storage.r2_mirror.succeeded'
   | 'storage.r2_mirror.failed'
   | 'admin.members.listed'
+  | 'admin.members.bulk_noted'
   | 'admin.member.viewed'
   // F5 (overhaul) — admin member moderation. PII-FREE: metadata carries only
   // `{memberId, eventId}` — the free-text motif lives in the
@@ -60,6 +61,12 @@ export type AuditAction =
   // PII-free: metadata carries only `{memberId, eventId}`.
   | 'admin.member.avatar_removed'
   | 'admin.trade.viewed'
+  // J6-admin-scale item 4 — admin READ-ONLY view of member reflections
+  // (`ReflectionEntry`, CBT Ellis ABCD). PII-FREE: metadata carries only
+  // `{memberId?, cursor?, count}` — NEVER the reflection text (the ABCD content
+  // is a private journal; this view lives only under `/admin/*`, never emailed).
+  | 'admin.reflections.listed'
+  | 'admin.member.reflections.viewed'
   // J4 — annotation workflow
   | 'admin.annotation.created'
   | 'admin.annotation.deleted'
@@ -163,6 +170,15 @@ export type AuditAction =
   | 'cron.dispatch_notifications.scan'
   // J10 — RGPD account self-service + ops crons
   | 'account.data.exported'
+  // J6 (admin-scale, scope 6) — asynchronous RGPD export with media. Lifecycle
+  // slugs for the `DataExportJob` background pipeline (member requests → job runs
+  // out of the HTTP request via `after()` → zip of JSON + photos on the uploads
+  // volume → `data_export_ready` notification). PII-FREE metadata: `{jobId}` +
+  // counts/byte size only (`byteSize`, `mediaAppended`, `mediaSkipped`, the
+  // `summariseExport` row counts) — NEVER a filename, media key, or row content.
+  | 'account.data.export_job.requested'
+  | 'account.data.export_job.completed'
+  | 'account.data.export_job.failed'
   // F2 (overhaul) — member self-service timezone change. PII-free: metadata
   // carries only the new IANA timezone string (no location precision beyond
   // the zone the member chose themselves).

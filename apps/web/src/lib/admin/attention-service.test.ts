@@ -7,20 +7,24 @@ vi.mock('@/lib/db', () => ({
     discrepancy: { groupBy: vi.fn(), count: vi.fn(), findMany: vi.fn() },
     constancyScore: { findMany: vi.fn() },
     markDouglasDelivery: { findMany: vi.fn(), groupBy: vi.fn() },
+    user: { count: vi.fn(), findMany: vi.fn() },
   },
 }));
 
 import { db } from '@/lib/db';
 
 import {
+  disengagedMembersWhere,
   getCohortAttention,
   getMembersAttention,
   getTriageQueueCounts,
+  listDisengagedMembers,
   listOpenDiscrepancies,
   listRecentBehavioralSignals,
   listStaleOpenTrades,
   listUncommentedClosedTrades,
   BEHAVIORAL_SIGNAL_RECENT_DAYS,
+  DISENGAGED_AFTER_MS,
   STALE_OPEN_TRADE_HOURS,
   TRIAGE_PAGE_SIZE,
 } from './attention-service';
@@ -406,7 +410,7 @@ describe('listOpenDiscrepancies', () => {
 });
 
 describe('getTriageQueueCounts', () => {
-  it('sums the four section counts and excludes deleted members from each', async () => {
+  it('sums the five section counts and excludes deleted members from each', async () => {
     vi.mocked(db.trade.count)
       .mockResolvedValueOnce(4 as never) // uncommented closed
       .mockResolvedValueOnce(2 as never); // stale open
@@ -418,6 +422,9 @@ describe('getTriageQueueCounts', () => {
       { userId: 'm1' },
       { userId: 'm2' },
     ] as never);
+    // J6 — the disengaged-member count is a bounded `db.user.count` over the same
+    // predicate as the list + the daily-brief email (single-sourced).
+    vi.mocked(db.user.count).mockResolvedValue(5 as never);
 
     const counts = await getTriageQueueCounts();
     expect(counts).toEqual({
@@ -425,7 +432,8 @@ describe('getTriageQueueCounts', () => {
       staleOpen: 2,
       openDiscrepancies: 3,
       behavioralSignals: 2,
-      total: 11,
+      disengagedMembers: 5,
+      total: 16,
     });
 
     // Every count excludes soft-deleted members (the queue must never point the
@@ -447,6 +455,21 @@ describe('getTriageQueueCounts', () => {
     const signalWhere = signalArg.where as Record<string, unknown>;
     expect(signalWhere.user).toEqual({ status: { not: 'deleted' } });
     expect((signalWhere.createdAt as { gte: Date }).gte).toBeInstanceOf(Date);
+
+    // FIND — the disengaged count reuses the SHARED `disengagedMembersWhere`
+    // predicate verbatim (the badge, the list and the daily-brief email counter
+    // are single-sourced). Pin the exact fragment + that the floor is a Date in
+    // the expected window so the count can never silently drift from the list.
+    const disengagedArg = firstArg(db.user.count);
+    const disengagedWhere = disengagedArg.where as Record<string, unknown>;
+    expect(disengagedWhere.status).toBe('active');
+    expect(disengagedWhere.deletedAt).toBeNull();
+    const floor = (
+      (disengagedWhere.OR as { lastSeenAt: { lt: Date } }[])[0] as {
+        lastSeenAt: { lt: Date };
+      }
+    ).lastSeenAt.lt;
+    expect(disengagedWhere).toEqual(disengagedMembersWhere(floor));
   });
 });
 
@@ -576,5 +599,143 @@ describe('listRecentBehavioralSignals', () => {
     const { items, nextCursor } = await listRecentBehavioralSignals();
     expect(items).toHaveLength(0);
     expect(nextCursor).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// J6 — « Membres en décrochage » : cohort-wide list of drifting active members.
+// ---------------------------------------------------------------------------
+
+describe('disengagedMembersWhere', () => {
+  it('scopes to active, never-soft-deleted members past the floor (seen OR never-seen)', () => {
+    const floor = new Date('2026-07-11T00:00:00Z');
+    // The whole point of the single-sourcing: this fragment is the ONE predicate
+    // the list, the badge count and the daily-brief email all reuse. Pin it whole
+    // so a drift between callers can't slip in unnoticed.
+    expect(disengagedMembersWhere(floor)).toEqual({
+      status: 'active',
+      deletedAt: null,
+      OR: [{ lastSeenAt: { lt: floor } }, { lastSeenAt: null, joinedAt: { lt: floor } }],
+    });
+  });
+});
+
+/** A member row as the disengaged loader selects it (thin, name + stamps). */
+function memberRow(
+  id: string,
+  over: Partial<{
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    lastSeenAt: Date | null;
+    joinedAt: Date;
+  }> = {},
+) {
+  return {
+    id,
+    firstName: 'firstName' in over ? over.firstName : 'Léa',
+    lastName: 'lastName' in over ? over.lastName : 'Bernard',
+    email: over.email ?? 'lea@x.io',
+    // `?? ` would swallow an intentional `null` — key presence decides instead.
+    lastSeenAt: 'lastSeenAt' in over ? over.lastSeenAt : new Date('2026-07-01T09:00:00Z'),
+    joinedAt: over.joinedAt ?? new Date('2026-06-01T08:00:00Z'),
+  };
+}
+
+describe('listDisengagedMembers', () => {
+  it('lists a drifting member with a fiche link + last-seen stamp', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([memberRow('u1')] as never);
+
+    const { items, nextCursor } = await listDisengagedMembers();
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({
+      id: 'u1',
+      memberLabel: 'Léa Bernard',
+      lastSeenAt: '2026-07-01T09:00:00.000Z',
+      joinedAt: '2026-06-01T08:00:00.000Z',
+      href: '/admin/members/u1',
+    });
+    expect(nextCursor).toBeNull();
+  });
+
+  it('carries a null lastSeenAt through for a never-seen member (joinedAt still shown)', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([memberRow('u2', { lastSeenAt: null })] as never);
+
+    const { items } = await listDisengagedMembers();
+    expect(items[0]?.lastSeenAt).toBeNull();
+    expect(items[0]?.joinedAt).toBe('2026-06-01T08:00:00.000Z');
+  });
+
+  it('reuses the shared disengagement predicate with a floor in the expected window', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([] as never);
+
+    const before = Date.now();
+    await listDisengagedMembers();
+    const after = Date.now();
+
+    const arg = firstArg(db.user.findMany);
+    // The where-clause is the SHARED `disengagedMembersWhere` output — pin it
+    // whole against the recomputed floor so the list can never diverge from the
+    // count/badge/email that reuse the same fragment.
+    const where = arg.where as Record<string, unknown>;
+    const floor = (
+      (where.OR as { lastSeenAt: { lt: Date } }[])[0] as {
+        lastSeenAt: { lt: Date };
+      }
+    ).lastSeenAt.lt;
+    expect(floor).toBeInstanceOf(Date);
+    const windowMs = DISENGAGED_AFTER_MS;
+    expect(floor.getTime()).toBeGreaterThanOrEqual(before - windowMs);
+    expect(floor.getTime()).toBeLessThanOrEqual(after - windowMs);
+    expect(where).toEqual(disengagedMembersWhere(floor));
+  });
+
+  it('orders longest-silence first: lastSeenAt asc NULLS FIRST, then id', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([] as never);
+    await listDisengagedMembers();
+    // NULLS FIRST surfaces the never-seen new joiners at the very top; `id`
+    // tiebreaks the nullable, non-unique stamp so the cursor can't skip/repeat.
+    expect(firstArg(db.user.findMany).orderBy).toEqual([
+      { lastSeenAt: { sort: 'asc', nulls: 'first' } },
+      { id: 'asc' },
+    ]);
+  });
+
+  it('emits a nextCursor and trims the look-ahead row when a full page + 1 comes back', async () => {
+    const rows = Array.from({ length: TRIAGE_PAGE_SIZE + 1 }, (_, i) => memberRow(`u${i}`));
+    vi.mocked(db.user.findMany).mockResolvedValue(rows as never);
+
+    const { items, nextCursor } = await listDisengagedMembers();
+
+    expect(items).toHaveLength(TRIAGE_PAGE_SIZE);
+    expect(nextCursor).toBe(`u${TRIAGE_PAGE_SIZE - 1}`);
+    expect(firstArg(db.user.findMany).take).toBe(TRIAGE_PAGE_SIZE + 1);
+  });
+
+  it('applies a valid cursor as a skip-1 seek and ignores a forged one', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([] as never);
+
+    const validCursor = 'a'.repeat(25);
+    await listDisengagedMembers({ cursor: validCursor });
+    expect(firstArg(db.user.findMany)).toMatchObject({
+      cursor: { id: validCursor },
+      skip: 1,
+    });
+
+    vi.mocked(db.user.findMany).mockClear();
+    await listDisengagedMembers({ cursor: 'not-a-cuid!' });
+    const arg = firstArg(db.user.findMany);
+    expect(arg.cursor).toBeUndefined();
+    expect(arg.skip).toBeUndefined();
+  });
+
+  it('falls back to the email when the member has no name', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([
+      memberRow('u9', { firstName: null, lastName: null, email: 'anon@x.io' }),
+    ] as never);
+
+    const { items } = await listDisengagedMembers();
+    expect(items[0]?.memberLabel).toBe('anon@x.io');
   });
 });

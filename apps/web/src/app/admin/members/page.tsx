@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { BulkMemberActions } from '@/components/admin/bulk-member-actions';
 import { MemberRow } from '@/components/admin/member-row';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { AnimatedNumber } from '@/components/ui/animated-number';
@@ -357,6 +358,15 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* J6 scope 7 — bulk v1: select members on this page + one mass action
+              (private admin note, never member-facing). */}
+          <BulkMemberActions
+            members={page.items.map((m) => ({
+              id: m.id,
+              name: [m.firstName, m.lastName].filter(Boolean).join(' ').trim() || m.email,
+              email: m.email,
+            }))}
+          />
           <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
             {page.items.map((member) => (
               // `.wow-reveal` class (not a framer wrapper) so `ul > li > a`

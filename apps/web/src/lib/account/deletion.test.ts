@@ -1,3 +1,7 @@
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findUniqueMock = vi.fn();
@@ -9,6 +13,7 @@ const proofFindManyMock = vi.fn();
 const trainingTradeFindManyMock = vi.fn();
 const trainingAnnotationFindManyMock = vi.fn();
 const tradeFindManyMock = vi.fn();
+const dataExportFindManyMock = vi.fn();
 const storageDeleteMock = vi.fn();
 const reportWarningMock = vi.fn();
 
@@ -41,6 +46,11 @@ vi.mock('@/lib/db', () => ({
     // media (entry/exit screenshots + annotation media) before the cascade.
     trade: {
       findMany: tradeFindManyMock,
+    },
+    // J6 scope 6 (RGPD art.17) — the purge also sweeps the member's async
+    // export zips (full-PII aggregates) from the volume before the cascade.
+    dataExportJob: {
+      findMany: dataExportFindManyMock,
     },
   },
 }));
@@ -76,6 +86,7 @@ beforeEach(() => {
   trainingTradeFindManyMock.mockReset();
   trainingAnnotationFindManyMock.mockReset();
   tradeFindManyMock.mockReset();
+  dataExportFindManyMock.mockReset();
   storageDeleteMock.mockReset();
   reportWarningMock.mockReset();
   // Default: nothing to sweep — the pre-S3/S8 purge tests stay byte-identical.
@@ -83,6 +94,7 @@ beforeEach(() => {
   trainingTradeFindManyMock.mockResolvedValue([]);
   trainingAnnotationFindManyMock.mockResolvedValue([]);
   tradeFindManyMock.mockResolvedValue([]);
+  dataExportFindManyMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -548,6 +560,43 @@ describe('purgeMaterialisedDeletions', () => {
     expect(result.purged).toBe(1);
     expect(result.errors).toBe(0);
     warnSpy.mockRestore();
+  });
+
+  it('J6 scope 6 (RGPD art.17) — sweeps the member async EXPORT zips from the volume before the cascade', async () => {
+    // The export zips are the FULL-PII aggregate (data.json + every photo). They
+    // are plain files on the LOCAL uploads volume (not storage-key objects), so
+    // this asserts the REAL fs removal, not a `selectStorage().delete` call.
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'fxmily-del-export-'));
+    process.env.UPLOADS_DIR = tmp;
+    const exportsDir = path.join(tmp, 'data-exports');
+    await fs.mkdir(exportsDir, { recursive: true });
+    const zipA = path.join(exportsDir, 'exportjoba.zip');
+    const zipB = path.join(exportsDir, 'exportjobb.zip');
+    await fs.writeFile(zipA, new Uint8Array([1, 2, 3]));
+    await fs.writeFile(zipB, new Uint8Array([4, 5, 6]));
+
+    const now = new Date('2026-07-19T10:00:00.000Z');
+    findManyMock.mockResolvedValueOnce([{ id: 'u1' }]);
+    dataExportFindManyMock.mockResolvedValueOnce([{ id: 'exportjoba' }, { id: 'exportjobb' }]);
+    deleteMock.mockResolvedValue({});
+
+    const result = await purgeMaterialisedDeletions({ now });
+
+    // Scoped read of the member's export jobs before the cascade drops them.
+    expect(dataExportFindManyMock).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      select: { id: true },
+    });
+    // Both PII-bearing zips are physically gone from the volume...
+    await expect(fs.access(zipA)).rejects.toThrow();
+    await expect(fs.access(zipB)).rejects.toThrow();
+    // ...and the hard-delete still runs.
+    expect(deleteMock).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    expect(result.purged).toBe(1);
+    expect(result.errors).toBe(0);
+
+    await fs.rm(tmp, { recursive: true, force: true });
+    delete process.env.UPLOADS_DIR;
   });
 });
 

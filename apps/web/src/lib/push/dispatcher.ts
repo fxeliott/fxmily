@@ -66,6 +66,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   training_reply_received: 86400, // 24h — admin sees a member reply, can wait a day
   weekly_review_reminder: 86400, // 24h — J2 Sunday nudge, not time-critical
   calendar_ready: 86400, // 24h — J2 weekly calendar publication, not time-critical
+  data_export_ready: 604800, // 7d — J6 export stays downloadable a week; the link isn't time-critical
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -83,6 +84,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   training_reply_received: 'low', // admin-facing loop-close, never urgent
   weekly_review_reminder: 'low', // J2 — calm Sunday nudge, never a pressure stick
   calendar_ready: 'low', // J2 — calm informative signal, never urgent
+  data_export_ready: 'low', // J6 — calm "your export is ready" signal, never urgent
 };
 
 /**
@@ -417,6 +419,16 @@ export function buildPayload(
       title = 'Ton plan de la semaine est prêt';
       body = 'Ton calendrier de la semaine vient d’être publié.';
       path = '/calendrier';
+      break;
+    }
+    case 'data_export_ready': {
+      // J6 (admin-scale, scope 6) — the member's asynchronous RGPD export (JSON +
+      // photos) has been built off the request and is ready to download. Deep-link
+      // to `/account/data` where the download button appears. Payload carries only
+      // the opaque jobId (+ PII-free counts); the copy stays generic.
+      title = 'Ton export de données est prêt';
+      body = 'Ton archive (données + photos) est prête à télécharger, quand tu veux.';
+      path = '/account/data';
       break;
     }
   }

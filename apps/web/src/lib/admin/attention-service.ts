@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { Prisma } from '@/generated/prisma/client';
+import type { UserStatus } from '@/generated/prisma/enums';
 import { db } from '@/lib/db';
 import { isConstancyDip } from '@/lib/admin/attention-logic';
 import { STALE_OPEN_TRADE_HOURS, STALE_OPEN_TRADE_MS } from '@/lib/trades/stale-open-threshold';
@@ -29,6 +31,56 @@ export const ATTENTION_RECENT_DAYS = 14;
 
 /** How far back we read constancy snapshots to judge a recent dip. */
 const CONSTANCY_DECLINE_LOOKBACK_DAYS = 70;
+
+/**
+ * A member is "disengaged" (en décrochage) when they are active but have not
+ * been seen for this long. 7 days is the same recency horizon the
+ * behavioral-signal section uses — long enough not to flag a member merely
+ * taking a weekend off, short enough that a real disengagement surfaces within
+ * the week. SINGLE SOURCE OF TRUTH: `daily-brief.ts` imports this constant +
+ * `disengagedMembersWhere` (just wrapped in a `count()`) so the morning email
+ * counter can never drift from the `/admin/a-traiter` list + its badge.
+ */
+export const DISENGAGED_AFTER_MS = 7 * DAY_MS;
+
+/**
+ * The cohort-wide "disengaged member" predicate, as a reusable Prisma
+ * where-fragment. A member is drifting when they are active, never soft-deleted,
+ * and either last seen before `floor` OR never seen at all while having joined
+ * before `floor` (a brand-new member with no session yet is NOT drifting — they
+ * just arrived). The caller computes `floor` from its own clock — the daily
+ * brief from `options.now`, the triage list/count from `Date.now()` — which is
+ * the only thing that legitimately differs between callers; the PREDICATE itself
+ * lives here once (`daily-brief.ts` reuses it verbatim in a `count()`).
+ */
+export function disengagedMembersWhere(floor: Date): Prisma.UserWhereInput {
+  return {
+    status: 'active',
+    deletedAt: null,
+    OR: [{ lastSeenAt: { lt: floor } }, { lastSeenAt: null, joinedAt: { lt: floor } }],
+  };
+}
+
+/**
+ * The single-member mirror of `disengagedMembersWhere`, for surfaces that
+ * already hold the member row in memory (the member-fiche synthesis banner) and
+ * must not re-query the cohort just to learn one member's status. Same rule,
+ * single-sourced: active AND (last seen before the 7-day floor OR never seen
+ * while joined before it). `now` is a parameter (default = wall clock) so the
+ * clock lives here, in the service, and callers — including React Server
+ * Components — stay pure (no `Date.now()` in a render body). A deleted member
+ * never reaches this (the members-service throws first), so the `active` check
+ * is sufficient without re-testing `deletedAt`.
+ */
+export function isMemberDisengaged(
+  member: { status: UserStatus; lastSeenAt: string | Date | null; joinedAt: string | Date },
+  now: number = Date.now(),
+): boolean {
+  if (member.status !== 'active') return false;
+  const floorMs = now - DISENGAGED_AFTER_MS;
+  const lastSeenMs = member.lastSeenAt !== null ? new Date(member.lastSeenAt).getTime() : null;
+  return lastSeenMs !== null ? lastSeenMs < floorMs : new Date(member.joinedAt).getTime() < floorMs;
+}
 
 export interface MemberAttention {
   /** Recent real + training trades with no admin correction yet. */
@@ -177,13 +229,15 @@ export async function getCohortAttention(): Promise<CohortAttention> {
 //
 // Performance: every read is a bounded `findMany` (take = limit + 1 look-ahead)
 // joined to a thin member `select` (id + name parts) — no N+1, no per-row
-// round-trip. Honest caveat: the cohort-wide sorts (`closedAt asc`,
-// `enteredAt asc`, `detectedAt asc`) have NO supporting index — every Trade /
-// Discrepancy index is userId/memberId-prefixed — so Postgres scans then sorts
-// in memory. Bounded and fine at coaching-cohort scale (tens of members); add
-// a cohort-wide index before the cohort outgrows that. `id` is the cursor +
-// the sort tiebreaker so a minute-precision timestamp collision can never make
-// the cursor skip or repeat a row (same contract as `listMemberTradesAsAdmin`).
+// round-trip. Each cohort-wide sort is now served by a dedicated cohort-wide
+// index added in this branch: `closedAt asc` by `trades_closed_at_id_idx`,
+// the open-trade `enteredAt asc` (filtered `closedAt IS NULL`) by
+// `trades_closed_at_entered_at_id_idx`, and `detectedAt asc` (filtered
+// `status = 'open'`) by `discrepancies_status_detected_at_id_idx` — so Postgres
+// walks the index in sort order instead of scanning then sorting the cohort in
+// memory. `id` is the cursor + the sort tiebreaker so a minute-precision
+// timestamp collision can never make the cursor skip or repeat a row (same
+// contract as `listMemberTradesAsAdmin`).
 // =============================================================================
 
 // Threshold shared with the member-side reminder — single source of truth in
@@ -583,6 +637,87 @@ export async function listRecentBehavioralSignals(
   };
 }
 
+// =============================================================================
+// J6 — « Membres en décrochage » : cohort-wide list of active members drifting
+// away — the coach's "who to call this week" queue.
+//
+// `daily-brief.ts` already COUNTS these members (the morning email badge). This
+// loader returns the LIST itself — same members, same predicate
+// (`disengagedMembersWhere`, single-sourced), so the counter, the list and the
+// `/admin/a-traiter` badge can never disagree. Ordered by `lastSeenAt asc NULLS
+// FIRST` then `id asc`: the longest-silent members surface first, and the
+// never-seen new joiners (null `lastSeenAt`, joined before the floor) sit at the
+// very top — the natural outreach order. Each row links straight to the member
+// fiche where the coach reaches out.
+//
+// Performance: a bounded `findMany` (take = limit + 1 look-ahead) served by the
+// `@@index([status, deletedAt, lastSeenAt])` added in this branch — the
+// `status = 'active' AND deletedAt IS NULL` equality prefix + `lastSeenAt` sort
+// column let Postgres walk the index in order instead of scanning the members
+// table. `id` is the cursor + the sort tiebreaker for the nullable, non-unique
+// `lastSeenAt`, so a collision (or the null bucket) can never make the cursor
+// skip or repeat a member.
+// =============================================================================
+
+export interface DisengagedMemberItem {
+  /** Member id — also the cursor and the deep-link target segment. */
+  readonly id: string;
+  readonly memberLabel: string;
+  /** When the member was last seen, or null if never seen since joining. */
+  readonly lastSeenAt: string | null;
+  /** When the member joined (shown when `lastSeenAt` is null). */
+  readonly joinedAt: string;
+  /** Direct link to the member fiche where the coach reaches out. */
+  readonly href: string;
+}
+
+/**
+ * Cohort-wide active members not seen for ≥ `DISENGAGED_AFTER_MS`, longest
+ * silence first. Reuses the SAME predicate as the daily-brief counter
+ * (`disengagedMembersWhere`) so the list, the `/admin/a-traiter` badge and the
+ * morning email can never drift. `lastSeenAt asc NULLS FIRST` puts the
+ * never-seen new joiners (null `lastSeenAt`, joined before the floor) at the
+ * very top — the most at-risk of silently churning. `id` tiebreaks the
+ * (nullable, non-unique) stamp so the cursor can never skip or repeat a member.
+ */
+export async function listDisengagedMembers(
+  options: TriageListOptions = {},
+): Promise<TriagePage<DisengagedMemberItem>> {
+  const limit = clampLimit(options.limit);
+  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+  const floor = new Date(Date.now() - DISENGAGED_AFTER_MS);
+
+  const rows = await db.user.findMany({
+    where: disengagedMembersWhere(floor),
+    // Longest silence first; `lastSeenAt` is nullable so NULLS FIRST surfaces the
+    // never-seen new joiners at the top. `id` tiebreaks the non-unique stamp.
+    orderBy: [{ lastSeenAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      lastSeenAt: true,
+      joinedAt: true,
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: page.map((u) => ({
+      id: u.id,
+      memberLabel: memberLabel(u),
+      lastSeenAt: u.lastSeenAt === null ? null : u.lastSeenAt.toISOString(),
+      joinedAt: u.joinedAt.toISOString(),
+      href: `/admin/members/${u.id}`,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+  };
+}
+
 export interface TriageQueueCounts {
   /** Cohort closed trades with no admin annotation. */
   readonly uncommentedClosed: number;
@@ -592,50 +727,58 @@ export interface TriageQueueCounts {
   readonly openDiscrepancies: number;
   /** Cohort members with ≥1 behavioral signal in the last 7 days. */
   readonly behavioralSignals: number;
+  /** Cohort active members not seen for ≥ `DISENGAGED_AFTER_MS` (drifting away). */
+  readonly disengagedMembers: number;
   /** Sum — the single number the hub card shows. */
   readonly total: number;
 }
 
 /**
- * The three section counts for the « À traiter » page + the hub card total.
- * Three bounded counts over indexed columns, run in parallel — cheap enough to
- * call on the hub AND the page without a shared cache (30-member scale).
+ * The section counts for the « À traiter » page + the hub card total. Bounded
+ * counts over indexed columns, run in parallel — cheap enough to call on the hub
+ * AND the page without a shared cache (30-member scale).
  */
 export async function getTriageQueueCounts(): Promise<TriageQueueCounts> {
   const staleFloor = new Date(Date.now() - STALE_OPEN_TRADE_MS);
   const signalFloor = new Date(Date.now() - BEHAVIORAL_SIGNAL_RECENT_DAYS * DAY_MS);
+  const disengagedFloor = new Date(Date.now() - DISENGAGED_AFTER_MS);
 
-  const [uncommentedClosed, staleOpen, openDiscrepancies, signalMembers] = await Promise.all([
-    db.trade.count({
-      where: {
-        closedAt: { not: null },
-        annotations: { none: {} },
-        user: { status: { not: 'deleted' } },
-      },
-    }),
-    db.trade.count({
-      where: {
-        closedAt: null,
-        enteredAt: { lt: staleFloor },
-        user: { status: { not: 'deleted' } },
-      },
-    }),
-    db.discrepancy.count({
-      where: { status: 'open', member: { status: { not: 'deleted' } } },
-    }),
-    // Behavioral-signal count = number of DISTINCT members with ≥1 delivery in the
-    // last 7 days (the section lists one row per member, so its badge counts
-    // members, not deliveries). `groupBy(['userId'])` over the same window +
-    // non-deleted filter as the loader; `.length` of the grouped rows = distinct
-    // members (served by @@index([userId, createdAt])).
-    db.markDouglasDelivery.groupBy({
-      by: ['userId'],
-      where: {
-        createdAt: { gte: signalFloor },
-        user: { status: { not: 'deleted' } },
-      },
-    }),
-  ]);
+  const [uncommentedClosed, staleOpen, openDiscrepancies, signalMembers, disengagedMembers] =
+    await Promise.all([
+      db.trade.count({
+        where: {
+          closedAt: { not: null },
+          annotations: { none: {} },
+          user: { status: { not: 'deleted' } },
+        },
+      }),
+      db.trade.count({
+        where: {
+          closedAt: null,
+          enteredAt: { lt: staleFloor },
+          user: { status: { not: 'deleted' } },
+        },
+      }),
+      db.discrepancy.count({
+        where: { status: 'open', member: { status: { not: 'deleted' } } },
+      }),
+      // Behavioral-signal count = number of DISTINCT members with ≥1 delivery in the
+      // last 7 days (the section lists one row per member, so its badge counts
+      // members, not deliveries). `groupBy(['userId'])` over the same window +
+      // non-deleted filter as the loader; `.length` of the grouped rows = distinct
+      // members (served by @@index([userId, createdAt])).
+      db.markDouglasDelivery.groupBy({
+        by: ['userId'],
+        where: {
+          createdAt: { gte: signalFloor },
+          user: { status: { not: 'deleted' } },
+        },
+      }),
+      // Disengaged-member count = same predicate as `listDisengagedMembers` +
+      // the daily-brief counter (`disengagedMembersWhere`, single-sourced) so the
+      // badge, the list and the morning email can never disagree.
+      db.user.count({ where: disengagedMembersWhere(disengagedFloor) }),
+    ]);
 
   const behavioralSignals = signalMembers.length;
 
@@ -644,6 +787,8 @@ export async function getTriageQueueCounts(): Promise<TriageQueueCounts> {
     staleOpen,
     openDiscrepancies,
     behavioralSignals,
-    total: uncommentedClosed + staleOpen + openDiscrepancies + behavioralSignals,
+    disengagedMembers,
+    total:
+      uncommentedClosed + staleOpen + openDiscrepancies + behavioralSignals + disengagedMembers,
   };
 }

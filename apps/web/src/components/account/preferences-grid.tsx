@@ -117,6 +117,12 @@ const CATEGORIES: CategoryMeta[] = [
     label: 'Calendrier de la semaine',
     description: 'Une notification quand ton calendrier de la semaine est publié.',
   },
+  {
+    type: 'data_export_ready',
+    label: 'Export de données prêt',
+    description:
+      'Une notification quand l’archive de tes données (RGPD, avec tes photos) que tu as demandée est prête à télécharger.',
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -135,6 +141,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       training_reply_received: true,
       weekly_review_reminder: true,
       calendar_ready: true,
+      data_export_ready: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

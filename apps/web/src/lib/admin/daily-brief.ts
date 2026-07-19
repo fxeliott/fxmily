@@ -6,7 +6,11 @@ import { sendAdminDailyBriefEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
 import { reportWarning } from '@/lib/observability';
 
-import { getTriageQueueCounts } from './attention-service';
+import {
+  DISENGAGED_AFTER_MS,
+  disengagedMembersWhere,
+  getTriageQueueCounts,
+} from './attention-service';
 
 /**
  * Tour 15 — daily ADMIN brief (« mon tableau de bord du matin »).
@@ -39,13 +43,9 @@ const DAY_MS = 86_400_000;
 /** Window for the "new since yesterday" behavioral-signal delta. */
 const NEW_SIGNAL_WINDOW_MS = DAY_MS;
 
-/**
- * A member is "drifting" (en décrochage) when they are active but have not been
- * seen for this long. 7 days is the same recency horizon the behavioral-signal
- * section uses — long enough not to flag a member merely taking a weekend off,
- * short enough that a real disengagement surfaces within the week.
- */
-const DISENGAGED_AFTER_MS = 7 * DAY_MS;
+// The "disengaged member" horizon + predicate are single-sourced in
+// `attention-service.ts` (`DISENGAGED_AFTER_MS` + `disengagedMembersWhere`) so
+// this email counter can never drift from the `/admin/a-traiter` list + badge.
 
 export interface AdminDailyBrief {
   /** Triage queue counts (reused from `getTriageQueueCounts`). */
@@ -96,19 +96,11 @@ export async function composeAdminDailyBrief(
         user: { status: { not: 'deleted' } },
       },
     }),
-    // Drifting members: active, never soft-deleted, and either last seen before
-    // the floor OR never seen at all while having joined before the floor (a
-    // brand-new member with no session yet is NOT drifting — they just arrived).
-    db.user.count({
-      where: {
-        status: 'active',
-        deletedAt: null,
-        OR: [
-          { lastSeenAt: { lt: disengagedFloor } },
-          { lastSeenAt: null, joinedAt: { lt: disengagedFloor } },
-        ],
-      },
-    }),
+    // Drifting members: the shared `disengagedMembersWhere` predicate (active,
+    // never soft-deleted, last seen — or, if never seen, joined — before the
+    // floor). Reused verbatim from the triage list so this counter can never
+    // drift; the floor is this brief's own `now`.
+    db.user.count({ where: disengagedMembersWhere(disengagedFloor) }),
   ]);
 
   return {

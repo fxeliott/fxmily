@@ -25,6 +25,7 @@ import {
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
 import { MemberMonthlyDebriefsPanel } from '@/components/admin/member-monthly-debriefs-panel';
 import { MemberMindsetChecksPanel } from '@/components/admin/member-mindset-checks-panel';
+import { MemberReflectionsPanel } from '@/components/admin/member-reflections-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
@@ -46,6 +47,9 @@ import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { countUnseenAnnotationsByMember } from '@/lib/admin/annotations-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
+import { listReflectionsForMemberAsAdmin } from '@/lib/admin/reflections-service';
+import { getMembersAttention, isMemberDisengaged } from '@/lib/admin/attention-service';
+import { MemberSynthesisBanner } from '@/components/admin/member-synthesis-banner';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import {
   listTrainingTradesAsAdmin,
@@ -107,6 +111,7 @@ function parseTab(
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'reflections'
   | 'calendar'
   | 'profile'
   | 'trajectoire'
@@ -124,6 +129,7 @@ function parseTab(
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
   if (value === 'mindset') return 'mindset';
+  if (value === 'reflections') return 'reflections';
   if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
   if (value === 'trajectoire') return 'trajectoire';
@@ -288,6 +294,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ? await loadMindsetDashboardData(memberId, currentParisWeekStart(), 52)
       : null;
 
+  // J6-admin-scale item 4 — read-only per-member REFLECT feed for the
+  // reflections tab (SPEC §21.6 "vue admin des réflexions", lecture seule, ton
+  // privé). Newest-first, capped at 50 (admin-only, not a hot path). Read
+  // straight from `reflection_entries` via the admin service (bypass-ownership,
+  // never a real-edge recompute). The ABCD text is surfaced verbatim for the
+  // admin to read, but this view lives ONLY under `/admin/*` and is never
+  // emailed / notified; the audit metadata carries ids + counts, never the text.
+  const reflectionsData =
+    tab === 'reflections' ? await listReflectionsForMemberAsAdmin(memberId, { limit: 50 }) : null;
+
   const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
 
   // V2.4 Phase C — read-only MemberProfile for the admin profile tab (M3
@@ -368,19 +384,51 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // `detail.timezone` already contains the value (added to MemberDetail), so
   // we no longer need a separate `findUnique` round-trip here.
   const memberTimezone = detail.timezone;
-  const [latestScore, analytics] =
+  // J6-admin-scale (scope 3) — the synthesis banner sits above the tabs on EVERY
+  // tab, so the triage signals + latest behavioral score are now loaded
+  // unconditionally (not just on overview). Both reuse services the page/cohort
+  // already rely on: getMembersAttention runs 4 bounded, indexed single-member
+  // queries and getLatestBehavioralScore is cache()-wrapped (no double-fetch when
+  // the overview tab reads it again). getDashboardAnalytics stays overview-only
+  // (it is the heavy fan-out) — no new N+1, no new schema.
+  const [attentionMap, latestScore, analytics] = await Promise.all([
+    getMembersAttention([memberId]),
+    getLatestBehavioralScore(memberId),
     tab === 'overview'
-      ? await Promise.all([
-          getLatestBehavioralScore(memberId),
-          getDashboardAnalytics(memberId, memberTimezone, '30d'),
-        ])
-      : [null, null];
+      ? getDashboardAnalytics(memberId, memberTimezone, '30d')
+      : Promise.resolve(null),
+  ]);
+  // getMembersAttention zeroes every requested id, so the get() is always defined
+  // for a passed id; the fallback keeps the type honest.
+  const attention = attentionMap.get(memberId) ?? {
+    tradesToComment: 0,
+    openDiscrepancies: 0,
+    constancyDeclining: false,
+  };
+  // Mirror the cohort-wide "décrochage" predicate (single-sourced in
+  // attention-service) so the banner flags a drifting member exactly like
+  // /admin/a-traiter does, without re-querying the cohort. The clock lives in
+  // the service, keeping this Server Component render pure.
+  const memberDisengaged = isMemberDisengaged(detail);
 
   await logAudit({
     action: 'admin.member.viewed',
     userId: session.user.id,
     metadata: { memberId, tab },
   });
+
+  // J6-admin-scale item 4 — dedicated PII-FREE trace when an admin opens a
+  // member's private REFLECT journal. Metadata carries ids + count ONLY, NEVER
+  // the reflection text (SPEC §21.6 confidentialité). Emitted in addition to the
+  // generic `admin.member.viewed` above so the sensitive-surface access is
+  // filterable on its own slug.
+  if (tab === 'reflections' && reflectionsData !== null) {
+    await logAudit({
+      action: 'admin.member.reflections.viewed',
+      userId: session.user.id,
+      metadata: { memberId, count: reflectionsData.items.length },
+    });
+  }
 
   // Generate avatar initials + deterministic hue from email hash
   const initials =
@@ -520,6 +568,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         </div>
       </Card>
 
+      {/* Synthesis banner (J6-admin-scale scope 3) — key signals at a glance,
+          above the tabs so it stays in view on every tab. */}
+      <MemberSynthesisBanner
+        memberId={memberId}
+        lastSeenAt={detail.lastSeenAt}
+        disengaged={memberDisengaged}
+        attention={attention}
+        score={latestScore}
+      />
+
       {/* Tabs */}
       <MemberTabs memberId={memberId} active={tab} />
 
@@ -595,6 +653,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'mindset' && mindsetData !== null ? (
         <MemberMindsetChecksPanel data={mindsetData} />
+      ) : null}
+      {tab === 'reflections' && reflectionsData !== null ? (
+        <MemberReflectionsPanel entries={reflectionsData.items} />
       ) : null}
       {tab === 'calendar' ? <MemberCalendarPanel calendar={calendar} /> : null}
       {tab === 'profile' && profileData !== null ? (

@@ -210,6 +210,19 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   // User wipe for log-visibility (same canon as V1.5/V1.8/V1.3/V2.3/§26 above).
   await db.leaderboardSnapshot.deleteMany({ where: { userId: { in: ids } } });
 
+  // J6 scope 5 — ReplayView (per-member replay-open telemetry). ON DELETE
+  // CASCADE on User; deleted explicitly BEFORE the User wipe for log-visibility
+  // (same canon as LeaderboardSnapshot/§26/V1.5 above). The parent
+  // ReplaySession has 0 FK to User, so an E2E that seeds one cleans that row by
+  // its `(date, slot)` key itself.
+  await db.replayView.deleteMany({ where: { userId: { in: ids } } });
+
+  // J6 scope 6 — DataExportJob (async RGPD export job rows). ON DELETE CASCADE
+  // on User; deleted explicitly BEFORE the User wipe for log-visibility (same
+  // canon as ReplayView/LeaderboardSnapshot above). The zip artefact on the
+  // uploads volume is NOT touched here — the archive test cleans its own file.
+  await db.dataExportJob.deleteMany({ where: { userId: { in: ids } } });
+
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarCheck, CalendarClock, CalendarX, RefreshCw } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarX, Eye, RefreshCw } from 'lucide-react';
 import { useActionState, useId, useState } from 'react';
 
 import {
@@ -100,7 +100,14 @@ function regenMessage(state: SeanceRegenerateActionState | null): string | null 
   }
 }
 
-export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
+export function SeanceAdminCell({
+  cell,
+  memberCount,
+}: {
+  cell: AdminSeanceCell;
+  /** J6 scope 5 — active-member denominator N for the "Vu par X/N" badge. */
+  memberCount: number;
+}) {
   const [state, formAction, pending] = useActionState<SeanceGoNoGoActionState | null, FormData>(
     declareSeanceGoNoGoAction,
     null,
@@ -156,6 +163,20 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
           ) : (
             <Pill tone="mute">Non déclarée</Pill>
           )}
+          {/* J6 scope 5 — replay coverage: distinct member viewers / active members.
+              Only a held (published) session carries a real replay (viewerCount !== null). */}
+          {cell.viewerCount !== null ? (
+            <Pill tone="mute">
+              <Eye className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+              <span
+                data-slot="seance-viewers"
+                data-viewer-count={cell.viewerCount}
+                title={`Vu par ${cell.viewerCount} membre${cell.viewerCount > 1 ? 's' : ''} sur ${memberCount}`}
+              >
+                Vu par {cell.viewerCount}/{memberCount}
+              </span>
+            </Pill>
+          ) : null}
         </div>
       </div>
 

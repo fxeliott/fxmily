@@ -154,6 +154,9 @@ export const NOTIFICATION_TYPES = [
   // J2 — fires when the member's weekly adaptive calendar is published.
   // Deep-link /calendrier, calm and non-urgent.
   'calendar_ready',
+  // J6 (admin-scale, scope 6) — member's asynchronous RGPD export (JSON + photos)
+  // is ready to download. Deep-link /account/data, calm and non-urgent.
+  'data_export_ready',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];
 

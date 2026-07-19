@@ -8,6 +8,7 @@ import {
   HeartPulse,
   Inbox,
   Library,
+  NotebookPen,
   Settings,
   Users,
   type LucideIcon,
@@ -133,6 +134,12 @@ export default async function AdminHubPage() {
               ) : null}
             </div>
           }
+        />
+        <HubCard
+          href="/admin/reflections"
+          icon={NotebookPen}
+          label="Réflexions"
+          description="Le journal ABCD des membres, du plus récent au plus ancien. Lecture seule."
         />
         <HubCard
           href="/admin/cards"

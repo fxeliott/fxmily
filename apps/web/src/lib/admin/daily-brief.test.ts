@@ -26,7 +26,13 @@ vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn() }));
 vi.mock('@/lib/observability', () => ({ reportWarning: vi.fn() }));
 vi.mock('@/lib/email/send', () => ({ sendAdminDailyBriefEmail: sendMock }));
 vi.mock('@/lib/env', () => ({ env: envMock }));
-vi.mock('./attention-service', () => ({ getTriageQueueCounts: triageMock }));
+// Spread the REAL module so the single-sourced disengagement predicate
+// (`DISENGAGED_AFTER_MS` + `disengagedMembersWhere`) flows through the brief
+// unchanged — only `getTriageQueueCounts` is stubbed (it has its own test).
+vi.mock('./attention-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./attention-service')>();
+  return { ...actual, getTriageQueueCounts: triageMock };
+});
 
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';

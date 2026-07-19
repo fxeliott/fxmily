@@ -283,7 +283,7 @@ describe('unsubscribePushInputSchema', () => {
 });
 
 describe('NOTIFICATION_TYPES const', () => {
-  it('contains exactly the 13 notification categories', () => {
+  it('contains exactly the 14 notification categories', () => {
     expect(NOTIFICATION_TYPES).toEqual([
       'annotation_received',
       'training_annotation_received',
@@ -298,13 +298,14 @@ describe('NOTIFICATION_TYPES const', () => {
       'training_reply_received',
       'weekly_review_reminder',
       'calendar_ready',
+      'data_export_ready',
     ]);
   });
 
   it('is readonly (typed as `as const`)', () => {
     // Compile-time assertion mirror via TS — we just sanity-check the runtime
     // value is frozen-equivalent (cannot mutate without a cast).
-    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 13).toBe(true);
+    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 14).toBe(true);
   });
 
   // ── S3 re-challenge — drift firewall ──────────────────────────────────────

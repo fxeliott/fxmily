@@ -150,6 +150,17 @@ export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
     'Admin moderation decisions about the member (suspend/reinstate + motif): controller-internal, not member self-service portability.',
   moderationActionsTaken:
     'Moderation actions AUTHORED by an admin: only an admin is ever the actor, never a member.',
+  // J6 scope 5 — per-member "opened this replay" UI telemetry. Observed
+  // interaction analytics (not content the member provided), same class as
+  // `moderationEvents`: out of scope for the automated art.20 self-service
+  // export; still available via a manual art.15 access request.
+  replayViews:
+    'Replay-open UI telemetry (observed interaction analytics, not provided content); available via a manual art.15 access request.',
+  // J6 scope 6 — the member's OWN async-export job rows (status/result key).
+  // Operational bookkeeping ABOUT the export mechanism, not member content — the
+  // downloadable archive is the artifact, the job row is transient infra state.
+  dataExportJobs:
+    'Async-export job bookkeeping (status/result key of the export itself): operational infra state, not portable member content.',
 } as const;
 
 export interface UserDataExport {

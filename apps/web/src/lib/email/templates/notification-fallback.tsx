@@ -201,6 +201,14 @@ const META_BY_TYPE: Record<
     body: 'Ton calendrier de la semaine vient d’être publié.',
     ctaLabel: 'Voir mon calendrier →',
   },
+  // J6 (admin-scale, scope 6) — asynchronous RGPD export (JSON + photos) ready.
+  data_export_ready: {
+    title: 'Ton export de données est prêt',
+    preview: 'Ton archive (données + photos) est prête à télécharger.',
+    eyebrow: 'RGPD · EXPORT',
+    body: 'Ton export complet (toutes tes données + tes photos) a été préparé. Il t’attend, prêt à télécharger, sur ta page « Mes données ».',
+    ctaLabel: 'Télécharger mon export →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

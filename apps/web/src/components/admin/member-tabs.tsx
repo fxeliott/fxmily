@@ -11,6 +11,7 @@ export type MemberTabKey =
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'reflections'
   | 'calendar'
   | 'profile'
   | 'trajectoire'
@@ -47,6 +48,9 @@ const TABS: readonly TabDefinition[] = [
   { key: 'weekly-reports', label: 'Rapports IA' },
   { key: 'monthly-debrief', label: 'Débrief mensuel' },
   { key: 'mindset', label: 'Mindset' },
+  // J6-admin-scale item 4 — admin read-only view of the member's REFLECT entries
+  // (CBT Ellis ABCD daily reflections). Lecture seule, ton privé. Carbone §7.7.
+  { key: 'reflections', label: 'Réflexions' },
   // §26 J-C4 — admin read-only view of the member's latest AdaptiveCalendar
   // (post-J-C1/J-C2/J-C3 LIVE). Carbone pattern §7.7 admin-only read-only.
   { key: 'calendar', label: 'Calendrier' },

@@ -25,6 +25,7 @@ import {
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
 import { MemberMonthlyDebriefsPanel } from '@/components/admin/member-monthly-debriefs-panel';
 import { MemberMindsetChecksPanel } from '@/components/admin/member-mindset-checks-panel';
+import { MemberReflectionsPanel } from '@/components/admin/member-reflections-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
@@ -46,6 +47,7 @@ import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { countUnseenAnnotationsByMember } from '@/lib/admin/annotations-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
+import { listReflectionsForMemberAsAdmin } from '@/lib/admin/reflections-service';
 import { getMembersAttention, isMemberDisengaged } from '@/lib/admin/attention-service';
 import { MemberSynthesisBanner } from '@/components/admin/member-synthesis-banner';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
@@ -109,6 +111,7 @@ function parseTab(
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'reflections'
   | 'calendar'
   | 'profile'
   | 'trajectoire'
@@ -126,6 +129,7 @@ function parseTab(
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
   if (value === 'mindset') return 'mindset';
+  if (value === 'reflections') return 'reflections';
   if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
   if (value === 'trajectoire') return 'trajectoire';
@@ -290,6 +294,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ? await loadMindsetDashboardData(memberId, currentParisWeekStart(), 52)
       : null;
 
+  // J6-admin-scale item 4 — read-only per-member REFLECT feed for the
+  // reflections tab (SPEC §21.6 "vue admin des réflexions", lecture seule, ton
+  // privé). Newest-first, capped at 50 (admin-only, not a hot path). Read
+  // straight from `reflection_entries` via the admin service (bypass-ownership,
+  // never a real-edge recompute). The ABCD text is surfaced verbatim for the
+  // admin to read, but this view lives ONLY under `/admin/*` and is never
+  // emailed / notified; the audit metadata carries ids + counts, never the text.
+  const reflectionsData =
+    tab === 'reflections' ? await listReflectionsForMemberAsAdmin(memberId, { limit: 50 }) : null;
+
   const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
 
   // V2.4 Phase C — read-only MemberProfile for the admin profile tab (M3
@@ -402,6 +416,19 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     userId: session.user.id,
     metadata: { memberId, tab },
   });
+
+  // J6-admin-scale item 4 — dedicated PII-FREE trace when an admin opens a
+  // member's private REFLECT journal. Metadata carries ids + count ONLY, NEVER
+  // the reflection text (SPEC §21.6 confidentialité). Emitted in addition to the
+  // generic `admin.member.viewed` above so the sensitive-surface access is
+  // filterable on its own slug.
+  if (tab === 'reflections' && reflectionsData !== null) {
+    await logAudit({
+      action: 'admin.member.reflections.viewed',
+      userId: session.user.id,
+      metadata: { memberId, count: reflectionsData.items.length },
+    });
+  }
 
   // Generate avatar initials + deterministic hue from email hash
   const initials =
@@ -626,6 +653,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'mindset' && mindsetData !== null ? (
         <MemberMindsetChecksPanel data={mindsetData} />
+      ) : null}
+      {tab === 'reflections' && reflectionsData !== null ? (
+        <MemberReflectionsPanel entries={reflectionsData.items} />
       ) : null}
       {tab === 'calendar' ? <MemberCalendarPanel calendar={calendar} /> : null}
       {tab === 'profile' && profileData !== null ? (

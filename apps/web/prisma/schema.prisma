@@ -2085,6 +2085,9 @@ model ReflectionEntry {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, date(sort: Desc)])
+  // J6-admin-scale item 4 — backs the cross-member admin feed
+  // (`/admin/reflections`, `listReflectionsForAdmin`) which orders on createdAt.
+  @@index([createdAt(sort: Desc)])
   @@map("reflection_entries")
 }
 

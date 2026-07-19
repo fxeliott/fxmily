@@ -60,6 +60,12 @@ export type AuditAction =
   // PII-free: metadata carries only `{memberId, eventId}`.
   | 'admin.member.avatar_removed'
   | 'admin.trade.viewed'
+  // J6-admin-scale item 4 — admin READ-ONLY view of member reflections
+  // (`ReflectionEntry`, CBT Ellis ABCD). PII-FREE: metadata carries only
+  // `{memberId?, cursor?, count}` — NEVER the reflection text (the ABCD content
+  // is a private journal; this view lives only under `/admin/*`, never emailed).
+  | 'admin.reflections.listed'
+  | 'admin.member.reflections.viewed'
   // J4 — annotation workflow
   | 'admin.annotation.created'
   | 'admin.annotation.deleted'

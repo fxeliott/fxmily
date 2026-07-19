@@ -2,6 +2,7 @@ import { ArrowLeft, CalendarX, Clock, FileText, LineChart } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { cache, type CSSProperties } from 'react';
 
 import { auth } from '@/auth';
@@ -14,6 +15,7 @@ import { ReplayPlayer } from '@/components/seances/replay-player';
 import { SeancesDisclaimer } from '@/components/seances/seances-disclaimer';
 import { SessionChoreography } from '@/components/seances/session-choreography';
 import type { SeanceSlot } from '@/lib/seances/derive';
+import { recordReplayView } from '@/lib/seances/replay-views';
 import { getSeanceByDateSlot } from '@/lib/seances/service';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +49,24 @@ export default async function SeancePage({ params }: SeancePageProps) {
 
   const seance = await loadSeance(date, slot);
   if (!seance) notFound();
+
+  // J6 scope 5 — replay VIEW telemetry. Record that this MEMBER opened the
+  // replay so the admin "Vu par X/N" coverage badge can count real viewers.
+  // Guards: only a role='member' own-view (admins previewing the page are NOT
+  // counted), and only a published (non-cancelled) séance is a real replay.
+  // Runs AFTER the response (`after`) and is wrapped in try/catch so a
+  // telemetry write can never delay or break the reader's page.
+  if (session.user.role === 'member' && seance.status !== 'cancelled') {
+    const viewerId = session.user.id;
+    const sessionId = seance.id;
+    after(async () => {
+      try {
+        await recordReplayView(viewerId, sessionId);
+      } catch {
+        // Best-effort telemetry — swallow; never surface to the reader.
+      }
+    });
+  }
 
   const SlotIcon = seance.slot === 'analyse' ? LineChart : FileText;
   // Eyebrow TEXT colour — must stay ≥4.5:1 in both themes. debrief uses

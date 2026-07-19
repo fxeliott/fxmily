@@ -35,7 +35,7 @@ export default async function AdminSeancesPage() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const { stats, days, latestMessages } = await listSeancesForAdmin();
+  const { stats, days, latestMessages, activeMemberCount } = await listSeancesForAdmin();
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -114,7 +114,7 @@ export default async function AdminSeancesPage() {
                     key={`${cell.date}-${cell.slot}`}
                     data-seance-cell={`${cell.date}#${cell.slot}`}
                   >
-                    <SeanceAdminCell cell={cell} />
+                    <SeanceAdminCell cell={cell} memberCount={activeMemberCount} />
                   </li>
                 ))}
               </ul>

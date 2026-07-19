@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { safeFreeText } from '@/lib/text/safe';
 
 import { deriveSeanceTitle, type SeanceSlot, type SeanceStatus } from './derive';
+import { activeMemberCount, countViewersForSessions } from './replay-views';
 import {
   ADMIN_SEANCE_HORIZON_DAYS,
   ADMIN_SEANCE_PAST_DAYS,
@@ -89,6 +90,12 @@ export interface AdminSeanceCell {
   isPast: boolean;
   /** False when no-rewind forbids reverting to "prévue" (status === 'done'). */
   canRevertToScheduled: boolean;
+  /**
+   * J6 scope 5 — distinct member viewers of this replay (the "Vu par X" of the
+   * "Vu par X/N" coverage badge). `null` for any non-`done`/undeclared cell (no
+   * published replay to open); `0` for a held session nobody has opened yet.
+   */
+  viewerCount: number | null;
   pipeline: AdminPipelineView;
 }
 
@@ -124,6 +131,13 @@ export interface AdminSeancesView {
   stats: AdminSeanceStats;
   days: AdminSeanceDay[];
   latestMessages: AdminLatestMessages | null;
+  /**
+   * J6 scope 5 — the denominator N of the "Vu par X/N" badge: active members
+   * excluding the showcase/demo account (consistent with the leaderboard).
+   * Cohort-wide, identical for every cell, so it is carried once at the view
+   * level and passed down to each cell.
+   */
+  activeMemberCount: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -137,6 +151,7 @@ function toLocalDate(date: Date): LocalDateString {
 const SLOT_ORDER: Record<SeanceSlot, number> = { analyse: 0, debrief: 1 };
 
 type SeanceRowForAdmin = {
+  id: string;
   date: Date;
   slot: string;
   status: string;
@@ -158,7 +173,11 @@ type SeanceRowForAdmin = {
   _count: { assets: number; messages: number };
 };
 
-function rowToCell(r: SeanceRowForAdmin, today: LocalDateString): AdminSeanceCell {
+function rowToCell(
+  r: SeanceRowForAdmin,
+  today: LocalDateString,
+  viewerCounts: Map<string, number>,
+): AdminSeanceCell {
   const date = toLocalDate(r.date);
   const slot = r.slot as SeanceSlot;
   const status = r.status as SeanceStatus;
@@ -187,6 +206,9 @@ function rowToCell(r: SeanceRowForAdmin, today: LocalDateString): AdminSeanceCel
     messageCount: r._count.messages,
     isPast: date < today,
     canRevertToScheduled: status !== 'done',
+    // "Vu par X" only for a held (published) session with a real replay; a
+    // scheduled/cancelled/undeclared cell has nothing to open → null.
+    viewerCount: status === 'done' ? (viewerCounts.get(r.id) ?? 0) : null,
     pipeline: {
       steps: pipeline.steps,
       badge: pipeline.badge,
@@ -229,6 +251,8 @@ function placeholderCell(
     messageCount: 0,
     isPast: date < today,
     canRevertToScheduled: true,
+    // Undeclared placeholder → no session, nothing to view.
+    viewerCount: null,
     pipeline: {
       steps: pipeline.steps,
       badge: pipeline.badge,
@@ -258,6 +282,7 @@ export async function listSeancesForAdmin(now: Date = new Date()): Promise<Admin
     where: { date: { gte: fromDate, lte: toDate } },
     orderBy: [{ date: 'desc' }, { slot: 'asc' }],
     select: {
+      id: true,
       date: true,
       slot: true,
       status: true,
@@ -280,11 +305,20 @@ export async function listSeancesForAdmin(now: Date = new Date()): Promise<Admin
     },
   });
 
+  // J6 scope 5 — "Vu par X/N" coverage. Count distinct viewers for the held
+  // (published) sessions in ONE batched groupBy (no N+1), and the cohort-wide
+  // active-member denominator once. Only `done` sessions carry a real replay.
+  const doneIds = rows.filter((r) => r.status === 'done').map((r) => r.id);
+  const [viewerCounts, memberCount] = await Promise.all([
+    countViewersForSessions(doneIds),
+    activeMemberCount(),
+  ]);
+
   const byKey = new Map<string, AdminSeanceCell>();
   const key = (date: string, slot: string): string => `${date}#${slot}`;
 
   for (const r of rows) {
-    const cell = rowToCell(r, today);
+    const cell = rowToCell(r, today, viewerCounts);
     byKey.set(key(cell.date, cell.slot), cell);
   }
 
@@ -320,7 +354,7 @@ export async function listSeancesForAdmin(now: Date = new Date()): Promise<Admin
 
   const latestMessages = await getLatestDoneSessionMessages();
 
-  return { stats, days, latestMessages };
+  return { stats, days, latestMessages, activeMemberCount: memberCount };
 }
 
 /** FR "lundi 29 juin 2026" from a YYYY-MM-DD (UTC-pinned, no tz drift). */

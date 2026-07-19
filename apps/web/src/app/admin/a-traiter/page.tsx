@@ -51,6 +51,16 @@ function parseCursor(value: string | undefined): string | undefined {
   return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
 }
 
+/** The « décrochage » cursor is an OPAQUE composite token (base64url of
+ *  `lastSeenAt|id`), NOT a bare cuid — `lastSeenAt` is mutable, so the keyset
+ *  boundary must travel WITH the cursor (see `listDisengagedMembers`). Validate
+ *  only the outer shape here (base64url charset + a length bound so a forged
+ *  param can't bloat the URL); the service decodes + fully validates and
+ *  degrades to page 1 on garbage. */
+function parseDmCursor(value: string | undefined): string | undefined {
+  return value && /^[A-Za-z0-9_-]{8,256}$/.test(value) ? value : undefined;
+}
+
 /** Build a « voir plus » href that advances ONE section's cursor while keeping
  *  the other sections on their current page. */
 function moreHref(
@@ -101,7 +111,7 @@ export default async function AtraiterPage({ searchParams }: AtraiterPageProps) 
     to: parseCursor(rawTo),
     ec: parseCursor(rawEc),
     sg: parseCursor(rawSg),
-    dm: parseCursor(rawDm),
+    dm: parseDmCursor(rawDm),
   };
 
   const [counts, uncommented, staleOpen, gaps, signals, disengaged] = await Promise.all([

@@ -721,32 +721,123 @@ describe('listDisengagedMembers', () => {
     ]);
   });
 
-  it('emits a nextCursor and trims the look-ahead row when a full page + 1 comes back', async () => {
+  it('emits a COMPOSITE nextCursor and trims the look-ahead row when a full page + 1 comes back', async () => {
     const rows = Array.from({ length: TRIAGE_PAGE_SIZE + 1 }, (_, i) => memberRow(`u${i}`));
     vi.mocked(db.user.findMany).mockResolvedValue(rows as never);
 
     const { items, nextCursor } = await listDisengagedMembers();
 
     expect(items).toHaveLength(TRIAGE_PAGE_SIZE);
-    expect(nextCursor).toBe(`u${TRIAGE_PAGE_SIZE - 1}`);
+    // nextCursor is the base64url composite `<lastSeenAt>|<id>` of the last
+    // VISIBLE row (index TRIAGE_PAGE_SIZE - 1), never the trimmed look-ahead row.
+    const lastId = `u${TRIAGE_PAGE_SIZE - 1}`;
+    const expected = Buffer.from(`2026-07-01T09:00:00.000Z|${lastId}`, 'utf8').toString(
+      'base64url',
+    );
+    expect(nextCursor).toBe(expected);
     expect(firstArg(db.user.findMany).take).toBe(TRIAGE_PAGE_SIZE + 1);
   });
 
-  it('applies a valid cursor as a skip-1 seek and ignores a forged one', async () => {
+  it('applies a valid composite cursor as a manual keyset seek (no Prisma cursor/skip)', async () => {
     vi.mocked(db.user.findMany).mockResolvedValue([] as never);
 
-    const validCursor = 'a'.repeat(25);
-    await listDisengagedMembers({ cursor: validCursor });
-    expect(firstArg(db.user.findMany)).toMatchObject({
-      cursor: { id: validCursor },
-      skip: 1,
-    });
+    const t1 = new Date('2026-07-01T09:00:00.000Z');
+    const id = 'a'.repeat(25);
+    const token = Buffer.from(`${t1.toISOString()}|${id}`, 'utf8').toString('base64url');
 
+    await listDisengagedMembers({ cursor: token });
+
+    const arg = firstArg(db.user.findMany);
+    // No Prisma `cursor`/`skip` seek — the boundary is a hand-built keyset so it
+    // can't drift when the cursor member's mutable lastSeenAt is rewritten.
+    expect(arg.cursor).toBeUndefined();
+    expect(arg.skip).toBeUndefined();
+    const and = (arg.where as { AND: Record<string, unknown>[] }).AND;
+    // and[0] is still the SHARED single-sourced predicate; and[1] is the frozen
+    // keyset built from the captured (t1, id).
+    const floor = (
+      (and[0]?.OR as { lastSeenAt: { lt: Date } }[])[0] as { lastSeenAt: { lt: Date } }
+    ).lastSeenAt.lt;
+    expect(and[0]).toEqual(disengagedMembersWhere(floor));
+    expect(and[1]).toEqual({
+      OR: [{ lastSeenAt: { gt: t1 } }, { lastSeenAt: t1, id: { gt: id } }],
+    });
+  });
+
+  it('freezes the keyset boundary at the cursor token, ignoring the member’s live lastSeenAt', async () => {
+    // Page 1: a full look-ahead page whose LAST visible row is (t1, lastId).
+    const t1 = new Date('2026-07-02T09:00:00.000Z');
+    const lastId = 'b'.repeat(25);
+    const page1 = Array.from({ length: TRIAGE_PAGE_SIZE + 1 }, (_, i) =>
+      memberRow(i === TRIAGE_PAGE_SIZE - 1 ? lastId : `u${i}`, {
+        lastSeenAt: i === TRIAGE_PAGE_SIZE - 1 ? t1 : new Date('2026-06-20T09:00:00Z'),
+      }),
+    );
+    vi.mocked(db.user.findMany).mockResolvedValueOnce(page1 as never);
+
+    const { nextCursor } = await listDisengagedMembers();
+    expect(nextCursor).not.toBeNull();
+
+    // The cursor member now LOGS BACK IN — their lastSeenAt jumps far past the
+    // floor. A Prisma `cursor:{id},skip:1` seek would re-read that NEW value and
+    // shove the page-2 boundary forward, silently skipping members in between.
+    // The composite cursor must rebuild the boundary from the TOKEN, not the row.
     vi.mocked(db.user.findMany).mockClear();
-    await listDisengagedMembers({ cursor: 'not-a-cuid!' });
+    vi.mocked(db.user.findMany).mockResolvedValueOnce([] as never);
+    await listDisengagedMembers({ cursor: nextCursor! });
+
     const arg = firstArg(db.user.findMany);
     expect(arg.cursor).toBeUndefined();
     expect(arg.skip).toBeUndefined();
+    const and = (arg.where as { AND: Record<string, unknown>[] }).AND;
+    // Boundary still keyed on t1 (captured at page 1), NOT any later value.
+    expect(and[1]).toEqual({
+      OR: [{ lastSeenAt: { gt: t1 } }, { lastSeenAt: t1, id: { gt: lastId } }],
+    });
+  });
+
+  it('advances within the NULLS-FIRST bucket when the cursor member was never seen', async () => {
+    const lastId = 'c'.repeat(25);
+    const page1 = Array.from({ length: TRIAGE_PAGE_SIZE + 1 }, (_, i) =>
+      memberRow(i === TRIAGE_PAGE_SIZE - 1 ? lastId : `u${i}`, { lastSeenAt: null }),
+    );
+    vi.mocked(db.user.findMany).mockResolvedValueOnce(page1 as never);
+
+    const { nextCursor } = await listDisengagedMembers();
+    expect(nextCursor).not.toBeNull();
+
+    vi.mocked(db.user.findMany).mockClear();
+    vi.mocked(db.user.findMany).mockResolvedValueOnce([] as never);
+    await listDisengagedMembers({ cursor: nextCursor! });
+
+    const and = (firstArg(db.user.findMany).where as { AND: Record<string, unknown>[] }).AND;
+    // A null-bucket cursor advances by id inside the null bucket, then admits
+    // EVERY non-null row (they all sort after the nulls).
+    expect(and[1]).toEqual({
+      OR: [{ lastSeenAt: null, id: { gt: lastId } }, { lastSeenAt: { not: null } }],
+    });
+  });
+
+  it('degrades a forged / malformed cursor to page 1 (plain predicate, no keyset)', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([] as never);
+
+    const cuid = 'a'.repeat(25);
+    const forged = [
+      '', // empty
+      Buffer.from('nopipe', 'utf8').toString('base64url'), // decodes, but has no `|`
+      Buffer.from(`2026-07-01T09:00:00.000Z|short`, 'utf8').toString('base64url'), // id too short
+      Buffer.from(`2026-07-01|${cuid}`, 'utf8').toString('base64url'), // non-canonical (date-only) stamp
+    ];
+
+    for (const cursor of forged) {
+      vi.mocked(db.user.findMany).mockClear();
+      await listDisengagedMembers({ cursor });
+      const arg = firstArg(db.user.findMany);
+      expect(arg.cursor).toBeUndefined();
+      expect(arg.skip).toBeUndefined();
+      // Page 1 = the shared predicate ALONE, never wrapped in a keyset AND.
+      expect(arg.where).not.toHaveProperty('AND');
+    }
   });
 
   it('falls back to the email when the member has no name', async () => {

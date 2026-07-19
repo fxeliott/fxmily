@@ -186,6 +186,11 @@ enum NotificationType {
   /// one calendar per member per week (idempotency skip), so the enqueue is a
   /// plain insert (that publication hook is the once-per-week guard; no dedup).
   calendar_ready
+  /// J6 (scope 6) — the member's asynchronous personal-data export (RGPD
+  /// portability) has finished processing and the archive is ready to download
+  /// from `/account/data`. Enqueued once per `DataExportJob` that reaches the
+  /// `ready` status. Push if installed, else email fallback. PII-free payload.
+  data_export_ready
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -503,6 +508,12 @@ model User {
   // mirrors the AccessRequest reviewer + AuditLog user relations).
   moderationEvents              MemberModerationEvent[]        @relation("MemberModerationTarget")
   moderationActionsTaken        MemberModerationEvent[]        @relation("MemberModerationActor")
+  // J6 (scope 5) — replay-session view records ("Vu par X/N"). Cascade on User
+  // delete (RGPD §17, schema-wide invariant).
+  replayViews                   ReplayView[]
+  // J6 (scope 6) — asynchronous RGPD personal-data export jobs. Cascade on User
+  // delete (RGPD §17, schema-wide invariant).
+  dataExportJobs                DataExportJob[]
 
   @@index([status])
   @@index([role])
@@ -3736,6 +3747,8 @@ model ReplaySession {
 
   assets   ReplayAsset[]
   messages ReplayMessage[]
+  /// J6 (scope 5) — per-member view records for the "Vu par X/N" admin surface.
+  views    ReplayView[]
 
   /// One analyse + one debrief per civil day (idempotent pipeline upsert key,
   /// mirror Meeting `@@unique(date, slot)`). Doubles as the hub listing filter.
@@ -3807,6 +3820,76 @@ model ReplayMessage {
   /// Ordered copy list in the admin.
   @@index([sessionId, position])
   @@map("replay_messages")
+}
+
+/// J6 (scope 5) — one row per (session, member) recording that a member has
+/// opened a replay session at least once. Powers the admin "Vu par X/N"
+/// coverage badge on the séance list. `firstViewedAt` pins the first open,
+/// `lastViewedAt` refreshes on each re-open, `viewCount` counts opens.
+/// Cascade on both sides (RGPD §17: a purged member or deleted session leaves
+/// no orphan view rows).
+model ReplayView {
+  id String @id @default(cuid())
+
+  sessionId String        @map("session_id")
+  session   ReplaySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// First time this member opened the replay (immutable anchor).
+  firstViewedAt DateTime @default(now()) @map("first_viewed_at")
+  /// Refreshed on each subsequent open (freshness / "last seen").
+  lastViewedAt  DateTime @updatedAt @map("last_viewed_at")
+  /// Number of opens by this member (starts at 1 on first view).
+  viewCount     Int      @default(1) @map("view_count")
+
+  /// One view row per member per session (idempotent upsert on re-open).
+  @@unique([sessionId, userId])
+  /// "Vu par X/N" aggregation: count/list viewers of a session.
+  @@index([sessionId])
+  @@map("replay_views")
+}
+
+/// J6 (scope 6) — lifecycle status of an asynchronous RGPD personal-data
+/// export job. `pending` (queued) → `processing` (worker building the archive)
+/// → `ready` (archive available at `resultKey`) or `failed` (see `error`).
+enum DataExportStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
+/// J6 (scope 6) — an asynchronous personal-data export request (RGPD
+/// portability). Decouples the archive build from the request so a large export
+/// never blocks the route handler: the member enqueues a job, a worker fills
+/// `resultKey` (storage key of the built archive) and flips `status` to
+/// `ready`, then a `data_export_ready` notification is enqueued. Cascade on
+/// User delete (RGPD §17, schema-wide invariant).
+model DataExportJob {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status DataExportStatus @default(pending)
+
+  /// Storage key of the built archive once `status = ready` (null otherwise).
+  resultKey String? @map("result_key")
+  /// Diagnostic message when `status = failed` (null otherwise; never a secret).
+  error     String?
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  /// Terminal timestamp (set when the job reaches `ready` or `failed`).
+  completedAt DateTime? @map("completed_at")
+
+  /// A member's export history / their latest job.
+  @@index([userId])
+  /// Worker queue scan by lifecycle status.
+  @@index([status])
+  @@map("data_export_jobs")
 }
 
 /// J2 — Resend webhook event log (bounce / complaint / delivery / …).

@@ -99,6 +99,18 @@ export class LocalStorageAdapter implements StorageAdapter {
 }
 
 /**
+ * J6 (admin-scale, scope 6) — resolve the on-disk absolute path for a storage
+ * key WITHOUT opening it. Used by the async RGPD export archiver, which streams
+ * local files into the zip via `archive.file(path)` (lazy, one FD at a time).
+ * Reuses the same path-traversal hardening as every read (`safePathFor` →
+ * `parseStorageKey` + root-containment), so a malformed key throws rather than
+ * escaping the upload root.
+ */
+export function localUploadPathFor(key: string): string {
+  return safePathFor(key);
+}
+
+/**
  * Open a read stream on a local key. Used by the GET route handler.
  * Throws `StorageError('not_found')` on missing files. Accepts trade,
  * annotation and training keys — the prefix is validated by `parseStorageKey`.

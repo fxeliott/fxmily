@@ -217,6 +217,12 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   // its `(date, slot)` key itself.
   await db.replayView.deleteMany({ where: { userId: { in: ids } } });
 
+  // J6 scope 6 — DataExportJob (async RGPD export job rows). ON DELETE CASCADE
+  // on User; deleted explicitly BEFORE the User wipe for log-visibility (same
+  // canon as ReplayView/LeaderboardSnapshot above). The zip artefact on the
+  // uploads volume is NOT touched here — the archive test cleans its own file.
+  await db.dataExportJob.deleteMany({ where: { userId: { in: ids } } });
+
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };
 }

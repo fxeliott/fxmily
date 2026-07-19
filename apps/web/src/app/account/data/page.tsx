@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { ExportDataButton } from '@/components/account/export-data-button';
+import { RequestExportPanel, type ExportJobView } from '@/components/account/request-export-panel';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Code } from '@/components/ui/code';
@@ -103,6 +104,17 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     db.constancyScore.count({ where: { memberId: userId } }),
     db.alert.count({ where: { memberId: userId } }),
   ]);
+
+  // J6 scope 6 — latest asynchronous export job (JSON + photos, built
+  // off-request). Drives the `<RequestExportPanel>` status + download link.
+  const latestJob = await db.dataExportJob.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, status: true },
+  });
+  const exportJob: ExportJobView | null = latestJob
+    ? { id: latestJob.id, status: latestJob.status }
+    : null;
 
   const sections: Array<{ label: string; count: number; description: string }> = [
     {
@@ -273,7 +285,16 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
             ))}
           </ul>
 
-          <form action="/api/account/data/export" method="POST" className="mt-6">
+          {/* J6 scope 6 — full archive (data + photos), built off-request. */}
+          <div className="mt-6 border-t border-[var(--b-subtle)] pt-6">
+            <RequestExportPanel job={exportJob} />
+          </div>
+
+          {/* Secondary: the instant JSON-only download (no photos, no wait). */}
+          <form action="/api/account/data/export" method="POST" className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[var(--t-2)]">
+              Ou, tout de suite : juste le <Code>JSON</Code> (sans les photos).
+            </p>
             <ExportDataButton />
             <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />

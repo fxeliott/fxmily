@@ -902,3 +902,62 @@ export async function enqueueWeeklyReviewReminderNotification(
     return null;
   }
 }
+
+export interface DataExportReadyPayload {
+  /** The `DataExportJob` whose zip is ready — deep-links `/account/data`. */
+  jobId: string;
+  /** Archive size in bytes (drives no copy; PII-free telemetry only). */
+  byteSize: number;
+  /** How many media files made it into the zip (PII-free count). */
+  mediaCount: number;
+}
+
+/**
+ * J6 (admin-scale, scope 6) — notify a member their asynchronous RGPD export
+ * (JSON + photos) is ready to download. Fired by `runDataExportJob` once the zip
+ * is flushed to disk. Deep-links `/account/data` where the download appears.
+ *
+ * PII-FREE (§16): the payload carries only the opaque jobId + counts — never a
+ * filename, media key, or any row content. Best-effort: returns the row id, or
+ * null if the write failed (logged, never thrown — a queue hiccup must not roll
+ * back a completed export).
+ */
+export async function enqueueDataExportReadyNotification(
+  recipientUserId: string,
+  payload: DataExportReadyPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'data_export_ready',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'data_export_ready',
+          jobId: payload.jobId,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort: return
+    // null so a queue hiccup never rolls back a completed export.
+    reportWarning('data-export-ready.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}

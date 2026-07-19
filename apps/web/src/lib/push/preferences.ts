@@ -44,6 +44,7 @@ export async function getEffectivePreferences(userId: string): Promise<Effective
     training_reply_received: true,
     weekly_review_reminder: true,
     calendar_ready: true,
+    data_export_ready: true,
   };
 
   for (const row of rows) {

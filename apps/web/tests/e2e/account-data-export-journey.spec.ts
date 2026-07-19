@@ -142,6 +142,13 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     expect(Object.keys(entries)).toContain('data.json');
     const snapshot = JSON.parse(new TextDecoder().decode(entries['data.json']!));
     expect(snapshot).toBeTruthy();
+
+    // The button now saves the archive CLIENT-SIDE (fetch → blob), so a
+    // pruned/forbidden archive can never dump raw JSON at the member. Prove the
+    // real browser click yields a genuine download event, not a navigation.
+    const [dl] = await Promise.all([page.waitForEvent('download'), download.click()]);
+    expect(dl.suggestedFilename()).toMatch(/^fxmily-export-.+\.zip$/);
+    await expect(page).toHaveURL(/\/account\/data$/);
   });
 
   test('B — a member cannot download another member’s export (BOLA → 404)', async ({
@@ -169,5 +176,40 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     // so even a well-formed id gets 401 — never a file, never a status leak.
     const res = await request.get('/api/account/data/export/anon0000export0000test0000');
     expect(res.status()).toBe(401);
+  });
+
+  test('D — a pruned archive shows a clean in-panel message, never a raw JSON dump', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000);
+
+    // Reach a genuinely ready export the SAME way a member does (mirrors A) — a
+    // fresh seat, request in the UI, wait for the real download link. Reaching
+    // "ready" via the client poll (not a fresh SSR of an already-ready page)
+    // keeps a single download node on the page, so the click is unambiguous.
+    const memberD = await seedMemberUser({ firstName: 'ExportMemberD' });
+    await page.goto('/login');
+    await loginAs(page, request, memberD.email, memberD.password);
+    await page.goto('/account/data');
+    await page.getByRole('button', { name: 'Préparer mon export complet' }).click();
+
+    const download = page.getByTestId('download-export-zip');
+    await expect(download).toBeVisible({ timeout: 90_000 });
+    const href = await download.getAttribute('href');
+    const jobId = href!.split('/').pop()!;
+    createdJobIds.push(jobId);
+
+    // Simulate the retention / TTL sweep firing AFTER the link was rendered: the
+    // zip is gone from the volume but the job row still says "ready" → the route
+    // now returns 410 (export_not_found), the exact P3 scenario.
+    await fs.rm(exportZipPath(jobId), { force: true });
+
+    // Clicking fetches → 410 → the client shows factual FR copy in the panel and
+    // does NOT navigate to the API URL (no raw JSON body at the member). Filter
+    // past the empty Next route-announcer (`role="alert"`) to the panel's alert.
+    await download.click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Ce lien a expiré' })).toBeVisible();
+    await expect(page).toHaveURL(/\/account\/data$/);
   });
 });

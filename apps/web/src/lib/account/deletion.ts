@@ -493,7 +493,17 @@ export async function purgeMaterialisedDeletions(
         select: { id: true },
       });
       for (const job of exportJobs) {
-        await removeExportZip(job.id);
+        if (!(await removeExportZip(job.id))) {
+          // Align with the proof/training/trade/avatar sweeps above: a failed
+          // delete of the FULL-PII export zip must be observable, never swallowed.
+          // The user row is hard-deleted regardless (below), so a stranded zip
+          // would otherwise be an INVISIBLE orphaned PII dump after erasure —
+          // exactly the art.17 gap the sibling sweeps route to Sentry.
+          reportWarning('account.deletion.purge', 'storage_sweep_failed', {
+            userId: u.id,
+            kind: 'export',
+          });
+        }
       }
 
       await db.user.delete({ where: { id: u.id } });

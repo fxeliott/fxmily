@@ -594,6 +594,25 @@ describe('listRecentBehavioralSignals', () => {
     expect(items[0]?.id).toBe('a');
   });
 
+  it('returns an empty terminal page when a valid cursor member left the window', async () => {
+    // A well-formed cuid cursor (passes `isValidCursor`) whose member is no longer
+    // in the recalculated 7-day window — their last signal aged past the floor, or
+    // they were deleted, between two « voir plus » clicks. `findIndex` → -1 must
+    // yield an empty terminal page, NOT a silent reset to page 1 that would
+    // re-serve (and duplicate) every member above the vanished cursor.
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([
+      deliveryRow('Sur-trading détecté', '2026-07-06T10:00:00Z', MEMBER_A),
+      deliveryRow('Constance en baisse', '2026-07-05T09:00:00Z', MEMBER_B),
+    ] as never);
+
+    const { items, nextCursor } = await listRecentBehavioralSignals({
+      cursor: 'clhgone0000000000000000',
+    });
+
+    expect(items).toHaveLength(0);
+    expect(nextCursor).toBeNull();
+  });
+
   it('returns an empty page when no signals fired in the window', async () => {
     vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
     const { items, nextCursor } = await listRecentBehavioralSignals();

@@ -232,26 +232,63 @@ describe('export lifecycle helpers (reaper + retention + zip removal)', () => {
     expect(await removeExportZip('missing999')).toBe(true);
   });
 
-  it('reapStaleExportJobs flips only sufficiently-old pending/processing jobs to failed', async () => {
+  it('reapStaleExportJobs flips old pending/processing jobs to failed AND reclaims their stranded zips', async () => {
     const now = new Date('2026-07-19T12:00:00.000Z');
-    vi.mocked(db.dataExportJob.updateMany).mockResolvedValueOnce({ count: 2 } as never);
+    // Two zombies, each with a half-written zip a dead build left on the volume.
+    const z1 = path.join(exportsDir, 'zombie001.zip');
+    const z2 = path.join(exportsDir, 'zombie002.zip');
+    await fs.writeFile(z1, new Uint8Array([1]));
+    await fs.writeFile(z2, new Uint8Array([2]));
+    vi.mocked(db.dataExportJob.findMany).mockResolvedValueOnce([
+      { id: 'zombie001' },
+      { id: 'zombie002' },
+    ] as never);
+    // Each guarded flip matches (the job is still pending/processing).
+    vi.mocked(db.dataExportJob.updateMany).mockResolvedValue({ count: 1 } as never);
 
     const reaped = await reapStaleExportJobs(USER_ID, now);
     expect(reaped).toBe(2);
 
-    const args = vi.mocked(db.dataExportJob.updateMany).mock.calls.at(-1)?.[0] as {
+    // The stale-window query is scoped to this user + status + exactly `now - STALE`.
+    const findArgs = vi.mocked(db.dataExportJob.findMany).mock.calls.at(-1)?.[0] as {
       where: { userId: string; status: { in: string[] }; createdAt: { lt: Date } };
+    };
+    expect(findArgs.where.userId).toBe(USER_ID);
+    expect(findArgs.where.status).toEqual({ in: ['pending', 'processing'] });
+    expect(findArgs.where.createdAt.lt.getTime()).toBe(now.getTime() - STALE_EXPORT_JOB_MS);
+
+    // Each per-id flip is status-guarded so it can never clobber a job that just
+    // became `ready` in the read→flip window.
+    const flip = vi.mocked(db.dataExportJob.updateMany).mock.calls.at(-1)?.[0] as {
+      where: { id: string; status: { in: string[] } };
       data: { status: string };
     };
-    expect(args.where.userId).toBe(USER_ID);
-    expect(args.where.status).toEqual({ in: ['pending', 'processing'] });
-    // Threshold is exactly `now - STALE_EXPORT_JOB_MS` — a fresher job is spared.
-    expect(args.where.createdAt.lt.getTime()).toBe(now.getTime() - STALE_EXPORT_JOB_MS);
-    expect(args.data.status).toBe('failed');
+    expect(flip.where.status).toEqual({ in: ['pending', 'processing'] });
+    expect(flip.data.status).toBe('failed');
+
+    // Both stranded full-PII zips are physically reclaimed.
+    await expect(fs.access(z1)).rejects.toThrow();
+    await expect(fs.access(z2)).rejects.toThrow();
+  });
+
+  it('reapStaleExportJobs does NOT delete the zip of a job that became ready mid-reap (race-safe)', async () => {
+    const now = new Date('2026-07-19T12:00:00.000Z');
+    // A row that looked stale on read but actually completed before the flip: its
+    // zip is a VALID ready archive and must survive.
+    const readyZip = path.join(exportsDir, 'racejob005.zip');
+    await fs.writeFile(readyZip, new Uint8Array([5, 5, 5]));
+    vi.mocked(db.dataExportJob.findMany).mockResolvedValueOnce([{ id: 'racejob005' }] as never);
+    // The status-guarded flip matches 0 rows (no longer pending/processing).
+    vi.mocked(db.dataExportJob.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+
+    const reaped = await reapStaleExportJobs(USER_ID, now);
+    expect(reaped).toBe(0);
+    // The ready job's zip is UNTOUCHED (deleting it would break the download).
+    await expect(fs.access(readyZip)).resolves.toBeUndefined();
   });
 
   it('reapStaleExportJobs never throws (returns 0 on a DB error)', async () => {
-    vi.mocked(db.dataExportJob.updateMany).mockRejectedValueOnce(new Error('db down'));
+    vi.mocked(db.dataExportJob.findMany).mockRejectedValueOnce(new Error('db down'));
     await expect(reapStaleExportJobs(USER_ID)).resolves.toBe(0);
   });
 
@@ -308,5 +345,30 @@ describe('export lifecycle helpers (reaper + retention + zip removal)', () => {
     await expect(fs.access(stuckZip)).resolves.toBeUndefined();
 
     rmSpy.mockRestore();
+  });
+
+  it('removes the flushed zip when the build fails AFTER writing it (no orphan full-PII archive)', async () => {
+    // The zip is written to disk (full-PII snapshot) BEFORE the `ready` flip. If
+    // that flip throws (transient pool error), the catch must reclaim the file —
+    // otherwise a complete PII archive strands with a `failed` row no path scans.
+    const failJob = 'failjob006';
+    vi.mocked(db.dataExportJob.findUnique).mockResolvedValueOnce({
+      id: failJob,
+      userId: USER_ID,
+      status: 'pending',
+    } as never);
+    // 1st update = processing (ok); 2nd = ready flip (throws). The 3rd (the
+    // catch's `failed` write) falls through to the base mock — consumed onces
+    // auto-restore, so no other test is affected.
+    vi.mocked(db.dataExportJob.update)
+      .mockResolvedValueOnce({ id: failJob } as never)
+      .mockRejectedValueOnce(new Error('pool timeout on ready flip'));
+
+    const result = await runDataExportJob(failJob);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('export_failed');
+
+    // The zip the build flushed before the failing flip is GONE — no orphan PII.
+    await expect(fs.access(path.join(exportsDir, `${failJob}.zip`))).rejects.toThrow();
   });
 });

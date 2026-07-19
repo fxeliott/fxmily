@@ -282,4 +282,31 @@ describe('export lifecycle helpers (reaper + retention + zip removal)', () => {
     // The export itself still succeeds (prune is best-effort housekeeping).
     expect(result.ok).toBe(true);
   });
+
+  it('keeps the superseded row when its zip removal fails (art.17 sweep can still reap it)', async () => {
+    // Seed a superseded ready zip, then make the physical delete of it fail with
+    // a real I/O error. The DB row MUST survive: the account-erasure sweep
+    // (`deletion.ts`) only iterates existing `DataExportJob` rows, so dropping
+    // the row while the full-PII zip lingers would strand it past an art.17
+    // erasure. `fs.rm` is the only rm in the module, and on the success path it
+    // is reached solely via the prune's `removeExportZip`.
+    const stuckZip = path.join(exportsDir, 'stuckjob04.zip');
+    await fs.writeFile(stuckZip, new Uint8Array([7, 7, 7]));
+    vi.mocked(db.dataExportJob.findMany).mockResolvedValueOnce([{ id: 'stuckjob04' }] as never);
+    const rmSpy = vi.spyOn(fs, 'rm').mockRejectedValueOnce(new Error('EIO: volume down'));
+
+    const result = await runDataExportJob(JOB_ID2);
+    expect(result.ok).toBe(true); // prune is best-effort — the export still succeeds
+
+    // No deleteMany call carried the stuck id → its pointer row is preserved...
+    const deletedStuck = vi.mocked(db.dataExportJob.deleteMany).mock.calls.some((c) => {
+      const w = c[0] as { where?: { id?: { in?: string[] } } } | undefined;
+      return w?.where?.id?.in?.includes('stuckjob04') ?? false;
+    });
+    expect(deletedStuck).toBe(false);
+    // ...and the orphan zip is still on the volume, reapable by a later erase.
+    await expect(fs.access(stuckZip)).resolves.toBeUndefined();
+
+    rmSpy.mockRestore();
+  });
 });

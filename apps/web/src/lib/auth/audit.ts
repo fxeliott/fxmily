@@ -50,6 +50,7 @@ export type AuditAction =
   | 'storage.r2_mirror.succeeded'
   | 'storage.r2_mirror.failed'
   | 'admin.members.listed'
+  | 'admin.members.bulk_noted'
   | 'admin.member.viewed'
   // F5 (overhaul) — admin member moderation. PII-FREE: metadata carries only
   // `{memberId, eventId}` — the free-text motif lives in the

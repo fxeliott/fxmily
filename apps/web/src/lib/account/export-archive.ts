@@ -279,10 +279,21 @@ async function pruneSupersededExports(userId: string, keepJobId: string): Promis
       select: { id: true },
     });
     if (superseded.length === 0) return;
+    // Only drop a row once its zip is CONFIRMED gone. `removeExportZip` returns
+    // false on a real fs error — if we deleted the row anyway, the account-
+    // erasure sweep (`deletion.ts`) iterates existing `DataExportJob` rows and
+    // would never find the leftover full-PII archive, stranding it on the volume
+    // past an art.17 erasure. Keeping the row preserves the pointer so a later
+    // regenerate/erase can still reap the file.
+    const removedIds: string[] = [];
     for (const job of superseded) {
-      await removeExportZip(job.id);
+      if (await removeExportZip(job.id)) {
+        removedIds.push(job.id);
+      }
     }
-    await db.dataExportJob.deleteMany({ where: { id: { in: superseded.map((j) => j.id) } } });
+    if (removedIds.length > 0) {
+      await db.dataExportJob.deleteMany({ where: { id: { in: removedIds } } });
+    }
   } catch {
     reportWarning('account.data.export_job', 'retention_prune_failed', {});
   }

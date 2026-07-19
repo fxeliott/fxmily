@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { removeExportZip } from '@/lib/account/export-archive';
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
@@ -476,6 +477,23 @@ export async function purgeMaterialisedDeletions(
             error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
           });
         }
+      }
+
+      // J6 scope 6 (RGPD art.17) — sweep the member's asynchronous EXPORT
+      // archives BEFORE the cascade erases the `DataExportJob` rows that name
+      // them. Each zip is the FULL PII aggregate (data.json + every photo:
+      // face avatar, broker screenshots with name/account/balance/P&L) — the
+      // single most sensitive artifact. It is a plain file on the LOCAL uploads
+      // volume (not a storage-key object), so `selectStorage().delete` can't
+      // reach it: `removeExportZip` (best-effort, never throws) is the primitive.
+      // Without this, the zip is stranded as an ORPHANED, unreferenced PII dump
+      // after erasure — no DB row points to it, so no future audit can find it.
+      const exportJobs = await db.dataExportJob.findMany({
+        where: { userId: u.id },
+        select: { id: true },
+      });
+      for (const job of exportJobs) {
+        await removeExportZip(job.id);
       }
 
       await db.user.delete({ where: { id: u.id } });

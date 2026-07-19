@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { unzipSync } from 'fflate';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateAvatarKey } from '@/lib/storage/keys';
 
@@ -38,6 +38,11 @@ vi.mock('@/lib/db', () => ({
         dbUpdateCalls.push(args);
         return { id: JOB_ID };
       }),
+      // Retention prune (older ready jobs) + zombie reaper. Default to a no-op
+      // shape; individual tests override via `mockResolvedValueOnce`.
+      findMany: vi.fn(async () => []),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
     },
   },
 }));
@@ -66,10 +71,14 @@ vi.mock('@/lib/observability', () => ({
 
 // Imported AFTER the mocks are registered (vi.mock is hoisted above imports).
 import { buildUserDataExport } from '@/lib/account/export';
+import { db } from '@/lib/db';
 import {
   exportResultKey,
   openExportReadStream,
+  reapStaleExportJobs,
+  removeExportZip,
   runDataExportJob,
+  STALE_EXPORT_JOB_MS,
 } from '@/lib/account/export-archive';
 import { localUploadPathFor } from '@/lib/storage';
 import type { UserDataExport } from '@/lib/account/export';
@@ -166,5 +175,111 @@ describe('runDataExportJob (async RGPD export, J6 scope 6)', () => {
     expect(result).toEqual({ ok: true, reason: 'already_ready' });
     // No further status writes on a ready job.
     expect(dbUpdateCalls.length).toBe(before);
+  });
+});
+
+/**
+ * J6 scope 6 hardening (adversarial-review fixes): zombie reaper + per-member
+ * retention prune + the RGPD-erasure-shared `removeExportZip` primitive. These
+ * keep the filesystem + volume side of the export lifecycle honest at scale.
+ */
+describe('export lifecycle helpers (reaper + retention + zip removal)', () => {
+  let tmp2: string;
+  let exportsDir: string;
+  const JOB_ID2 = 'testjob0002';
+
+  beforeAll(async () => {
+    tmp2 = await fs.mkdtemp(path.join(os.tmpdir(), 'fxmily-export-life-'));
+    process.env.UPLOADS_DIR = tmp2;
+    exportsDir = path.join(tmp2, 'data-exports');
+    await fs.mkdir(exportsDir, { recursive: true });
+    // No media keys — these tests only care about the job lifecycle, not media.
+    vi.mocked(buildUserDataExport).mockResolvedValue({
+      account: { id: USER_ID },
+    } as unknown as UserDataExport);
+  });
+
+  afterAll(async () => {
+    if (tmp2) await fs.rm(tmp2, { recursive: true, force: true });
+    delete process.env.UPLOADS_DIR;
+  });
+
+  beforeEach(() => {
+    vi.mocked(db.dataExportJob.findMany)
+      .mockReset()
+      .mockResolvedValue([] as never);
+    vi.mocked(db.dataExportJob.deleteMany)
+      .mockReset()
+      .mockResolvedValue({ count: 0 } as never);
+    vi.mocked(db.dataExportJob.updateMany)
+      .mockReset()
+      .mockResolvedValue({ count: 0 } as never);
+    vi.mocked(db.dataExportJob.findUnique)
+      .mockReset()
+      .mockResolvedValue({ id: JOB_ID2, userId: USER_ID, status: 'pending' } as never);
+  });
+
+  it('removeExportZip deletes an existing zip, no-ops a missing file, refuses a bad id', async () => {
+    const f = path.join(exportsDir, 'abc123.zip');
+    await fs.writeFile(f, new Uint8Array([1, 2, 3]));
+
+    expect(await removeExportZip('abc123')).toBe(true);
+    await expect(fs.access(f)).rejects.toThrow(); // actually gone
+
+    // A malformed id can never be turned into a path (traversal-safe).
+    expect(await removeExportZip('../etc/passwd')).toBe(false);
+    // A missing file is a benign no-op (force rm resolves).
+    expect(await removeExportZip('missing999')).toBe(true);
+  });
+
+  it('reapStaleExportJobs flips only sufficiently-old pending/processing jobs to failed', async () => {
+    const now = new Date('2026-07-19T12:00:00.000Z');
+    vi.mocked(db.dataExportJob.updateMany).mockResolvedValueOnce({ count: 2 } as never);
+
+    const reaped = await reapStaleExportJobs(USER_ID, now);
+    expect(reaped).toBe(2);
+
+    const args = vi.mocked(db.dataExportJob.updateMany).mock.calls.at(-1)?.[0] as {
+      where: { userId: string; status: { in: string[] }; createdAt: { lt: Date } };
+      data: { status: string };
+    };
+    expect(args.where.userId).toBe(USER_ID);
+    expect(args.where.status).toEqual({ in: ['pending', 'processing'] });
+    // Threshold is exactly `now - STALE_EXPORT_JOB_MS` — a fresher job is spared.
+    expect(args.where.createdAt.lt.getTime()).toBe(now.getTime() - STALE_EXPORT_JOB_MS);
+    expect(args.data.status).toBe('failed');
+  });
+
+  it('reapStaleExportJobs never throws (returns 0 on a DB error)', async () => {
+    vi.mocked(db.dataExportJob.updateMany).mockRejectedValueOnce(new Error('db down'));
+    await expect(reapStaleExportJobs(USER_ID)).resolves.toBe(0);
+  });
+
+  it('prunes an older ready export (zip file + row) when a fresh one completes', async () => {
+    // Seed a stale ready zip belonging to a superseded job.
+    const oldZip = path.join(exportsDir, 'oldjob0003.zip');
+    await fs.writeFile(oldZip, new Uint8Array([9, 9, 9]));
+    // The prune query returns that one superseded job.
+    vi.mocked(db.dataExportJob.findMany).mockResolvedValueOnce([{ id: 'oldjob0003' }] as never);
+
+    const result = await runDataExportJob(JOB_ID2);
+    expect(result.ok).toBe(true);
+
+    // The superseded row is deleted...
+    const del = vi.mocked(db.dataExportJob.deleteMany).mock.calls.at(-1)?.[0] as {
+      where: { id: { in: string[] } };
+    };
+    expect(del.where.id.in).toEqual(['oldjob0003']);
+    // ...and its zip is physically gone from the volume.
+    await expect(fs.access(oldZip)).rejects.toThrow();
+    // The NEW job's archive was written and is still present.
+    await expect(fs.access(path.join(exportsDir, `${JOB_ID2}.zip`))).resolves.toBeUndefined();
+  });
+
+  it('a prune failure never fails the export the member just completed', async () => {
+    vi.mocked(db.dataExportJob.findMany).mockRejectedValueOnce(new Error('prune query down'));
+    const result = await runDataExportJob(JOB_ID2);
+    // The export itself still succeeds (prune is best-effort housekeeping).
+    expect(result.ok).toBe(true);
   });
 });

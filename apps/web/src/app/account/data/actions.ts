@@ -4,7 +4,7 @@ import { after } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
-import { runDataExportJob } from '@/lib/account/export-archive';
+import { reapStaleExportJobs, runDataExportJob } from '@/lib/account/export-archive';
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import type { DataExportStatus } from '@/generated/prisma/enums';
@@ -31,6 +31,12 @@ export async function requestDataExportAction(): Promise<RequestDataExportResult
   const userId = session.user.id;
 
   try {
+    // Self-heal FIRST: reap any zombie job (a pending/processing row whose
+    // off-request build died with a server restart). Without this, the dedup
+    // below would keep reusing the zombie and the member could NEVER start a new
+    // export. Best-effort — a reap failure just falls through to the dedup.
+    await reapStaleExportJobs(userId);
+
     // Dedup — reuse a job that is still pending/processing instead of stacking a
     // second concurrent archive for the same member.
     const existing = await db.dataExportJob.findFirst({

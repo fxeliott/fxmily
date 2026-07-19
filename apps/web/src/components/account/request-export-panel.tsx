@@ -27,6 +27,12 @@ import { Pill } from '@/components/ui/pill';
 export type ExportJobView = {
   id: string;
   status: 'pending' | 'processing' | 'ready' | 'failed';
+  /**
+   * Server-computed: a pending/processing job that has outlived any legitimate
+   * build (its off-request work died with a server restart). Rendered as a
+   * recoverable "stuck" state with an explicit relaunch, and it stops the poll.
+   */
+  stale?: boolean;
 };
 
 export function RequestExportPanel({ job }: { job: ExportJobView | null }): React.ReactNode {
@@ -36,12 +42,17 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
 
   const status = job?.status ?? null;
   const isRunning = status === 'pending' || status === 'processing';
+  // A zombie job: still "running" server-side but its build died. Show a relaunch
+  // affordance instead of an eternal spinner, and DON'T poll (refreshing a dead
+  // job changes nothing — relaunching it does).
+  const isStuck = isRunning && job?.stale === true;
+  const isActivelyRunning = isRunning && !isStuck;
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isActivelyRunning) return;
     const timer = setInterval(() => router.refresh(), 6000);
     return () => clearInterval(timer);
-  }, [isRunning, router]);
+  }, [isActivelyRunning, router]);
 
   function handleRequest(): void {
     setError(null);
@@ -75,7 +86,8 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
               Export complet (avec photos)
             </h3>
             {status === 'ready' && <Pill tone="ok">Prêt</Pill>}
-            {isRunning && <Pill tone="cy">Préparation…</Pill>}
+            {isActivelyRunning && <Pill tone="cy">Préparation…</Pill>}
+            {isStuck && <Pill tone="warn">Interrompu</Pill>}
             {status === 'failed' && <Pill tone="bad">Échec</Pill>}
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-[var(--t-3)]">
@@ -106,7 +118,7 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
             </div>
           )}
 
-          {isRunning && (
+          {isActivelyRunning && (
             <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-2)]">
               <Loader2
                 aria-hidden="true"
@@ -114,6 +126,24 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
               />
               On assemble ton archive. Tu peux quitter cette page, on te préviendra.
             </p>
+          )}
+
+          {isStuck && (
+            <div className="mt-3">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] text-[var(--t-2)]">
+                <TriangleAlert aria-hidden="true" className="h-3.5 w-3.5 text-[var(--warn)]" />
+                La préparation a été interrompue (redémarrage serveur). Relance-la quand tu veux.
+              </p>
+              <button
+                type="button"
+                onClick={handleRequest}
+                disabled={pending}
+                className={btnVariants({ kind: 'primary', size: 's' })}
+              >
+                <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                {pending ? 'Démarrage…' : 'Relancer la préparation'}
+              </button>
+            </div>
           )}
 
           {(status === null || status === 'failed') && (

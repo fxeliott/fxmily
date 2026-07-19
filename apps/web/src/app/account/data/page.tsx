@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { ExportDataButton } from '@/components/account/export-data-button';
 import { RequestExportPanel, type ExportJobView } from '@/components/account/request-export-panel';
+import { STALE_EXPORT_JOB_MS } from '@/lib/account/export-archive';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Code } from '@/components/ui/code';
@@ -110,10 +111,18 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
   const latestJob = await db.dataExportJob.findFirst({
     where: { userId },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, status: true },
+    select: { id: true, status: true, createdAt: true },
   });
+  // A pending/processing job older than the stale window is a zombie (its
+  // off-request build died with a server restart). Flag it so the panel offers a
+  // relaunch instead of an eternal spinner. No write on render: the reap runs
+  // server-side in `requestDataExportAction` when the member relaunches.
+  const jobIsStale =
+    latestJob !== null &&
+    (latestJob.status === 'pending' || latestJob.status === 'processing') &&
+    new Date().getTime() - latestJob.createdAt.getTime() > STALE_EXPORT_JOB_MS;
   const exportJob: ExportJobView | null = latestJob
-    ? { id: latestJob.id, status: latestJob.status }
+    ? { id: latestJob.id, status: latestJob.status, stale: jobIsStale }
     : null;
 
   const sections: Array<{ label: string; count: number; description: string }> = [

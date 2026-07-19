@@ -46,6 +46,17 @@ const EXPORT_KEY_PREFIX = 'data-exports';
 /** A Prisma cuid is lowercase alnum — reject anything else before it touches a path. */
 const JOB_ID_RE = /^[a-z0-9]+$/i;
 
+/**
+ * A `pending`/`processing` job older than this survived a process restart:
+ * `after()` runs in-process and does NOT resume across a redeploy (Fxmily
+ * auto-deploys on every `main` push), so its build died mid-flight and the row
+ * is a zombie. Reaped lazily on the member's next request / page load so a stale
+ * job can never permanently lock a member out of a fresh export. A real archive
+ * build finishes in seconds to a couple of minutes even for a heavy member, so
+ * 15 min is comfortably above any legitimate in-flight job.
+ */
+export const STALE_EXPORT_JOB_MS = 15 * 60 * 1000;
+
 function exportsRoot(): string {
   const fromEnv = process.env.UPLOADS_DIR;
   const uploadsRoot =
@@ -206,6 +217,77 @@ async function writeExportZip(
   });
 }
 
+/**
+ * Best-effort removal of a job's zip artifact from the uploads volume. Never
+ * throws (a missing file or a malformed id resolves to `false`). Shared by the
+ * RGPD erasure sweep (`purgeMaterialisedDeletions`) and the per-member retention
+ * prune below: the zip is a plain file on the LOCAL volume (never an R2 object,
+ * never a `parseStorageKey` prefix), so `fs.rm` is the correct primitive rather
+ * than `selectStorage().delete`.
+ */
+export async function removeExportZip(jobId: string): Promise<boolean> {
+  let target: string;
+  try {
+    target = exportZipPath(jobId);
+  } catch {
+    return false; // malformed id — nothing to remove
+  }
+  try {
+    await fs.rm(target, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reap a member's ZOMBIE export jobs: any `pending`/`processing` row older than
+ * `STALE_EXPORT_JOB_MS` whose `after()` build died with the process. Marks them
+ * `failed` so the dedup in `requestDataExportAction` can't reuse a zombie for
+ * ever and lock the member out of a new export. Atomic (`updateMany`),
+ * idempotent, best-effort (a reap failure never blocks the caller). Returns the
+ * number of jobs reaped.
+ */
+export async function reapStaleExportJobs(userId: string, now: Date = new Date()): Promise<number> {
+  const threshold = new Date(now.getTime() - STALE_EXPORT_JOB_MS);
+  try {
+    const reaped = await db.dataExportJob.updateMany({
+      where: { userId, status: { in: ['pending', 'processing'] }, createdAt: { lt: threshold } },
+      data: {
+        status: 'failed',
+        error: 'stale: reaped after a server restart interrupted the build',
+      },
+    });
+    return reaped.count;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Retention (J6 scale) — keep only the LATEST ready export per member. Older
+ * ready zips on the shared uploads volume (which also stores member media) are
+ * pruned so a member can't accumulate full-PII archives by regenerating, growing
+ * the volume without bound. The audit trail lives in the immutable audit log,
+ * not these transient rows. Best-effort: a prune failure must never fail the
+ * export the member just completed.
+ */
+async function pruneSupersededExports(userId: string, keepJobId: string): Promise<void> {
+  try {
+    const superseded = await db.dataExportJob.findMany({
+      where: { userId, status: 'ready', id: { not: keepJobId } },
+      select: { id: true },
+    });
+    if (superseded.length === 0) return;
+    for (const job of superseded) {
+      await removeExportZip(job.id);
+    }
+    await db.dataExportJob.deleteMany({ where: { id: { in: superseded.map((j) => j.id) } } });
+  } catch {
+    reportWarning('account.data.export_job', 'retention_prune_failed', {});
+  }
+}
+
 export interface RunDataExportResult {
   ok: boolean;
   reason?: string;
@@ -222,16 +304,25 @@ export interface RunDataExportResult {
  * with a truncated reason and reports to Sentry.
  */
 export async function runDataExportJob(jobId: string): Promise<RunDataExportResult> {
-  const job = await db.dataExportJob.findUnique({
-    where: { id: jobId },
-    select: { id: true, userId: true, status: true },
-  });
-  if (!job) return { ok: false, reason: 'job_not_found' };
-  if (job.status === 'ready') return { ok: true, reason: 'already_ready' };
-
-  await db.dataExportJob.update({ where: { id: jobId }, data: { status: 'processing' } });
-
+  // Tracked outside the try so the `failed` audit can still name the member even
+  // if a later step throws. Stays null only when the very first read fails (or
+  // the job is missing), in which case there is nothing meaningful to audit.
+  let userId: string | null = null;
   try {
+    // Inside the try (contract: this function NEVER throws). A transient DB error
+    // on the initial read or the `processing` write used to escape as an
+    // unhandled rejection inside `after()`, leaving the row stuck in `pending`
+    // for ever — the exact zombie the reaper then has to clean up.
+    const job = await db.dataExportJob.findUnique({
+      where: { id: jobId },
+      select: { id: true, userId: true, status: true },
+    });
+    if (!job) return { ok: false, reason: 'job_not_found' };
+    if (job.status === 'ready') return { ok: true, reason: 'already_ready' };
+    userId = job.userId;
+
+    await db.dataExportJob.update({ where: { id: jobId }, data: { status: 'processing' } });
+
     const snapshot = await buildUserDataExport(job.userId);
     const mediaKeys = collectMediaKeys(snapshot);
     const target = exportZipPath(jobId);
@@ -258,6 +349,8 @@ export async function runDataExportJob(jobId: string): Promise<RunDataExportResu
         ...summariseExport(snapshot),
       },
     });
+    // Retention — this fresh archive supersedes any older ready one (bounded disk).
+    await pruneSupersededExports(job.userId, jobId);
     return { ok: true, byteSize: stat.size, mediaAppended: appended, mediaSkipped: skipped };
   } catch (err) {
     await db.dataExportJob
@@ -269,16 +362,21 @@ export async function runDataExportJob(jobId: string): Promise<RunDataExportResu
         },
       })
       .catch(() => {
-        // Best-effort — never mask the original failure with a status-write error.
+        // Best-effort — never mask the original failure with a status-write error
+        // (and the row may not exist if the initial read is what threw).
       });
     reportError('account.data.export_job', err instanceof Error ? err : new Error(String(err)), {
       jobId,
     });
-    await logAudit({
-      action: 'account.data.export_job.failed',
-      userId: job.userId,
-      metadata: { jobId },
-    });
+    if (userId) {
+      await logAudit({
+        action: 'account.data.export_job.failed',
+        userId,
+        metadata: { jobId },
+      }).catch(() => {
+        // Audit is best-effort in the failure path — never re-throw from here.
+      });
+    }
     return { ok: false, reason: 'export_failed' };
   }
 }

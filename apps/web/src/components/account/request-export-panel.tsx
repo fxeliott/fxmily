@@ -35,10 +35,39 @@ export type ExportJobView = {
   stale?: boolean;
 };
 
+/** Map the download route's non-200 statuses to factual French copy (posture
+ *  §2 — never dump the raw API JSON error at the member). 410 (zip pruned by
+ *  retention/TTL after the link was rendered) and 404 (job gone) both resolve to
+ *  « regenerate »; the « Regénérer » button is already on screen. */
+function downloadErrorMessage(status: number): string {
+  if (status === 410 || status === 404) {
+    return 'Ce lien a expiré. Régénère ton archive pour la télécharger à nouveau.';
+  }
+  if (status === 401) return 'Session expirée, reconnecte-toi.';
+  if (status === 409)
+    return 'Ton archive n’est pas encore prête. Patiente un instant, puis réessaie.';
+  return 'Le téléchargement n’a pas pu aboutir. Réessaie, ou régénère ton archive.';
+}
+
+/** Pull the server-authored filename out of `Content-Disposition` (the source of
+ *  truth) so the saved file keeps the route's name; the caller falls back to the
+ *  server-mirrored default when the header is absent or unparsable. */
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 export function RequestExportPanel({ job }: { job: ExportJobView | null }): React.ReactNode {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const status = job?.status ?? null;
   const isRunning = status === 'pending' || status === 'processing';
@@ -76,6 +105,56 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
         setError('La préparation n’a pas pu démarrer. Réessaie dans un instant.');
       }
     });
+  }
+
+  /**
+   * Download the ready archive CLIENT-SIDE instead of letting the browser
+   * navigate to the API URL. A raw `<a href>` nav renders the route's JSON error
+   * body verbatim if the zip was pruned (410) or the job vanished (404/401)
+   * between render and click — a technical dump at the member (posture §2). We
+   * fetch first: 200 → blob save (Content-Disposition filename preserved);
+   * non-200 → factual French copy in the existing `role="alert"`, with the
+   * « Regénérer » button already on screen. The `href` stays for progressive
+   * enhancement — no-JS and right-click « save as » still download the
+   * attachment (the route serves 200 as `Content-Disposition: attachment`).
+   */
+  async function handleDownload(e: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
+    // Leave modified / non-primary clicks (open in new tab, save-as, middle
+    // click) to the browser — the href is a real, attachment-served URL.
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+      return;
+    }
+    e.preventDefault();
+    if (downloading || !job) return;
+    setError(null);
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/account/data/export/${job.id}`, {
+        headers: { Accept: 'application/zip' },
+      });
+      if (!res.ok) {
+        setError(downloadErrorMessage(res.status));
+        return;
+      }
+      // The member export is a bounded snapshot (their own data + photos), so
+      // buffering it as one blob to force a named save is acceptable here.
+      const blob = await res.blob();
+      const filename =
+        filenameFromDisposition(res.headers.get('Content-Disposition')) ??
+        `fxmily-export-${job.id.slice(-6)}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Le téléchargement n’a pas pu aboutir. Vérifie ta connexion, puis réessaie.');
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -128,11 +207,21 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <a
                 href={`/api/account/data/export/${job.id}`}
+                onClick={handleDownload}
+                aria-busy={downloading}
+                aria-disabled={downloading}
                 className={btnVariants({ kind: 'primary', size: 's' })}
                 data-testid="download-export-zip"
               >
-                <Download aria-hidden="true" className="h-4 w-4" />
-                Télécharger l’archive
+                {downloading ? (
+                  <Loader2
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                  />
+                ) : (
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                )}
+                {downloading ? 'Téléchargement…' : 'Télécharger l’archive'}
               </a>
               <button
                 type="button"

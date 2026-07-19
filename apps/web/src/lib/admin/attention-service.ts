@@ -664,9 +664,17 @@ export async function listRecentBehavioralSignals(
 // `@@index([status, deletedAt, lastSeenAt])` added in this branch — the
 // `status = 'active' AND deletedAt IS NULL` equality prefix + `lastSeenAt` sort
 // column let Postgres walk the index in order instead of scanning the members
-// table. `id` is the cursor + the sort tiebreaker for the nullable, non-unique
-// `lastSeenAt`, so a collision (or the null bucket) can never make the cursor
-// skip or repeat a member.
+// table.
+//
+// Pagination: a COMPOSITE keyset cursor `(lastSeenAt, id)`, NOT a bare id.
+// `lastSeenAt` is MUTABLE — rewritten on every credential login — so a Prisma
+// `cursor: { id }, skip: 1` seek (which re-reads the cursor row's CURRENT
+// `lastSeenAt` to build the page-2 boundary) would shift that boundary the
+// moment the cursor member logs back in, silently skipping every member between
+// the old and new stamp. We instead carry BOTH sort keys in an opaque base64url
+// token and build the keyset predicate BY HAND against the captured values, so
+// the boundary is frozen at the page-1 render and can never skip or repeat a
+// member. `id` stays the tiebreaker for the nullable, non-unique `lastSeenAt`.
 // =============================================================================
 
 export interface DisengagedMemberItem {
@@ -681,29 +689,101 @@ export interface DisengagedMemberItem {
   readonly href: string;
 }
 
+/** The decoded composite cursor — both sort keys captured at page-1 render. */
+interface DisengagedCursor {
+  readonly lastSeenAt: Date | null;
+  readonly id: string;
+}
+
+/** Encode the composite cursor as an opaque base64url token (`<iso>|<id>`, an
+ *  empty `<iso>` meaning a never-seen member). Both sort keys travel WITH the
+ *  cursor so the page-2 boundary is frozen — see the section header for why a
+ *  bare-id Prisma seek is unsafe on the mutable `lastSeenAt`. */
+function encodeDisengagedCursor(lastSeenAt: Date | null, id: string): string {
+  const stamp = lastSeenAt === null ? '' : lastSeenAt.toISOString();
+  return Buffer.from(`${stamp}|${id}`, 'utf8').toString('base64url');
+}
+
+/** Decode + STRICTLY validate a composite cursor token. A forged / malformed
+ *  token returns null so the caller degrades to page 1 (never a 500, never a
+ *  wrong boundary): the id must be cuid-shaped and a non-empty stamp must be a
+ *  canonical ISO date (re-serialization has to round-trip). */
+function decodeDisengagedCursor(token: string | undefined): DisengagedCursor | null {
+  if (typeof token !== 'string' || token.length === 0) return null;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(token, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const sep = decoded.indexOf('|');
+  if (sep === -1) return null;
+  const stamp = decoded.slice(0, sep);
+  const id = decoded.slice(sep + 1);
+  if (!/^[a-z0-9]{20,40}$/i.test(id)) return null;
+  if (stamp === '') return { lastSeenAt: null, id };
+  const ms = Date.parse(stamp);
+  // A legit stamp is always `Date#toISOString()`; reject anything non-canonical
+  // so a forged token can't smuggle an ambiguous date into the keyset.
+  if (Number.isNaN(ms) || new Date(ms).toISOString() !== stamp) return null;
+  return { lastSeenAt: new Date(ms), id };
+}
+
+/**
+ * The keyset boundary for the NEXT page under `lastSeenAt asc NULLS FIRST, id
+ * asc`: every member sorting strictly AFTER the cursor row. Built by hand (not
+ * Prisma's `cursor`/`skip`) against the CAPTURED cursor values so a rewrite of
+ * the cursor member's mutable `lastSeenAt` can never move the boundary.
+ */
+function disengagedKeysetWhere(cursor: DisengagedCursor): Prisma.UserWhereInput {
+  if (cursor.lastSeenAt === null) {
+    // Cursor is in the NULLS-FIRST bucket: advance within the null bucket by id,
+    // then let EVERY non-null row through (they all sort after the nulls).
+    return {
+      OR: [{ lastSeenAt: null, id: { gt: cursor.id } }, { lastSeenAt: { not: null } }],
+    };
+  }
+  // Cursor has a stamp: a strictly greater stamp, or the same stamp with a
+  // greater id. Null-bucket rows sort BEFORE it (SQL `NULL > x` is unknown), so
+  // Prisma's `gt` correctly excludes them.
+  return {
+    OR: [
+      { lastSeenAt: { gt: cursor.lastSeenAt } },
+      { lastSeenAt: cursor.lastSeenAt, id: { gt: cursor.id } },
+    ],
+  };
+}
+
 /**
  * Cohort-wide active members not seen for ≥ `DISENGAGED_AFTER_MS`, longest
  * silence first. Reuses the SAME predicate as the daily-brief counter
  * (`disengagedMembersWhere`) so the list, the `/admin/a-traiter` badge and the
  * morning email can never drift. `lastSeenAt asc NULLS FIRST` puts the
  * never-seen new joiners (null `lastSeenAt`, joined before the floor) at the
- * very top — the most at-risk of silently churning. `id` tiebreaks the
- * (nullable, non-unique) stamp so the cursor can never skip or repeat a member.
+ * very top — the most at-risk of silently churning.
+ *
+ * Paginated with a COMPOSITE `(lastSeenAt, id)` keyset cursor, NOT a bare id:
+ * `lastSeenAt` is mutable (rewritten on login), so a Prisma `cursor`/`skip` seek
+ * would drift the page-2 boundary when the cursor member logs back in. The token
+ * carries both keys and the boundary is a hand-built `where` frozen at page 1,
+ * so it can never skip or repeat a member (see the section header).
  */
 export async function listDisengagedMembers(
   options: TriageListOptions = {},
 ): Promise<TriagePage<DisengagedMemberItem>> {
   const limit = clampLimit(options.limit);
-  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+  const cursor = decodeDisengagedCursor(options.cursor);
   const floor = new Date(Date.now() - DISENGAGED_AFTER_MS);
+  const predicate = disengagedMembersWhere(floor);
 
   const rows = await db.user.findMany({
-    where: disengagedMembersWhere(floor),
+    // A valid cursor ANDs a frozen keyset boundary onto the shared predicate; a
+    // missing / forged one just serves page 1 (the predicate alone).
+    where: cursor ? { AND: [predicate, disengagedKeysetWhere(cursor)] } : predicate,
     // Longest silence first; `lastSeenAt` is nullable so NULLS FIRST surfaces the
     // never-seen new joiners at the top. `id` tiebreaks the non-unique stamp.
     orderBy: [{ lastSeenAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
     take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
       id: true,
       firstName: true,
@@ -716,6 +796,7 @@ export async function listDisengagedMembers(
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
   return {
     items: page.map((u) => ({
       id: u.id,
@@ -724,7 +805,9 @@ export async function listDisengagedMembers(
       joinedAt: u.joinedAt.toISOString(),
       href: `/admin/members/${u.id}`,
     })),
-    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+    // The next boundary is the last visible row's COMPOSITE key, so page 2 seeks
+    // from exactly here regardless of any later `lastSeenAt` rewrite.
+    nextCursor: hasMore && last ? encodeDisengagedCursor(last.lastSeenAt, last.id) : null,
   };
 }
 

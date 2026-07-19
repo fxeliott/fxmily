@@ -619,7 +619,17 @@ export async function listRecentBehavioralSignals(
     return delta !== 0 ? delta : a.memberId.localeCompare(b.memberId);
   });
 
-  const startIndex = cursor ? ordered.findIndex((m) => m.memberId === cursor) + 1 : 0;
+  // A cursor that fell out of the recalculated 7-day window (its member's last
+  // signal aged past `recentFloor`, or the member was deleted between two "voir
+  // plus" clicks) is no longer in `ordered`: `findIndex` → -1 would make
+  // `startIndex` 0 and SILENTLY re-serve page 1 (duplicates). Return an empty
+  // terminal page instead — the same "cursor gone ⇒ empty page" contract the
+  // row-paginated sections get from Prisma's native `cursor`/`skip`.
+  const cursorIndex = cursor ? ordered.findIndex((m) => m.memberId === cursor) : -1;
+  if (cursor && cursorIndex === -1) {
+    return { items: [], nextCursor: null };
+  }
+  const startIndex = cursor ? cursorIndex + 1 : 0;
   const window = ordered.slice(startIndex, startIndex + limit + 1);
   const hasMore = window.length > limit;
   const page = hasMore ? window.slice(0, limit) : window;

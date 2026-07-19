@@ -56,8 +56,13 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
 
   function handleRequest(): void {
     setError(null);
-    startTransition(() => {
-      void requestDataExportAction().then((result) => {
+    // AWAIT inside the transition so `pending` (the button's disabled + label)
+    // reflects the real in-flight state for the whole round-trip (React 19 async
+    // Actions); the try/catch surfaces a rejection as the error message instead
+    // of an unhandled rejection.
+    startTransition(async () => {
+      try {
+        const result = await requestDataExportAction();
         if (!result.ok) {
           setError(
             result.error === 'unauthorized'
@@ -67,7 +72,9 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
           return;
         }
         router.refresh();
-      });
+      } catch {
+        setError('La préparation n’a pas pu démarrer. Réessaie dans un instant.');
+      }
     });
   }
 
@@ -85,10 +92,31 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
             <h3 className="text-sm font-semibold text-[var(--t-1)]">
               Export complet (avec photos)
             </h3>
-            {status === 'ready' && <Pill tone="ok">Prêt</Pill>}
-            {isActivelyRunning && <Pill tone="cy">Préparation…</Pill>}
-            {isStuck && <Pill tone="warn">Interrompu</Pill>}
-            {status === 'failed' && <Pill tone="bad">Échec</Pill>}
+            {/*
+             * The status pills change IN PLACE when the panel polls (every 6s)
+             * and the job flips pending -> ready/failed, with no navigation. Wrap
+             * them in a polite live region so a screen-reader member hears the
+             * outcome (WCAG 2.1 SC 4.1.3). The sr-only sentence makes the terse
+             * pill self-explanatory; aria-live only announces CHANGES after mount,
+             * so an already-ready job on first load stays silent (correct).
+             */}
+            <span role="status" aria-live="polite" className="inline-flex items-center gap-2">
+              {status === 'ready' && <Pill tone="ok">Prêt</Pill>}
+              {isActivelyRunning && <Pill tone="cy">Préparation…</Pill>}
+              {isStuck && <Pill tone="warn">Interrompu</Pill>}
+              {status === 'failed' && <Pill tone="bad">Échec</Pill>}
+              <span className="sr-only">
+                {status === 'ready'
+                  ? 'Ton export complet est prêt à télécharger.'
+                  : isActivelyRunning
+                    ? 'Préparation de ton export complet en cours.'
+                    : isStuck
+                      ? 'La préparation de ton export a été interrompue, tu peux la relancer.'
+                      : status === 'failed'
+                        ? 'La préparation de ton export a échoué, tu peux réessayer.'
+                        : ''}
+              </span>
+            </span>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-[var(--t-3)]">
             Une archive <code className="font-mono text-[var(--t-2)]">.zip</code> avec tes données

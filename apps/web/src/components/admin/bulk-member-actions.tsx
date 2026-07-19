@@ -58,8 +58,16 @@ export function BulkMemberActions({ members }: { members: BulkMember[] }): React
     if (!canSubmit) return;
     setResult(null);
     const ids = [...selected];
-    startTransition(() => {
-      void bulkAddMemberNoteAction(ids, bodyTrimmed).then((res) => {
+    // AWAIT inside the transition so `pending` stays true for the whole
+    // round-trip (React 19 async Actions) — without the await, `pending` flips
+    // back synchronously, the `!pending` guard in `canSubmit` is inert, the
+    // button never disables, and a double-click writes duplicate AdminNote rows.
+    // The try/catch turns a REJECTION (e.g. the whitelist read throwing outside
+    // the action's per-note try/catch) into the same error UI instead of an
+    // unhandled rejection that silently shows the admin nothing.
+    startTransition(async () => {
+      try {
+        const res = await bulkAddMemberNoteAction(ids, bodyTrimmed);
         if (!res.ok) {
           const message =
             res.error === 'unauthorized' || res.error === 'forbidden'
@@ -78,7 +86,9 @@ export function BulkMemberActions({ members }: { members: BulkMember[] }): React
         setSelected(new Set());
         setBody('');
         router.refresh();
-      });
+      } catch {
+        setResult({ kind: 'error', message: 'Échec de l’enregistrement, réessaie.' });
+      }
     });
   }
 

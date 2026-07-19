@@ -1,7 +1,24 @@
 import 'server-only';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { LEADERBOARD_EXCLUDED_EMAILS } from '@/lib/leaderboard/showcase';
+
+/**
+ * The single "real member" cohort predicate, shared by the badge NUMERATOR
+ * ({@link countViewersForSessions}) and DENOMINATOR ({@link activeMemberCount}).
+ * Factoring it here is the root-cause fix for the "Vu par X/N" badge that could
+ * never reach 100 %: the denominator used to count active admins (no `role`
+ * filter) while the numerator can only ever contain members, so N > X even when
+ * every member had watched. One definition ⇒ numerator and denominator can never
+ * diverge again (Prisma only reads the predicate, so a single shared object is
+ * safe).
+ */
+const REAL_MEMBER_WHERE: Prisma.UserWhereInput = {
+  status: 'active',
+  role: 'member',
+  email: { notIn: [...LEADERBOARD_EXCLUDED_EMAILS] },
+};
 
 /**
  * Réunion hub (séances) — replay VIEW telemetry (J6 scope 5).
@@ -54,9 +71,14 @@ export async function countViewersForSessions(sessionIds: string[]): Promise<Map
     by: ['sessionId'],
     where: {
       sessionId: { in: sessionIds },
-      // Exclude the shared showcase/demo vitrine from the "Vu par" numerator,
-      // mirroring its exclusion from the active-member denominator below.
-      user: { email: { notIn: [...LEADERBOARD_EXCLUDED_EMAILS] } },
+      // Count a view only if its author is a REAL MEMBER of the cohort — the
+      // exact same predicate as the {@link activeMemberCount} denominator, so X
+      // and N can never drift and X ≤ N always holds: an active, role `member`,
+      // non-demo user. This keeps out admins who previewed the replay (the write
+      // path already gates `role === 'member'`, but a member later promoted to
+      // admin would otherwise leave a counted row) and a viewer who has since
+      // been suspended (they drop out of N, so they must drop out of X too).
+      user: REAL_MEMBER_WHERE,
     },
     _count: { _all: true },
   });
@@ -66,13 +88,12 @@ export async function countViewersForSessions(sessionIds: string[]): Promise<Map
 }
 
 /**
- * The denominator N for the "Vu par X/N" badge: the number of active members,
- * excluding the shared showcase/demo account. Reuses the same active-member
- * definition (`status === 'active'`) + demo exclusion as the leaderboard so the
- * two surfaces always agree on "who is a real member".
+ * The denominator N for the "Vu par X/N" badge: the number of active MEMBERS
+ * (role `member`), excluding the shared showcase/demo account. Uses the shared
+ * {@link REAL_MEMBER_WHERE} predicate so N counts exactly the cohort the
+ * numerator draws from — admins (who can never appear in X) are no longer
+ * inflating N, so the badge can actually reach 100 %.
  */
 export async function activeMemberCount(): Promise<number> {
-  return db.user.count({
-    where: { status: 'active', email: { notIn: [...LEADERBOARD_EXCLUDED_EMAILS] } },
-  });
+  return db.user.count({ where: REAL_MEMBER_WHERE });
 }

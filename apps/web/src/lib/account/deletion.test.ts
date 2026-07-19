@@ -598,6 +598,41 @@ describe('purgeMaterialisedDeletions', () => {
     await fs.rm(tmp, { recursive: true, force: true });
     delete process.env.UPLOADS_DIR;
   });
+
+  it('J6 (RGPD art.17) — routes a FAILED export-zip removal to Sentry (aligned with the sibling sweeps)', async () => {
+    // A real fs error on the FULL-PII export zip must be OBSERVABLE, exactly like
+    // the proof/training/trade/avatar sweeps — the export sweep used to discard
+    // `removeExportZip`'s result, so a stranded zip after a hard-delete was an
+    // invisible orphaned PII dump (no DB row points to it afterwards).
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'fxmily-del-export-fail-'));
+    process.env.UPLOADS_DIR = tmp;
+    await fs.mkdir(path.join(tmp, 'data-exports'), { recursive: true });
+
+    const now = new Date('2026-07-19T10:00:00.000Z');
+    findManyMock.mockResolvedValueOnce([{ id: 'u1' }]);
+    dataExportFindManyMock.mockResolvedValueOnce([{ id: 'stuckexport' }]);
+    deleteMock.mockResolvedValue({});
+    // The physical delete of the zip fails with a real I/O error (EACCES/EBUSY) →
+    // `removeExportZip` returns false (force:true means ENOENT would NOT throw, so
+    // false is a genuine error) → the sweep must reportWarning.
+    const rmSpy = vi.spyOn(fs, 'rm').mockRejectedValueOnce(new Error('EACCES: volume locked'));
+
+    const result = await purgeMaterialisedDeletions({ now });
+
+    expect(reportWarningMock).toHaveBeenCalledWith(
+      'account.deletion.purge',
+      'storage_sweep_failed',
+      expect.objectContaining({ userId: 'u1', kind: 'export' }),
+    );
+    // The hard-delete still proceeds (best-effort sweep) and the run doesn't error.
+    expect(deleteMock).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    expect(result.purged).toBe(1);
+    expect(result.errors).toBe(0);
+
+    rmSpy.mockRestore();
+    await fs.rm(tmp, { recursive: true, force: true });
+    delete process.env.UPLOADS_DIR;
+  });
 });
 
 // =============================================================================

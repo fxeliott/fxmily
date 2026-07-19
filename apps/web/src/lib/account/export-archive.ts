@@ -251,14 +251,33 @@ export async function removeExportZip(jobId: string): Promise<boolean> {
 export async function reapStaleExportJobs(userId: string, now: Date = new Date()): Promise<number> {
   const threshold = new Date(now.getTime() - STALE_EXPORT_JOB_MS);
   try {
-    const reaped = await db.dataExportJob.updateMany({
+    // Identify the zombies first so we can also reclaim the partial zip each dead
+    // build may have left on the shared uploads volume.
+    const stale = await db.dataExportJob.findMany({
       where: { userId, status: { in: ['pending', 'processing'] }, createdAt: { lt: threshold } },
-      data: {
-        status: 'failed',
-        error: 'stale: reaped after a server restart interrupted the build',
-      },
+      select: { id: true },
     });
-    return reaped.count;
+    if (stale.length === 0) return 0;
+
+    let reaped = 0;
+    for (const job of stale) {
+      // Re-check the status INSIDE the flip: if the build actually completed in
+      // the tiny window since the read, the job is now `ready` with a VALID zip —
+      // count 0, so we must NOT delete its file. Only reclaim zips of jobs we
+      // genuinely reaped.
+      const res = await db.dataExportJob.updateMany({
+        where: { id: job.id, status: { in: ['pending', 'processing'] } },
+        data: {
+          status: 'failed',
+          error: 'stale: reaped after a server restart interrupted the build',
+        },
+      });
+      if (res.count === 1) {
+        reaped += 1;
+        await removeExportZip(job.id);
+      }
+    }
+    return reaped;
   } catch {
     return 0;
   }
@@ -364,6 +383,14 @@ export async function runDataExportJob(jobId: string): Promise<RunDataExportResu
     await pruneSupersededExports(job.userId, jobId);
     return { ok: true, byteSize: stat.size, mediaAppended: appended, mediaSkipped: skipped };
   } catch (err) {
+    // Reclaim any zip the failed build already flushed BEFORE marking the job
+    // `failed`. `writeExportZip` opens the file (and streams the full-PII
+    // snapshot) before the `ready` flip, so a throw after that point — or a
+    // partial write — strands a full/partial PII archive that no later path
+    // reclaims (`pruneSupersededExports` only scans `ready`, the download route
+    // 409s a non-ready job). Best-effort + `force:true`, so a never-created file
+    // is a no-op. This is the in-process twin of the reaper's zip sweep.
+    await removeExportZip(jobId);
     await db.dataExportJob
       .update({
         where: { id: jobId },

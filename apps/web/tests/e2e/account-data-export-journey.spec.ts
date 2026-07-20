@@ -212,4 +212,34 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     await expect(page.getByRole('alert').filter({ hasText: 'Ce lien a expiré' })).toBeVisible();
     await expect(page).toHaveURL(/\/account\/data$/);
   });
+
+  test('E — a network failure on download shows the connection message, never an unhandled error', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000);
+
+    // Same proven path as D to reach a single, real download link.
+    const memberE = await seedMemberUser({ firstName: 'ExportMemberE' });
+    await page.goto('/login');
+    await loginAs(page, request, memberE.email, memberE.password);
+    await page.goto('/account/data');
+    await page.getByRole('button', { name: 'Préparer mon export complet' }).click();
+
+    const download = page.getByTestId('download-export-zip');
+    await expect(download).toBeVisible({ timeout: 90_000 });
+    const href = await download.getAttribute('href');
+    createdJobIds.push(href!.split('/').pop()!);
+
+    // Drop the connection entirely (engine-agnostic, unlike `route.abort` which
+    // WebKit ignores for same-origin fetch) → the client `fetch` rejects → the
+    // `catch` must surface a factual connection message, not an unhandled
+    // rejection and not a navigation to a broken URL.
+    await page.context().setOffline(true);
+
+    await download.click();
+    await expect(page.getByRole('alert').filter({ hasText: 'connexion' })).toBeVisible();
+    await expect(page).toHaveURL(/\/account\/data$/);
+    await page.context().setOffline(false);
+  });
 });

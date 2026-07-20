@@ -38,7 +38,7 @@ export type ExportJobView = {
 /** Map the download route's non-200 statuses to factual French copy (posture
  *  §2 — never dump the raw API JSON error at the member). 410 (zip pruned by
  *  retention/TTL after the link was rendered) and 404 (job gone) both resolve to
- *  « regenerate »; the « Regénérer » button is already on screen. */
+ *  « regenerate »; the « Régénérer » button is already on screen. */
 function downloadErrorMessage(status: number): string {
   if (status === 410 || status === 404) {
     return 'Ce lien a expiré. Régénère ton archive pour la télécharger à nouveau.';
@@ -114,7 +114,7 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
    * between render and click — a technical dump at the member (posture §2). We
    * fetch first: 200 → blob save (Content-Disposition filename preserved);
    * non-200 → factual French copy in the existing `role="alert"`, with the
-   * « Regénérer » button already on screen. The `href` stays for progressive
+   * « Régénérer » button already on screen. The `href` stays for progressive
    * enhancement — no-JS and right-click « save as » still download the
    * attachment (the route serves 200 as `Content-Disposition: attachment`).
    */
@@ -230,7 +230,7 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
                 className={btnVariants({ kind: 'ghost', size: 's' })}
               >
                 <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
-                Regénérer
+                Régénérer
               </button>
             </div>
           )}
@@ -295,7 +295,7 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
           {status === 'ready' && (
             <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
               <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-[var(--ok)]" />
-              Archive prête. Le lien reste valable tant que tu ne la regénères pas.
+              Archive prête. Le lien reste valable tant que tu ne la régénères pas.
             </p>
           )}
 

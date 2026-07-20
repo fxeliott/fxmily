@@ -116,21 +116,28 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     // the job — not just a silent in-place pill swap.
     await expect(page.getByRole('status').filter({ hasText: 'Prêt' })).toBeVisible();
 
-    const href = await download.getAttribute('href');
-    expect(href).toMatch(/^\/api\/account\/data\/export\/[a-z0-9]+$/i);
-    const jobId = href!.split('/').pop()!;
-    createdJobIds.push(jobId);
+    // The download control is a <button> with NO navigable href: no click path
+    // (primary, modified, middle, right-click « save as ») can navigate the
+    // browser to the raw API URL and dump a JSON error body at the member
+    // (posture §2). Encode that guarantee structurally.
+    expect(await download.evaluate((el) => el.tagName)).toBe('BUTTON');
+    expect(await download.getAttribute('href')).toBeNull();
 
-    // Ownership sanity: the job the UI surfaced belongs to member A.
-    const job = await db.dataExportJob.findUnique({
-      where: { id: jobId },
-      select: { userId: true, status: true },
+    // The job the UI surfaced belongs to member A (looked up by owner, since the
+    // id is no longer exposed in the DOM).
+    const job = await db.dataExportJob.findFirst({
+      where: { userId: memberA.id, status: 'ready' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, userId: true, status: true },
     });
     expect(job?.userId).toBe(memberA.id);
     expect(job?.status).toBe('ready');
+    const jobId = job!.id;
+    createdJobIds.push(jobId);
+    const apiUrl = `/api/account/data/export/${jobId}`;
 
     // Download it as the member and assert it is a real, valid archive.
-    const res = await request.get(href!);
+    const res = await request.get(apiUrl);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('application/zip');
     expect(res.headers()['content-disposition']).toContain('attachment');
@@ -196,8 +203,14 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
 
     const download = page.getByTestId('download-export-zip');
     await expect(download).toBeVisible({ timeout: 90_000 });
-    const href = await download.getAttribute('href');
-    const jobId = href!.split('/').pop()!;
+    // The id is no longer in the DOM (button, not <a href>) — look up member D's
+    // ready job to target the real zip on the volume.
+    const jobD = await db.dataExportJob.findFirst({
+      where: { userId: memberD.id, status: 'ready' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    const jobId = jobD!.id;
     createdJobIds.push(jobId);
 
     // Simulate the retention / TTL sweep firing AFTER the link was rendered: the
@@ -228,8 +241,13 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
 
     const download = page.getByTestId('download-export-zip');
     await expect(download).toBeVisible({ timeout: 90_000 });
-    const href = await download.getAttribute('href');
-    createdJobIds.push(href!.split('/').pop()!);
+    // Button (no href) — record member E's job id for cleanup via the DB.
+    const jobE = await db.dataExportJob.findFirst({
+      where: { userId: memberE.id, status: 'ready' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (jobE) createdJobIds.push(jobE.id);
 
     // Drop the connection entirely (engine-agnostic, unlike `route.abort` which
     // WebKit ignores for same-origin fetch) → the client `fetch` rejects → the
@@ -253,23 +271,33 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     await loginAs(page, request, memberF.email, memberF.password);
     await page.goto('/account/data');
 
-    // A keyboard member activates the primary action. That button UNMOUNTS when
-    // the job flips to pending — focus must NOT fall to <body> (WCAG 2.4.3 Focus
-    // Order). It lands on the panel heading so the member stays anchored while the
-    // polite role=status region announces the new state.
+    // A keyboard member activates the primary action. `pending` flips true on the
+    // next render → the native `disabled` attribute would blur the focused button
+    // to <body> for the whole ~1-2s round-trip, and it then UNMOUNTS on the status
+    // change (WCAG 2.4.3 Focus Order). The fix moves focus to the panel heading
+    // SYNCHRONOUSLY, so focus must already be on the heading right after the
+    // keypress — NOT stranded on <body> during the in-flight window.
     const prepare = page.getByRole('button', { name: 'Préparer mon export complet' });
     await expect(prepare).toBeVisible();
     await prepare.focus();
     await prepare.press('Enter');
 
-    await expect(page.getByText('On assemble ton archive')).toBeVisible({ timeout: 30_000 });
+    // In-flight anchor: focus reaches the heading almost immediately (the
+    // synchronous move), well before the round-trip lands the "On assemble" copy.
+    // The short poll passes on the fixed code; the pre-fix version sat on <body>
+    // during this window.
     await expect
-      .poll(() => page.evaluate(() => document.activeElement?.tagName ?? null))
+      .poll(() => page.evaluate(() => document.activeElement?.tagName ?? null), {
+        timeout: 2500,
+        intervals: [50, 100, 150, 250, 400],
+      })
       .toBe('H3');
     const focusedText = await page.evaluate(
       () => (document.activeElement as HTMLElement | null)?.textContent ?? '',
     );
     expect(focusedText).toContain('Export complet');
+    // And the in-flight state is actually reached (the action registered).
+    await expect(page.getByText('On assemble ton archive')).toBeVisible({ timeout: 30_000 });
 
     const jobF = await db.dataExportJob.findFirst({
       where: { userId: memberF.id },

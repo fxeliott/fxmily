@@ -1,7 +1,7 @@
 'use client';
 
 import { Archive, CheckCircle2, Download, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { requestDataExportAction } from '@/app/account/data/actions';
@@ -68,6 +68,14 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Keyboard/AT focus anchor. Every action button (Régénérer / Relancer / Préparer
+  // / Réessayer) UNMOUNTS when its status transition lands, so the browser would
+  // drop focus to <body> and a keyboard member would restart from the top of the
+  // page (WCAG 2.4.3 Focus Order). On a USER-INITIATED transition only (never on
+  // the background poll) we move focus to the panel heading, keeping the member
+  // anchored while the polite role=status region announces the new state.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const refocusHeadingRef = useRef(false);
 
   const status = job?.status ?? null;
   const isRunning = status === 'pending' || status === 'processing';
@@ -76,12 +84,24 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
   // job changes nothing — relaunching it does).
   const isStuck = isRunning && job?.stale === true;
   const isActivelyRunning = isRunning && !isStuck;
+  // The rendered branch, so the refocus effect fires on EVERY meaningful UI
+  // transition (incl. stuck→running, where `status` alone stays 'pending').
+  const view = isStuck ? 'stuck' : isActivelyRunning ? 'running' : (status ?? 'idle');
 
   useEffect(() => {
     if (!isActivelyRunning) return;
     const timer = setInterval(() => router.refresh(), 6000);
     return () => clearInterval(timer);
   }, [isActivelyRunning, router]);
+
+  // Restore focus to the heading after a user-triggered status change unmounted
+  // the button they activated. Gated by `refocusHeadingRef` so the 6s poll (which
+  // also changes `view`, e.g. running→ready) never yanks focus from elsewhere.
+  useEffect(() => {
+    if (!refocusHeadingRef.current) return;
+    refocusHeadingRef.current = false;
+    headingRef.current?.focus();
+  }, [view]);
 
   function handleRequest(): void {
     setError(null);
@@ -100,6 +120,9 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
           );
           return;
         }
+        // Arm the heading refocus for the status change this refresh will land, so
+        // the keyboard member isn't dropped to <body> when the button unmounts.
+        refocusHeadingRef.current = true;
         router.refresh();
       } catch {
         setError('La préparation n’a pas pu démarrer. Réessaie dans un instant.');
@@ -168,7 +191,11 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-[var(--t-1)]">
+            <h3
+              ref={headingRef}
+              tabIndex={-1}
+              className="rounded-sm text-sm font-semibold text-[var(--t-1)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--b-acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-2)]"
+            >
               Export complet (avec photos)
             </h3>
             {/*

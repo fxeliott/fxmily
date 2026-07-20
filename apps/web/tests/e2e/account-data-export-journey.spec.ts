@@ -242,4 +242,39 @@ test.describe('Account data — async RGPD export member journey (runtime)', () 
     await expect(page).toHaveURL(/\/account\/data$/);
     await page.context().setOffline(false);
   });
+
+  test('F — keyboard focus stays on the panel after a status transition (WCAG 2.4.3)', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const memberF = await seedMemberUser({ firstName: 'ExportMemberF' });
+    await page.goto('/login');
+    await loginAs(page, request, memberF.email, memberF.password);
+    await page.goto('/account/data');
+
+    // A keyboard member activates the primary action. That button UNMOUNTS when
+    // the job flips to pending — focus must NOT fall to <body> (WCAG 2.4.3 Focus
+    // Order). It lands on the panel heading so the member stays anchored while the
+    // polite role=status region announces the new state.
+    const prepare = page.getByRole('button', { name: 'Préparer mon export complet' });
+    await expect(prepare).toBeVisible();
+    await prepare.focus();
+    await prepare.press('Enter');
+
+    await expect(page.getByText('On assemble ton archive')).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.tagName ?? null))
+      .toBe('H3');
+    const focusedText = await page.evaluate(
+      () => (document.activeElement as HTMLElement | null)?.textContent ?? '',
+    );
+    expect(focusedText).toContain('Export complet');
+
+    const jobF = await db.dataExportJob.findFirst({
+      where: { userId: memberF.id },
+      select: { id: true },
+    });
+    if (jobF) createdJobIds.push(jobF.id);
+  });
 });

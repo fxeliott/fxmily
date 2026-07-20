@@ -68,14 +68,14 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  // Keyboard/AT focus anchor. Every action button (Régénérer / Relancer / Préparer
-  // / Réessayer) UNMOUNTS when its status transition lands, so the browser would
-  // drop focus to <body> and a keyboard member would restart from the top of the
-  // page (WCAG 2.4.3 Focus Order). On a USER-INITIATED transition only (never on
-  // the background poll) we move focus to the panel heading, keeping the member
-  // anchored while the polite role=status region announces the new state.
+  // Keyboard/AT focus anchor. Activating a request button (Préparer / Régénérer /
+  // Relancer / Réessayer) flips `pending` → the native `disabled` attribute blurs
+  // the focused button to <body>, and moments later the button UNMOUNTS on the
+  // status change — either way a keyboard member is dropped to the top of the page
+  // (WCAG 2.4.3 Focus Order). `handleRequest` moves focus to this heading
+  // SYNCHRONOUSLY, before the disable/unmount, so the member stays anchored while
+  // the polite role=status region announces the new state.
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const refocusHeadingRef = useRef(false);
 
   const status = job?.status ?? null;
   const isRunning = status === 'pending' || status === 'processing';
@@ -84,9 +84,6 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
   // job changes nothing — relaunching it does).
   const isStuck = isRunning && job?.stale === true;
   const isActivelyRunning = isRunning && !isStuck;
-  // The rendered branch, so the refocus effect fires on EVERY meaningful UI
-  // transition (incl. stuck→running, where `status` alone stays 'pending').
-  const view = isStuck ? 'stuck' : isActivelyRunning ? 'running' : (status ?? 'idle');
 
   useEffect(() => {
     if (!isActivelyRunning) return;
@@ -94,17 +91,14 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
     return () => clearInterval(timer);
   }, [isActivelyRunning, router]);
 
-  // Restore focus to the heading after a user-triggered status change unmounted
-  // the button they activated. Gated by `refocusHeadingRef` so the 6s poll (which
-  // also changes `view`, e.g. running→ready) never yanks focus from elsewhere.
-  useEffect(() => {
-    if (!refocusHeadingRef.current) return;
-    refocusHeadingRef.current = false;
-    headingRef.current?.focus();
-  }, [view]);
-
   function handleRequest(): void {
     setError(null);
+    // Move focus to the stable panel heading NOW — synchronously, before
+    // startTransition flips `pending` and the native `disabled` attribute blurs
+    // the focused button to <body> (and before the button later unmounts on the
+    // status change). This keeps a keyboard/AT member anchored for the whole
+    // round-trip instead of being stranded at <body> (WCAG 2.4.3 Focus Order).
+    headingRef.current?.focus();
     // AWAIT inside the transition so `pending` (the button's disabled + label)
     // reflects the real in-flight state for the whole round-trip (React 19 async
     // Actions); the try/catch surfaces a rejection as the error message instead
@@ -120,9 +114,6 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
           );
           return;
         }
-        // Arm the heading refocus for the status change this refresh will land, so
-        // the keyboard member isn't dropped to <body> when the button unmounts.
-        refocusHeadingRef.current = true;
         router.refresh();
       } catch {
         setError('La préparation n’a pas pu démarrer. Réessaie dans un instant.');
@@ -131,23 +122,16 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
   }
 
   /**
-   * Download the ready archive CLIENT-SIDE instead of letting the browser
-   * navigate to the API URL. A raw `<a href>` nav renders the route's JSON error
-   * body verbatim if the zip was pruned (410) or the job vanished (404/401)
-   * between render and click — a technical dump at the member (posture §2). We
-   * fetch first: 200 → blob save (Content-Disposition filename preserved);
+   * Download the ready archive CLIENT-SIDE. This is a `<button>`, not an
+   * `<a href>`: there is NO navigable URL, so no click path (primary, modified,
+   * middle, or right-click « save as ») can make the browser render the route's
+   * raw JSON error body — the technical dump at the member that posture §2
+   * forbids when the zip was pruned (410) or the job vanished (404/401). We
+   * always fetch: 200 → blob save (Content-Disposition filename preserved);
    * non-200 → factual French copy in the existing `role="alert"`, with the
-   * « Régénérer » button already on screen. The `href` stays for progressive
-   * enhancement — no-JS and right-click « save as » still download the
-   * attachment (the route serves 200 as `Content-Disposition: attachment`).
+   * « Régénérer » button already on screen.
    */
-  async function handleDownload(e: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
-    // Leave modified / non-primary clicks (open in new tab, save-as, middle
-    // click) to the browser — the href is a real, attachment-served URL.
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
-      return;
-    }
-    e.preventDefault();
+  async function handleDownload(): Promise<void> {
     if (downloading || !job) return;
     setError(null);
     setDownloading(true);
@@ -232,8 +216,8 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
 
           {status === 'ready' && job && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <a
-                href={`/api/account/data/export/${job.id}`}
+              <button
+                type="button"
                 onClick={handleDownload}
                 aria-busy={downloading}
                 aria-disabled={downloading}
@@ -249,7 +233,7 @@ export function RequestExportPanel({ job }: { job: ExportJobView | null }): Reac
                   <Download aria-hidden="true" className="h-4 w-4" />
                 )}
                 {downloading ? 'Téléchargement…' : 'Télécharger l’archive'}
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={handleRequest}

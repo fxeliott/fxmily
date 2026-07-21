@@ -1,0 +1,159 @@
+name: E2E Mobile (golden path)
+
+# J7 — exercise the mobile viewport in CI WITHOUT paying the ~30% runtime that
+# running the full 46-spec suite on `mobile-iphone-15` would cost (that trade-off
+# is documented in `e2e.yml`, which deliberately skips the mobile project).
+#
+# Scope on purpose: this job runs ONLY the canonical golden-path spec
+# (`smoke-tour-j6.spec.ts` — login → dashboard 30d/7d → admin member detail) on
+# the `mobile-iphone-15` Playwright project. That single spec renders the
+# heaviest mobile surface (dashboard + Recharts at 393px) where viewport-overflow
+# / touch-target regressions actually show up, so we get real mobile signal for a
+# fraction of the cost. What is dropped vs the desktop run: the other ~45 specs
+# are NOT re-run on mobile here (by design — see the note above).
+#
+# NON-BLOCKING BY DESIGN: this workflow is intentionally NOT wired into `main`'s
+# required status checks (the required check stays "Playwright (chromium)" in
+# e2e.yml). A mobile-only flake must never block a merge — it is a signal, not a
+# gate. Add it to branch protection later only if it proves stable.
+#
+# ENGINE NOTE: Playwright's `devices['iPhone 15']` descriptor uses the WEBKIT
+# browser engine (defaultBrowserType: 'webkit'), not chromium — so this job
+# installs webkit, unlike e2e.yml which installs chromium only.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  # Manual trigger (validate a feature branch before merge).
+  workflow_dispatch:
+  # Nightly mobile smoke against main (03:00 UTC ≈ 04:00–05:00 Europe/Paris).
+  # `schedule` only fires on the default branch, so this covers main even on
+  # days with no push. Keeps a standing mobile-regression tripwire cheaply.
+  schedule:
+    - cron: '0 3 * * *'
+
+# Cancel in-flight PR runs on new pushes; keep every main/nightly run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-mobile:
+    name: Playwright (mobile-iphone-15, golden path)
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    # Same Postgres service + credentials + TZ as e2e.yml so the golden-path
+    # spec sees an identical DB layer (auth tables, seed rows).
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fxmily
+          POSTGRES_PASSWORD: fxmily_dev
+          POSTGRES_DB: fxmily
+          TZ: Europe/Paris
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U fxmily -d fxmily"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      HUSKY: 0
+      DATABASE_URL: postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public
+      # `next dev` → NODE_ENV=development, so the "AUTH_URL must be HTTPS in
+      # production" Zod refine (apps/web/src/lib/env.ts) doesn't fire.
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
+      # Auth.js v5: without this the credentials callback throws "Invalid URL"
+      # behind Playwright's webServer (same fix as e2e.yml / PR #72).
+      AUTH_TRUST_HOST: 'true'
+      VERIFICATION_ADMIN_BATCH_TOKEN: ci_placeholder_verification_admin_batch_token_min_32_chars
+      CI: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Distinct cache key from e2e.yml: this job caches WEBKIT binaries, that
+      # one caches chromium — different browsers, so they must not share a key.
+      - name: Cache Playwright browsers (webkit)
+        id: playwright-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
+      # Same Microsoft/azure apt-repo NOSPLIT flake mitigation as e2e.yml.
+      - name: Drop flaky Microsoft apt sources (install-deps NOSPLIT flake)
+        run: sudo find /etc/apt/sources.list.d -type f \( -name '*microsoft*' -o -name '*azure*' \) -print -delete
+
+      - name: Install Playwright browsers + system deps (webkit)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fxmily/web exec playwright install --with-deps webkit
+
+      - name: Install Playwright system deps (cache hit branch)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fxmily/web exec playwright install-deps webkit
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @fxmily/web prisma:migrate:deploy
+
+      # Same J6 demo seed as e2e.yml — smoke-tour-j6 needs the canonical
+      # admin user + trades + check-ins to reach the dashboard.
+      - name: Seed J6 demo data for smoke-tour spec
+        run: pnpm --filter @fxmily/web exec tsx scripts/seed-j6-demo.ts
+
+      # ONLY the golden-path spec, ONLY the mobile project. The `smoke-tour-j6`
+      # filter is a path substring — it matches `smoke-tour-j6.spec.ts` and NOT
+      # `smoke-tour.spec.ts`.
+      - name: Run golden-path spec on mobile-iphone-15 (webkit)
+        run: pnpm --filter @fxmily/web exec playwright test --project=mobile-iphone-15 smoke-tour-j6.spec.ts
+
+      - name: Upload Playwright traces + screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-mobile
+          path: apps/web/test-results/
+          retention-days: 7

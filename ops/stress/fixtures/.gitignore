@@ -1,0 +1,7 @@
+# Fixtures binaires générés localement — jamais commités (repo public, poids).
+# Générer avec : node ops/stress/gen-fixture.mjs
+*.jpg
+*.jpeg
+*.png
+*.bin
+!.gitignore

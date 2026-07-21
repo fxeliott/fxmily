@@ -1,0 +1,3 @@
+# Résumés / logs de run k6 — locaux, jamais commités (peuvent contenir des
+# chiffres de run + logs serveur ; le livrable versionné, c'est la SUITE).
+.results/

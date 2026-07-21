@@ -40,9 +40,58 @@ export const RECOMPUTE_DEBOUNCE_MS = 5_000;
 
 const lastRecomputeAt = new Map<string, number>();
 
-/** Test-only: clear the in-memory map. */
+/**
+ * Global cap on concurrent background recomputes across the WHOLE cohort
+ * (J7 stress-test fix). The per-user debounce above only coalesces repeated
+ * calls from the *same* user; it does nothing when 100 distinct members check
+ * in during the 21:00 window. Each `recomputeAndPersist` fans out to ~10 Prisma
+ * round-trips (2×30-day `findMany` + training + meeting + off-days + upsert),
+ * and the pg pool is capped at `DATABASE_POOL_MAX` (default 10, floor 8). An
+ * unbounded burst of N recomputes therefore demands ~10·N connections at once
+ * and starves the foreground request path (dashboards, other check-ins) into
+ * 5 s `connectionTimeoutMillis` throws.
+ *
+ * A small semaphore keeps at most `MAX_CONCURRENT_RECOMPUTES` recompute
+ * pipelines in flight; the rest queue and drain post-response (they already run
+ * inside `after()`, so the added latency is invisible to the member). This
+ * bounds background connection demand to a fraction of the pool and leaves the
+ * majority for foreground traffic — regardless of cohort size.
+ *
+ * Single-instance V1 (Hetzner). Multi-instance V2 would move this to a shared
+ * limiter (Redis token bucket) without changing the call sites.
+ */
+export const MAX_CONCURRENT_RECOMPUTES = 3;
+
+let activeRecomputes = 0;
+const recomputeWaiters: Array<() => void> = [];
+
+/** Acquire one recompute slot, awaiting a free one if the cap is reached. */
+function acquireRecomputeSlot(): Promise<void> {
+  if (activeRecomputes < MAX_CONCURRENT_RECOMPUTES) {
+    activeRecomputes += 1;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    recomputeWaiters.push(resolve);
+  });
+}
+
+/** Release a slot, handing it straight to the next waiter if any. */
+function releaseRecomputeSlot(): void {
+  const next = recomputeWaiters.shift();
+  if (next) {
+    // Hand the slot over directly — `activeRecomputes` stays unchanged.
+    next();
+  } else {
+    activeRecomputes = Math.max(0, activeRecomputes - 1);
+  }
+}
+
+/** Test-only: clear the in-memory debounce map + concurrency state. */
 export function __resetSchedulerForTests(): void {
   lastRecomputeAt.clear();
+  activeRecomputes = 0;
+  recomputeWaiters.length = 0;
 }
 
 export type ScoreRecomputeReason =
@@ -79,10 +128,14 @@ export function scheduleScoreRecompute(
       // Coalesced — a recent recompute already covers this change.
       return;
     }
-    // Reserve the slot BEFORE running so concurrent calls in the same
-    // process tick collapse onto one execution.
+    // Reserve the debounce slot BEFORE running so concurrent calls for the
+    // same user in the same process tick collapse onto one execution.
     lastRecomputeAt.set(userId, now);
 
+    // Bound cohort-wide concurrency: under a mass check-in burst this queues
+    // the recompute behind at most MAX_CONCURRENT_RECOMPUTES in-flight ones so
+    // the pg pool isn't drained. Runs post-response, so the wait is invisible.
+    await acquireRecomputeSlot();
     try {
       // Anchor on today-local so the just-submitted action is in-window.
       // Uses `localDateOf` for DST-safe local-day computation in `timezone`.
@@ -114,6 +167,8 @@ export function scheduleScoreRecompute(
       }).catch(() => {
         /* swallow — audit failure on top of recompute failure */
       });
+    } finally {
+      releaseRecomputeSlot();
     }
   });
 }

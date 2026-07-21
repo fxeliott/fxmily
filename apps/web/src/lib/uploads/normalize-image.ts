@@ -2,6 +2,8 @@ import 'server-only';
 
 import sharp from 'sharp';
 
+import { runWithImageNormalizeLimit } from './image-normalize-concurrency';
+
 /**
  * Tour 13 — image normalisation for MT5-proof uploads (SPEC §33).
  *
@@ -193,17 +195,22 @@ export async function normalizeAvatarImage(input: Uint8Array): Promise<Normalize
     return { ok: false, reason: 'heic_unsupported' };
   }
   try {
-    const buffer = await sharp(input, {
-      failOn: 'error',
-      limitInputPixels: MAX_INPUT_PIXELS,
-    })
-      .rotate()
-      .resize(AVATAR_SIZE_PX, AVATAR_SIZE_PX, {
-        fit: 'cover',
-        position: 'attention',
+    // Bound libvips concurrency: a burst of avatar uploads shares the same
+    // process-wide memory budget as MT5 proofs (J7 stress-test fix). The
+    // re-encode result is identical — only a bounded queue is added in front.
+    const buffer = await runWithImageNormalizeLimit(() =>
+      sharp(input, {
+        failOn: 'error',
+        limitInputPixels: MAX_INPUT_PIXELS,
       })
-      .webp({ quality: AVATAR_WEBP_QUALITY })
-      .toBuffer();
+        .rotate()
+        .resize(AVATAR_SIZE_PX, AVATAR_SIZE_PX, {
+          fit: 'cover',
+          position: 'attention',
+        })
+        .webp({ quality: AVATAR_WEBP_QUALITY })
+        .toBuffer(),
+    );
     return { ok: true, buffer, ext: 'webp', mime: 'image/webp' };
   } catch {
     return { ok: false, reason: 'decode_failed' };
@@ -219,25 +226,32 @@ export async function normalizeProofImage(input: Uint8Array): Promise<NormalizeI
   }
 
   try {
-    const buffer = await sharp(input, {
-      // `failOn: 'error'` (not the stricter default 'warning') tolerates the
-      // benign warnings real phone captures carry — a truncated ICC profile,
-      // an odd chunk — while still aborting on genuinely corrupt pixel data.
-      // We only ever read the FIRST frame (no `animated: true`), so an animated
-      // GIF/WebP collapses to its opening frame, exactly the intended policy.
-      failOn: 'error',
-      limitInputPixels: MAX_INPUT_PIXELS,
-    })
-      // `.rotate()` with no argument bakes in the EXIF Orientation tag (and is
-      // applied before the resize, so the ceiling is measured on the UPRIGHT
-      // image). Metadata is dropped on re-encode → no GPS/device PII persisted.
-      .rotate()
-      .resize(MAX_LONG_SIDE_PX, MAX_LONG_SIDE_PX, {
-        fit: 'inside',
-        withoutEnlargement: true,
+    // Bound libvips concurrency (J7 stress-test fix, bottleneck #8): under 50
+    // simultaneous MT5 proof uploads, 50 unbounded decode/re-encode pipelines
+    // would each hold tens of MiB of pixel buffers at once → OOM. The semaphore
+    // queues the excess so at most `MAX_CONCURRENT_IMAGE_NORMALIZE` run
+    // together; the normalised output is byte-for-byte identical.
+    const buffer = await runWithImageNormalizeLimit(() =>
+      sharp(input, {
+        // `failOn: 'error'` (not the stricter default 'warning') tolerates the
+        // benign warnings real phone captures carry — a truncated ICC profile,
+        // an odd chunk — while still aborting on genuinely corrupt pixel data.
+        // We only ever read the FIRST frame (no `animated: true`), so an
+        // animated GIF/WebP collapses to its opening frame, as intended.
+        failOn: 'error',
+        limitInputPixels: MAX_INPUT_PIXELS,
       })
-      .jpeg({ quality: OUTPUT_JPEG_QUALITY })
-      .toBuffer();
+        // `.rotate()` with no argument bakes in the EXIF Orientation tag (and is
+        // applied before the resize, so the ceiling is measured on the UPRIGHT
+        // image). Metadata is dropped on re-encode → no GPS/device PII persisted.
+        .rotate()
+        .resize(MAX_LONG_SIDE_PX, MAX_LONG_SIDE_PX, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: OUTPUT_JPEG_QUALITY })
+        .toBuffer(),
+    );
     return { ok: true, buffer, ext: 'jpg', mime: 'image/jpeg' };
   } catch {
     // Undecodable / corrupt / unexpected format that slipped past the sniff.

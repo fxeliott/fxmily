@@ -209,3 +209,65 @@ contrôle pas le rythme de déploiement) — acceptable en V1 (30→100 membres)
 - [ ] sonde prod (`db:ok`)
 
 _(Cochés + preuves renseignés à la clôture. `[~]` = partiel/honnête, pas coché.)_
+
+## Revue adversariale finale — contextes frais (2026-07-22)
+
+Revue en **4 sous-agents Opus 4.8 en contextes frais** (workflow `wf_8dfdf647-119`,
+525 s, 0 erreur) : 3 audits parallèles (artefacts stress / perf `/classement` /
+gardes de concurrence) + 1 synthèse. Chaque audit devait **réfuter** la thèse.
+
+**Verdict consolidé : `NO_GO`** pour un merge/deploy présenté comme _« J7
+load-readiness prouvé par mesure »_ (règle : ≥1 finding `blocker` ⇒ NO_GO).
+
+Nuance (honnête) : le **code de la suite est sain et scrupuleusement honnête** (aucun
+GO faux revendiqué), et les goulots #8/#9/#10 ont des **preuves indépendantes
+solides** — sémaphores mono-thread corrects (hand-off au release, libération en
+`finally`), `EXPLAIN (ANALYZE)` réel ~608×, **absence de N+1 sur `/classement`
+CONFIRMÉE** (`service.ts` = 1 + 1 + (0 ou 4) requêtes, reste en mémoire). Merger la
+suite **en tant qu'outillage** est à faible risque.
+
+Deux hypothèses de perf ont été **RÉFUTÉES par voie indépendante** :
+
+- « N+1 au rendu de `/classement` » → FAUX (aucune requête par ligne).
+- « Hydratation framer-motion coûteuse par ligne » → FAUX (liste = 100 % Server
+  Components, `<details>`/`<summary>` natif, 0 JS d'hydratation ; seul îlot client =
+  `AvatarImage` quand photo présente).
+- Cause réelle du rendu ~73-101 s en dev = **artefact RSC dev-mode Turbopack** sur un
+  arbre ~1000 lignes (non représentatif prod). Concern résiduel réel = rendu serveur
+  **O(N)** sans pagination + `force-dynamic` → à confirmer via `next build`, watch-item
+  vers 1000 membres, négligeable à 30-100.
+
+### Blockers (empêchent de signer « readiness mesurée »)
+
+1. **Zéro baseline de charge mesurée** : toutes les cellules p95/p99/taux-échec de
+   S1/S3/S4 = `_à mesurer_`, S2 non mesuré. Seuls réels : `EXPLAIN` DB-level + comptes
+   de seed ⇒ le livrable-cœur _mesure_ est absent.
+2. **`/api/auth/csrf` 404, cause racine non résolue** (worktree / Turbopack
+   workspace-root) : `login()` dépend d'un csrf 200 ⇒ S1/S3/S4 non-authentifiables ⇒
+   3/4 scénarios non-exécutables cette session. La prod sert `/api/auth/csrf`
+   normalement — c'est un blocage **local du harness**, pas un bug prod.
+
+### Correctif appliqué suite à la revue (major → fermé)
+
+**Faux-vert 307 → /login** : `authParams` posait déjà `redirects:0`, mais les
+`check()` `status===200` étaient _advisory_ (ne gatent pas le run) et le
+`http_req_failed` par défaut de k6 ne compte PAS un 307 comme échec. Un run aux
+tokens cassés pouvait donc passer seuils+p95 tout en mesurant `/login`.
+→ **Fix** : seuil sur la métrique `checks` ajouté à S1/S3/S4 (`checks: ['rate>0.99']`,
+S4 scopé `{scope:member}`). Un run à l'auth cassée **échoue désormais bruyamment**.
+_(Correct par inspection ; `k6 run` non rejoué cette session — même blocage csrf.)_
+
+### Reste-à-faire (résiduels — prérequis avant de signer J7 readiness)
+
+- Résoudre le **csrf 404** (poser `turbopack.root` sur le worktree, OU lancer k6 depuis
+  un checkout principal / build prod-like) puis **`k6 run` réel S1/S3/S4** avec baselines
+  p95/p99/taux-échec documentées.
+- **Baseline prod `/classement`** : `next build && next start` (le Zod refine d'`env.ts`
+  bloque `next start` sur `AUTH_URL` http → à contourner) pour la magnitude réelle du
+  rendu RSC 1000 lignes.
+- **S2 end-to-end** : compte MT5 seedé + creds `UPLOAD_*` (#8 prouvé unit-only).
+- **Write-path** check-in → recompute fan-out sous k6 réel (#9 prouvé unit-only).
+- **Filet de régression #10** : rendre `j7-explain-leaderboard.ts` exit ≠ 0 sur échec
+  d'assertion de plan (il imprime `PARTIAL` et sort 0) + l'ancrer en CI.
+- Vérifier le **lazy-loading avatars** (`loading='lazy'`) avant de scaler à 1000 membres.
+- Prouver que sémaphore #9 **+** batching cron tiennent conjointement le pg-pool.

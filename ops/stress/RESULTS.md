@@ -47,8 +47,10 @@ Les seuils « Done » sont dans chaque script et dans le README.
 > — `/dashboard` au plafond 60 s — ou des **aborts de fin de test** — `/checkin` ~27-43 s —,
 > **aucun n'est un 307**. Preuve k6 indépendante : les **81 check-échecs == 81 `http_req_failed`**,
 > or k6 ne compte **pas** un 307 comme `http_req_failed` ⇒ zéro 307, zéro faux-vert `/login`)
-> **ni un défaut de code/données** (l'`EXPLAIN` prouve la couche
-> data à **2,1 ms** — § Leaderboard indexé). C'est la **contention de rendu dev-mode**.
+> **ni un défaut de la couche data** — là où elle est mesurée (`/classement`), l'`EXPLAIN`
+> la situe à **2,1 ms** (§ Leaderboard indexé). Cet `EXPLAIN` **ne couvre pas** les requêtes
+> propres à `/dashboard` ; leur lenteur est donc imputée au **rendu RSC dev-mode**, pas à la
+> DB (aucune requête `/dashboard` n'a été profilée séparément). C'est la **contention de rendu dev-mode**.
 > Conformément à l'en-tête `-Mode dev`, ces chiffres sont une **borne supérieure** ; ici
 > la borne dev est dépassée ⇒ **non concluante pour la prod**. La lecture
 > prod-représentative exige un harnais prod-https (cf. § Reste-à-faire).
@@ -219,6 +221,7 @@ contrôle pas le rythme de déploiement) — acceptable en V1 (30→100 membres)
 - [ ] `pnpm format:check && pnpm lint && pnpm type-check && pnpm build`
 - [ ] `pnpm --filter @fxmily/web exec vitest run` (dont `scheduler.test.ts` + test sémaphore uploads)
 - [~] preuve runtime — **`EXPLAIN (ANALYZE)` réel exécuté** (#10, via `j7-explain-leaderboard.ts` sur la DB verify :55432 ; log local gitignoré) ; **k6 S1 live exécuté** (2026-07-22, `.results/s1-live.json` : auth OK, saturation `next dev` à 100 VU = borne dev non concluante prod, cf. § S1) ; **S3/S4 non exécutés** (env verrouillé après S1)
+- [~] **parcours membre mobile vert en CI** — check `Playwright (mobile-iphone-15, golden path)` (`.github/workflows/e2e-mobile.yml` → `pnpm exec playwright test --project=mobile-iphone-15 smoke-tour-j6.spec.ts`, webkit iPhone 15 375 px) ; exerce le golden-path membre de bout en bout à l'exécution réelle. Vert sur la PR #551. C'est la preuve « place du membre » côté runtime, complémentaire de la charge k6.
 - [ ] PR CI verte + merge + déploiement (infra déjà provisionnée)
 - [ ] sonde prod (`db:ok`)
 

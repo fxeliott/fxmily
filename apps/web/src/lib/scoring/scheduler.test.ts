@@ -145,3 +145,15 @@ describe('scheduleScoreRecompute — cohort-wide concurrency bound (J7)', () => 
     expect(recomputeAndPersistMock).toHaveBeenCalledTimes(COHORT);
   });
 });
+
+describe('MAX_CONCURRENT_RECOMPUTES — value anchor (J7 stress-test guard)', () => {
+  it('pins the concurrency cap so a silent bump cannot slip through CI', () => {
+    // This is a VALUE anchor, not a mechanism test. The tests above prove the
+    // semaphore bounds concurrency to *whatever* MAX_CONCURRENT_RECOMPUTES is —
+    // they stay green if someone bumps it from 3 to 30. This test fails on any
+    // change to the value itself, forcing an explicit review + a re-run of the
+    // k6 stress suite (ops/stress) before the pg pool budget assumptions
+    // (~10 round-trips per recompute vs DATABASE_POOL_MAX floor 8) change.
+    expect(MAX_CONCURRENT_RECOMPUTES).toBe(3);
+  });
+});

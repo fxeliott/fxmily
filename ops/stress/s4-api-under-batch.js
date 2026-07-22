@@ -55,6 +55,10 @@ export const options = {
   thresholds: {
     // Verdict : l'expérience membre reste saine PENDANT que le batch tourne.
     'http_req_failed{scope:member}': ['rate<0.01'],
+    // Gate the member-surface status===200 checks: a run whose tokens silently
+    // 307→/login would otherwise pass failed-rate+p95 (k6 counts 307 as non-failed)
+    // while measuring /login. Scoped to member so the batch 429s never gate it.
+    'checks{scope:member}': ['rate>0.99'],
     'http_req_duration{scope:member,name:classement}': [`p(95)<${READ_P95_MS}`],
     'http_req_duration{scope:member,name:dashboard}': [`p(95)<${READ_P95_MS}`],
   },

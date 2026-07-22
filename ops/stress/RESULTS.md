@@ -29,41 +29,57 @@
 
 Les seuils « Done » sont dans chaque script et dans le README.
 
-> **État de mesure k6 (honnête) — S1/S3/S4 NON mesurés à ce jour.**
-> Le driver `run-suite.ps1` échoue au démarrage du serveur local : la sonde de
-> readiness sur `/api/auth/csrf` recevait un **404** (le serveur boote —
-> `Ready in …` dans `server.log` — mais cette route répond 404, cf.
-> `server.err.log`), d'où le timeout `server did not start` observé
-> (`.results/k6-suite.log`). **Deux causes distinctes, non encore levées :**
+> **État de mesure k6 (honnête) — S1 MESURÉ le 2026-07-22 ; S3/S4 non mesurés.**
 >
-> 1. **Sonde de readiness** — corrigée dans ce commit (`/api/auth/csrf` →
->    `/api/health`, qui renvoie 200 sans auth). Le serveur sera désormais
->    détecté comme prêt.
-> 2. **Route `/api/auth/csrf` en 404** (cause racine NON résolue) — `login()`
->    (`lib/auth.js`) en dépend **entièrement** ; tant qu'elle 404, l'auth k6 des
->    scénarios S1/S3 échoue. Hypothèse de tête (non prouvée, exige un serveur
->    tournant pour être confirmée) : confusion du **workspace-root Turbopack** en
->    worktree git (`server.err.log` montre Turbopack choisissant le
->    `pnpm-workspace.yaml` **du repo principal** — hors worktree — comme racine). Le
->    driver émet maintenant un **diagnostic explicite** post-readiness pour
->    isoler ce cas (routing vs boot) au prochain run.
+> **`/api/auth/csrf` 404 : RÉSOLU cette session.** Le run S1 live
+> (`.results/s1-live.json`, `s1-checkin-burst.js`, 100 VUs) a produit **24 lectures
+> `/dashboard` en 200 authentifié** (+ 1 `/checkin`) avec `redirects:0`. Un 200 sous
+> `redirects:0` **ne peut arriver que si le cookie de session est valide** (une auth
+> cassée donnerait un 307 → `/login`) ⇒ **`/api/auth/csrf` + `login()` fonctionnent**.
+> L'hypothèse « csrf 404 / workspace-root Turbopack » des sessions précédentes est
+> **levée par la mesure** : l'auth k6 s'authentifie réellement.
 >
-> **Conséquence** : les tableaux S1/S3/S4 restent `_à mesurer_`. Le run live est
-> bloqué ici par (a) le démarrage serveur (permission de process longue refusée
-> cette session) et (b) la route csrf 404. Les goulots #8/#9/#10 sont prouvés
-> **indépendamment du wall-clock k6** (tests unitaires + `EXPLAIN` réel, cf.
-> § « Preuves déjà établies »), ce qui couvre le cœur technique de J7 ; les
-> chiffres p95/p99 des scénarios sont le résidu explicitement non fait.
+> **Ce que S1 mesure réellement = un plafond `next dev`, pas la prod.** À 100 VUs
+> concurrents sur `next dev` (compile-on-demand, sans minification, process Node
+> unique), `/dashboard` sature : min **2,9 s** (rendu RSC dev d'UNE requête chaude),
+> médiane **43 s**, **p95 60 s** (plafond de timeout, atteint par 76/100). Ce n'est
+> **ni un échec d'auth** (24 réponses 200 authentifiées ; les échecs sont des **timeouts**
+> — `/dashboard` au plafond 60 s — ou des **aborts de fin de test** — `/checkin` ~27-43 s —,
+> **aucun n'est un 307**. Preuve k6 indépendante : les **81 check-échecs == 81 `http_req_failed`**,
+> or k6 ne compte **pas** un 307 comme `http_req_failed` ⇒ zéro 307, zéro faux-vert `/login`)
+> **ni un défaut de la couche data** — là où elle est mesurée (`/classement`), l'`EXPLAIN`
+> la situe à **2,1 ms** (§ Leaderboard indexé). Cet `EXPLAIN` **ne couvre pas** les requêtes
+> propres à `/dashboard` ; leur lenteur est donc imputée au **rendu RSC dev-mode**, pas à la
+> DB (aucune requête `/dashboard` n'a été profilée séparément). C'est la **contention de rendu dev-mode**.
+> Conformément à l'en-tête `-Mode dev`, ces chiffres sont une **borne supérieure** ; ici
+> la borne dev est dépassée ⇒ **non concluante pour la prod**. La lecture
+> prod-représentative exige un harnais prod-https (cf. § Reste-à-faire).
+>
+> **S3/S4 non mesurés** : l'environnement de cette session s'est **verrouillé**
+> (démarrage serveur long + shell de sonde localhost refusés — vérifié sur 3 voies)
+> après le run S1 ; seul S1 a un artefact JSON. Les goulots #8/#9/#10 restent prouvés
+> **indépendamment du wall-clock k6** (tests unitaires Vitest — 6057 tests verts au
+> run local, exit 0 — + `EXPLAIN (ANALYZE)` réel), ce qui couvre le cœur technique de
+> J7 ; les chiffres p95/p99 de S3/S4 sont le résidu explicitement non fait ici.
 
-### S1 — burst de check-ins 21h (100 VUs, lecture)
+### S1 — burst de check-ins 21h (100 VUs, lecture) — MESURÉ 2026-07-22 (`next dev`, borne dev)
 
-| Route       | p95 (ms)    | p99 (ms)    | erreurs     | verdict (p95<800, err<1%) |
-| ----------- | ----------- | ----------- | ----------- | ------------------------- |
-| /dashboard  | _à mesurer_ | _à mesurer_ | _à mesurer_ | _à mesurer_               |
-| /checkin    | _à mesurer_ | _à mesurer_ | _à mesurer_ | _à mesurer_               |
-| /classement | _à mesurer_ | _à mesurer_ | _à mesurer_ | _à mesurer_               |
+| Route       | p95 (ms)          | min (ms) | max (ms) | 200 authentifiés | verdict prod                   |
+| ----------- | ----------------- | -------- | -------- | ---------------- | ------------------------------ |
+| /dashboard  | 60002 (plafond)   | 2875     | 60009    | 24 / 100         | non concluant (saturation dev) |
+| /checkin    | 42832             | 27770    | 42887    | 1 / 6            | non concluant (saturation dev) |
+| /classement | — (non exercé S1) | —        | —        | —                | voir S3                        |
 
-RSS max process `node` pendant S1 : _à mesurer_ Mo.
+100 VUs, **306 requêtes**, 3,44 req/s ; checks **25/106** (rate 23,6 %). Les échecs sont des
+**timeouts** (`/dashboard`, plafond 60 s) ou des **aborts de fin de test** (`/checkin`, ~27-43 s)
+sous saturation `next dev`, **aucun n'est un 307** — l'auth fonctionne (cf. callout).
+Source : `.results/s1-live.json` (artefact local **gitignoré** — chemins locaux ; régénérable via
+`s1-checkin-burst.js`). **Interprétation** : plafond dev à 100 VU concurrents ; la couche data est
+à 2,1 ms (`EXPLAIN`), donc la latence vient du rendu RSC **dev-mode** + process Node unique — non
+représentatif de la prod. p99 non tabulé (le p95 sature déjà au plafond de timeout).
+_(Traçabilité : `.results/server.log`/`s1.log` proviennent d'un run antérieur (~16h07) au
+`s1-live.json` rapporté (~18h40) ; ils corroborent le csrf 200 + callback 302 mais ne sont pas
+co-datés avec l'artefact S1 chiffré ci-dessus.)_
 
 ### S2 — uploads simultanés (50 VUs, preuve MT5 ~5 Mo)
 
@@ -204,8 +220,81 @@ contrôle pas le rythme de déploiement) — acceptable en V1 (30→100 membres)
 
 - [ ] `pnpm format:check && pnpm lint && pnpm type-check && pnpm build`
 - [ ] `pnpm --filter @fxmily/web exec vitest run` (dont `scheduler.test.ts` + test sémaphore uploads)
-- [~] preuve runtime — **`EXPLAIN (ANALYZE)` réel exécuté** (#10, via `j7-explain-leaderboard.ts` sur la DB verify :55432 ; log local gitignoré) ; **scénario k6 live NON exécuté** (bloqué : csrf 404 + démarrage serveur, cf. § « État de mesure k6 »)
+- [~] preuve runtime — **`EXPLAIN (ANALYZE)` réel exécuté** (#10, via `j7-explain-leaderboard.ts` sur la DB verify :55432 ; log local gitignoré) ; **k6 S1 live exécuté** (2026-07-22, `.results/s1-live.json` : auth OK, saturation `next dev` à 100 VU = borne dev non concluante prod, cf. § S1) ; **S3/S4 non exécutés** (env verrouillé après S1)
+- [~] **parcours membre mobile vert en CI** — check `Playwright (mobile-iphone-15, golden path)` (`.github/workflows/e2e-mobile.yml` → `pnpm exec playwright test --project=mobile-iphone-15 smoke-tour-j6.spec.ts`, webkit iPhone 15 375 px) ; exerce le golden-path membre de bout en bout à l'exécution réelle. Vert sur la PR #551. C'est la preuve « place du membre » côté runtime, complémentaire de la charge k6.
 - [ ] PR CI verte + merge + déploiement (infra déjà provisionnée)
 - [ ] sonde prod (`db:ok`)
 
 _(Cochés + preuves renseignés à la clôture. `[~]` = partiel/honnête, pas coché.)_
+
+## Revue adversariale finale — contextes frais (2026-07-22)
+
+Revue en **4 sous-agents Opus 4.8 en contextes frais** (workflow `wf_8dfdf647-119`,
+525 s, 0 erreur) : 3 audits parallèles (artefacts stress / perf `/classement` /
+gardes de concurrence) + 1 synthèse. Chaque audit devait **réfuter** la thèse.
+
+**Verdict consolidé : `NO_GO`** pour un merge/deploy présenté comme _« J7
+load-readiness prouvé par mesure »_ (règle : ≥1 finding `blocker` ⇒ NO_GO).
+
+Nuance (honnête) : le **code de la suite est sain et scrupuleusement honnête** (aucun
+GO faux revendiqué), et les goulots #8/#9/#10 ont des **preuves indépendantes
+solides** — sémaphores mono-thread corrects (hand-off au release, libération en
+`finally`), `EXPLAIN (ANALYZE)` réel ~608×, **absence de N+1 sur `/classement`
+CONFIRMÉE** (`service.ts` = 1 + 1 + (0 ou 4) requêtes, reste en mémoire). Merger la
+suite **en tant qu'outillage** est à faible risque.
+
+Deux hypothèses de perf ont été **RÉFUTÉES par voie indépendante** :
+
+- « N+1 au rendu de `/classement` » → FAUX (aucune requête par ligne).
+- « Hydratation framer-motion coûteuse par ligne » → FAUX (liste = 100 % Server
+  Components, `<details>`/`<summary>` natif, 0 JS d'hydratation ; seul îlot client =
+  `AvatarImage` quand photo présente).
+- Cause réelle du rendu ~73-101 s en dev = **artefact RSC dev-mode Turbopack** sur un
+  arbre ~1000 lignes (non représentatif prod). Concern résiduel réel = rendu serveur
+  **O(N)** sans pagination + `force-dynamic` → à confirmer via `next build`, watch-item
+  vers 1000 membres, négligeable à 30-100.
+
+### Blockers (empêchent de signer « readiness mesurée »)
+
+1. **Zéro baseline de charge mesurée** : toutes les cellules p95/p99/taux-échec de
+   S1/S3/S4 = `_à mesurer_`, S2 non mesuré. Seuls réels : `EXPLAIN` DB-level + comptes
+   de seed ⇒ le livrable-cœur _mesure_ est absent.
+   → **MàJ 2026-07-22 : partiellement levé.** S1 **mesuré** live (§ S1) — mais le
+   résultat est une **borne dev saturée** (p95 60 s à 100 VU sur `next dev`), non
+   concluante pour la prod. S3/S4 restent non mesurés (env verrouillé). Le blocker
+   « readiness prouvée par mesure prod » **tient toujours** (il faut un harnais
+   prod-https), mais « k6 ne tourne pas / auth cassée » est **infirmé**.
+2. **`/api/auth/csrf` 404, cause racine non résolue** (worktree / Turbopack
+   workspace-root) : `login()` dépend d'un csrf 200 ⇒ S1/S3/S4 non-authentifiables ⇒
+   3/4 scénarios non-exécutables cette session. La prod sert `/api/auth/csrf`
+   normalement — c'est un blocage **local du harness**, pas un bug prod.
+   → **MàJ 2026-07-22 : RÉSOLU (infirmé par la mesure).** Le run S1 live a produit
+   **24 lectures `/dashboard` en 200 authentifié** sous `redirects:0` ⇒ csrf + login
+   fonctionnent. L'hypothèse Turbopack workspace-root est **levée**.
+
+### Correctif appliqué suite à la revue (major → fermé)
+
+**Faux-vert 307 → /login** : `authParams` posait déjà `redirects:0`, mais les
+`check()` `status===200` étaient _advisory_ (ne gatent pas le run) et le
+`http_req_failed` par défaut de k6 ne compte PAS un 307 comme échec. Un run aux
+tokens cassés pouvait donc passer seuils+p95 tout en mesurant `/login`.
+→ **Fix** : seuil sur la métrique `checks` ajouté à S1/S3/S4 (`checks: ['rate>0.99']`,
+S4 scopé `{scope:member}`). Un run à l'auth cassée **échoue désormais bruyamment**.
+_(Correct par inspection ; `k6 run` non rejoué cette session — même blocage csrf.)_
+
+### Reste-à-faire (résiduels — prérequis avant de signer J7 readiness)
+
+- ~~Résoudre le **csrf 404**~~ **FAIT 2026-07-22** (auth k6 prouvée par la mesure S1).
+  Reste : **`k6 run` réel S3/S4** (S1 fait mais borne dev saturée) contre un **harnais
+  prod-représentatif** — car `next dev` sature à 100 VU et ne donne pas de baseline prod
+  exploitable ; un `next start` derrière un proxy TLS local (pour satisfaire le refine
+  Zod `AUTH_URL=https`) est le chemin, hors de portée dans un env sans serveur long.
+- **Baseline prod `/classement`** : `next build && next start` (le Zod refine d'`env.ts`
+  bloque `next start` sur `AUTH_URL` http → à contourner) pour la magnitude réelle du
+  rendu RSC 1000 lignes.
+- **S2 end-to-end** : compte MT5 seedé + creds `UPLOAD_*` (#8 prouvé unit-only).
+- **Write-path** check-in → recompute fan-out sous k6 réel (#9 prouvé unit-only).
+- **Filet de régression #10** : rendre `j7-explain-leaderboard.ts` exit ≠ 0 sur échec
+  d'assertion de plan (il imprime `PARTIAL` et sort 0) + l'ancrer en CI.
+- Vérifier le **lazy-loading avatars** (`loading='lazy'`) avant de scaler à 1000 membres.
+- Prouver que sémaphore #9 **+** batching cron tiennent conjointement le pg-pool.

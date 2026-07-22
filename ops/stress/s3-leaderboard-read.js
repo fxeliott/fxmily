@@ -28,6 +28,10 @@ export const options = {
   },
   thresholds: {
     http_req_failed: ['rate<0.01'],
+    // Gate the advisory status===200 check: a run whose tokens silently 307→/login
+    // would otherwise pass failed-rate+p95 (k6 counts 307 as non-failed, /login is
+    // fast) while measuring /login. This makes a broken-auth run FAIL loudly.
+    checks: ['rate>0.99'],
     'http_req_duration{name:classement}': [`p(95)<${READ_P95_MS}`, 'p(99)<1500'],
   },
 };

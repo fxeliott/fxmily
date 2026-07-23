@@ -35,6 +35,7 @@ import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { MethodGoalCard } from '@/components/objectives/method-goal-card';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { A2HSHint } from '@/components/pwa/a2hs-hint';
+import { IOSInstallHint } from '@/components/pwa/ios-install-hint';
 import { TimezoneMismatchNudge } from '@/components/account/timezone-mismatch-nudge';
 import { TrackingCoverageWidget } from '@/components/tracking/tracking-coverage-widget';
 import { AnimatedNumber } from '@/components/ui/animated-number';
@@ -295,6 +296,9 @@ export default async function DashboardPage() {
           until the browser fires `beforeinstallprompt` (never on iOS Safari,
           never when already installed) and self-retires after dismiss. */}
       <A2HSHint />
+      {/* iOS Safari equivalent — beforeinstallprompt never fires there, so
+          <A2HSHint> renders nothing; this points to /install and self-retires. */}
+      <IOSInstallHint />
 
       <div className="page-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         {/* V2 refonte J1 — north-star hero : point focal unique (état du jour +

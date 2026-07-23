@@ -152,6 +152,16 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             </p>
           </div>
         </section>
+
+        <p className="text-center text-xs text-[var(--t-3)]">
+          Sur iPhone, les notifications nécessitent d’installer Fxmily sur ton écran d’accueil.{' '}
+          <Link
+            href="/install"
+            className="rounded-sm font-medium text-[var(--acc-hi)] underline-offset-2 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
+            Installer Fxmily sur ton téléphone
+          </Link>
+        </p>
       </div>
     </main>
   );

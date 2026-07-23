@@ -1,6 +1,8 @@
 import { WifiOff } from 'lucide-react';
 import type { Metadata } from 'next';
 
+import { OfflineReload } from '@/components/offline/offline-reload';
+
 /**
  * Offline fallback (`/offline`) — served by the service worker when a
  * navigation fails while the device is offline (Tour 15). Pre-cached at SW
@@ -58,6 +60,26 @@ export default function OfflinePage(): React.ReactElement {
           La connexion s&apos;est interrompue. Dès que le réseau revient, ton espace se recharge
           tout seul. Rien n&apos;est perdu.
         </p>
+
+        {/* Chunk-independent auto-reload: this inline script ships INSIDE the
+            pre-cached static HTML, so it arms `online → reload` even when the
+            device is cold-offline and the island's JS chunk was never cached
+            (the SW only pre-caches the shell HTML + icons, not this route's JS).
+            It honors the "se recharge tout seul" copy above without depending on
+            React hydration. CSP allows it (`script-src 'self' 'unsafe-inline'`,
+            no nonce enforcement — apps/web/CLAUDE.md "Headers de sécurité"). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.addEventListener('online',function(){window.location.reload()},{once:true});",
+          }}
+        />
+
+        {/* Client island: belt-and-suspenders on top of the inline script — a
+            manual retry button + an aria-live status region. Hydrated
+            member-side when its chunk IS available; the page itself stays
+            `force-static`. */}
+        <OfflineReload />
       </div>
     </main>
   );

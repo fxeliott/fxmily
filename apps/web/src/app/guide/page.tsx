@@ -7,7 +7,9 @@ import {
   LineChart,
   NotebookPen,
   ScanSearch,
+  Smartphone,
   Sunrise,
+  Sunset,
   UserCircle,
 } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -22,7 +24,11 @@ import { NextStepRail } from '@/components/nav/next-step-rail';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { btnVariants } from '@/components/ui/btn';
+import { checkinCta } from '@/lib/checkin/checkin-cta';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
+
+import { GUIDE_CATALOG, type GuideEntry } from './guide-catalog';
 
 export const metadata: Metadata = {
   title: 'Guide d’utilisation',
@@ -120,6 +126,21 @@ export default async function GuidePage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
+  // Scope 4 — CTA check-in dynamique : matin avant 14h, soir après (fuseau membre).
+  const cta = checkinCta(new Date(), safeTimeZone(session.user.timezone));
+  // L'icône suit le créneau (lever de soleil le matin, coucher le soir) pour rester
+  // cohérente avec le libellé du CTA, jamais un soleil levant en soirée.
+  const CtaIcon = cta.slot === 'morning' ? Sunrise : Sunset;
+
+  // Scope 2 — matérialise le catalogue SSOT, groupé par thème (ordre pédagogique
+  // = ordre d'insertion des groupes dans GUIDE_CATALOG, préservé par la Map).
+  const catalogByGroup = new Map<string, GuideEntry[]>();
+  for (const entry of GUIDE_CATALOG) {
+    const bucket = catalogByGroup.get(entry.group);
+    if (bucket) bucket.push(entry);
+    else catalogByGroup.set(entry.group, [entry]);
+  }
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 — ambient mesh + drifting orbs (own hero glow, like progression/track) */}
@@ -213,8 +234,13 @@ export default async function GuidePage() {
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           aria-label="Les piliers de l’app"
         >
-          {PILLARS.map((pillar) => {
+          {PILLARS.map((pillar, index) => {
             const Icon = pillar.icon;
+            // Scope 4 — le CTA du 1er pilier (check-in) suit le créneau du membre.
+            const pillarCta =
+              index === 0 && pillar.cta
+                ? { ...pillar.cta, href: cta.href, label: cta.label, icon: CtaIcon }
+                : pillar.cta;
             return (
               <HoverLift key={pillar.title} className="h-full">
                 <Card className="wow-hover-glow rounded-card-lg group/pillar h-full p-6">
@@ -246,14 +272,14 @@ export default async function GuidePage() {
                       ))}
                     </ul>
 
-                    {pillar.cta ? (
+                    {pillarCta ? (
                       <div className="mt-auto pt-1">
                         <Link
-                          href={pillar.cta.href}
+                          href={pillarCta.href}
                           className={cn(btnVariants({ kind: 'secondary', size: 's' }))}
                         >
-                          <pillar.cta.icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-                          {pillar.cta.label}
+                          <pillarCta.icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                          {pillarCta.label}
                         </Link>
                       </div>
                     ) : null}
@@ -263,6 +289,61 @@ export default async function GuidePage() {
             );
           })}
         </section>
+
+        {/* Toutes tes surfaces — matérialisation visible du catalogue SSOT (Scope 2).
+            Une carte/lien par surface membre, groupée par thème. */}
+        <section aria-label="Toutes tes surfaces" className="flex flex-col gap-5">
+          <div className="flex flex-col gap-0.5">
+            <span className="t-eyebrow text-[var(--acc-hi)]">Le sommaire</span>
+            <h2 className="t-h2 text-[var(--t-1)]">Toutes tes surfaces.</h2>
+            <p className="t-body mt-2 max-w-[60ch] text-[var(--t-2)]">
+              Chaque écran de l’app, regroupé par thème. Un clic t’emmène où tu veux, quand tu veux,
+              sans jamais te perdre dans la densité.
+            </p>
+          </div>
+
+          {Array.from(catalogByGroup.entries()).map(([group, entries]) => (
+            <div key={group} className="flex flex-col gap-3">
+              <h3 className="t-eyebrow text-[var(--t-3)]">{group}</h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {entries.map((entry) => (
+                  <Link
+                    key={entry.href}
+                    href={entry.href}
+                    className="rounded-card-lg group/surface flex flex-col gap-1 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                  >
+                    <span className="t-body font-medium text-[var(--t-1)] transition-colors group-hover/surface:text-[var(--acc-hi)]">
+                      {entry.title}
+                    </span>
+                    <span className="t-cap text-[var(--t-3)]">{entry.blurb}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* Installer l'app sur mobile — parcours dédié /install (Scope 1). */}
+        <Card glass className="rounded-card-lg p-6 sm:p-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]"
+              >
+                <Smartphone className="h-5 w-5" strokeWidth={1.75} />
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="t-eyebrow text-[var(--acc-hi)]">Sur ton téléphone</span>
+                <h2 className="t-h3 text-[var(--t-1)]">Garde Fxmily à portée de main.</h2>
+              </div>
+            </div>
+            <Link href="/install" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
+              <Smartphone className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+              Installer Fxmily sur ton téléphone
+            </Link>
+          </div>
+        </Card>
 
         {/* Premier pas. */}
         <Card primary glass className="rounded-card-lg p-6 sm:p-7">
@@ -279,12 +360,9 @@ export default async function GuidePage() {
               className="flex flex-wrap items-center gap-2"
               style={{ '--rise-delay': '0ms' } as CSSProperties}
             >
-              <Link
-                href="/checkin/morning"
-                className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
-              >
-                <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-                Commencer mon check-in
+              <Link href={cta.href} className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+                <CtaIcon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                {cta.label}
               </Link>
               <Link
                 href="/journal/new"

@@ -36,9 +36,14 @@
  * Tour 15 — 4th responsibility: an OFFLINE navigation fallback. We pre-cache
  * `/offline` at install into a versioned Cache Storage bucket, drop stale
  * buckets at activate, and — for NAVIGATION requests only — serve the cached
- * `/offline` page when the network is unreachable (network-first). We do NOT
- * intercept any other request (assets, API, push): a bug there could break the
- * whole app or the push path, so the fetch handler is deliberately narrow.
+ * `/offline` page when the network is unreachable (network-first).
+ *
+ * J8 (SCOPE 3) — 5th responsibility: an app-SHELL cache. At install we ALSO
+ * pre-cache the manifest icons, and at runtime we serve immutable same-origin
+ * assets (`/_next/static/*`, `/icon*`, `/apple-icon`, `/favicon.svg`) CACHE-FIRST
+ * from a versioned runtime
+ * bucket. Navigations stay network-first; the push handlers are untouched. See
+ * the fetch handler for the production-build testing caveat.
  *
  * NEVER log push payload content — RGPD data minimization (SPEC §16).
  */
@@ -46,12 +51,31 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* global self, clients, fetch, caches, Request */
 
-const VERSION = 'fxmily-sw-v3-t15';
+const VERSION = 'fxmily-sw-v4-j8';
 
-// Versioned Cache Storage bucket. Bumping VERSION rotates the bucket name, so
-// `activate` can delete every bucket that isn't the current one.
-const CACHE_NAME = `fxmily-offline-${VERSION}`;
+// Bumping VERSION rotates every bucket name below, so `activate` can delete any
+// Cache Storage bucket that isn't part of the current version.
+//  · CACHE_NAME    — the shell bucket, pre-cached at install (offline page + icons).
+//  · RUNTIME_CACHE — filled on demand by the cache-first immutable-asset strategy.
+const CACHE_NAME = `fxmily-shell-${VERSION}`;
+const RUNTIME_CACHE = `fxmily-runtime-${VERSION}`;
+const CURRENT_CACHES = [CACHE_NAME, RUNTIME_CACHE];
+
 const OFFLINE_URL = '/offline';
+
+// App-shell icon list: the manifest icons, so the installed PWA renders its
+// identity even on a cold offline start. Cached per-URL via `Promise.allSettled`
+// (not `addAll`) so one 404 / redeploy race never fails the whole install. The
+// load-bearing OFFLINE_URL is cached separately (hard `cache.add`) in `install`.
+const SHELL_ICON_URLS = [
+  '/favicon.svg',
+  '/icon',
+  '/apple-icon',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+];
 
 // ── Install / activate ──────────────────────────────────────────────────────
 
@@ -60,18 +84,23 @@ self.addEventListener('install', (event) => {
   // with `clients.claim()` in `activate` so a freshly opened PWA gets the
   // new SW without an extra page reload.
   //
-  // Tour 15 — also pre-cache the offline fallback. `{ cache: 'reload' }`
-  // bypasses the HTTP cache so we store a fresh copy. If the fetch fails
-  // (e.g. installed on a flaky connection), we still `skipWaiting()` — the
-  // fetch handler degrades to a plain network passthrough when the cache
-  // miss happens, so a failed pre-cache never blocks activation.
+  // J8 — pre-cache the app shell (offline fallback + manifest icons).
+  // `{ cache: 'reload' }` bypasses the HTTP cache so each entry is stored fresh.
+  // The OFFLINE_URL is load-bearing (the fetch handler serves it on navigation
+  // failure) so it is cached explicitly; the icons are best-effort via
+  // `allSettled` (a single failed icon never blocks activation). Any fetch that
+  // fails is caught below and still lets activation proceed — the fetch handler
+  // degrades to a plain network passthrough on any individual cache miss.
   event.waitUntil(
     (async () => {
       try {
         const cache = await caches.open(CACHE_NAME);
         await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+        await Promise.allSettled(
+          SHELL_ICON_URLS.map((u) => cache.add(new Request(u, { cache: 'reload' }))),
+        );
       } catch (_err) {
-        /* offline page not cached this time — non-fatal, see fetch handler */
+        /* shell not fully cached this time — non-fatal, see fetch handler */
       }
       await self.skipWaiting();
     })(),
@@ -86,7 +115,10 @@ self.addEventListener('activate', (event) => {
         const keys = await caches.keys();
         await Promise.all(
           keys
-            .filter((key) => key.startsWith('fxmily-offline-') && key !== CACHE_NAME)
+            // Drop every Fxmily bucket that isn't part of the current VERSION —
+            // this evicts the legacy `fxmily-offline-*` bucket AND any stale
+            // shell/runtime bucket left by a previous version.
+            .filter((key) => key.startsWith('fxmily-') && !CURRENT_CACHES.includes(key))
             .map((key) => caches.delete(key)),
         );
       } catch (_err) {
@@ -112,20 +144,67 @@ self.addEventListener('activate', (event) => {
 // ── Fetch — offline navigation fallback ONLY ────────────────────────────────
 
 /**
- * Network-first for top-level NAVIGATIONS only. On success we pass the network
- * response straight through (no runtime caching of pages — content is dynamic
- * and per-user; we never want to serve a stale/cross-account page). On a
- * network failure (offline, DNS, timeout) we serve the pre-cached `/offline`.
+ * Two-strategy fetch handler (J8 SCOPE 3):
  *
- * Everything else — assets, `_next`, images, API calls, the push path — is
+ *   1. Immutable same-origin assets (`/_next/static/*` + `/icon*` + `/apple-icon`
+ *      + `/favicon.svg`) → CACHE-FIRST
+ *      from a versioned runtime bucket. These are content-hashed / VERSION-
+ *      rotated, so a cached copy is always valid until VERSION bumps (which
+ *      drops the whole runtime bucket). The shell paints instantly and survives
+ *      offline.
+ *   2. Top-level NAVIGATIONS → NETWORK-FIRST. On success we pass the live
+ *      response straight through (no runtime caching of pages — content is
+ *      dynamic and per-user; we never serve a stale/cross-account page). On a
+ *      network failure (offline, DNS, timeout) we serve the pre-cached
+ *      `/offline`.
+ *
+ * Everything else — non-GET, `/_next/image`, API calls, the push path — is
  * intentionally NOT intercepted: no `respondWith`, so the browser handles those
- * requests exactly as if this handler didn't exist. This keeps the SW's blast
- * radius to a single, well-understood case.
+ * requests exactly as if this handler didn't exist.
+ *
+ * ⚠️ TEST THE CACHE-FIRST PATH IN A PRODUCTION BUILD, NOT `next dev`. In dev,
+ * `/_next/static/*` is not content-hashed and Turbopack HMR streams module
+ * updates over those paths — a cache-first SW would pin stale chunks and break
+ * hot reload. Verify with `pnpm build && pnpm start`, then hard-refresh.
  */
+
+// An asset is safe to cache-first only if it's same-origin AND under a path
+// whose contents are immutable for the lifetime of this SW VERSION.
+function isImmutableAsset(url) {
+  if (url.origin !== self.location.origin) return false;
+  return (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icon') ||
+    url.pathname.startsWith('/apple-icon') ||
+    url.pathname === '/favicon.svg'
+  );
+}
+
+// Cache-first: serve from ANY bucket (shell pre-cache or runtime), else fetch
+// and populate the runtime bucket. Only clean 200 same-origin responses are
+// stored (never a redirect/opaque/error). A network failure with no cached copy
+// rejects naturally — there is no asset to invent.
+async function cacheFirstAsset(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response && response.status === 200 && response.type === 'basic') {
+    const cache = await caches.open(RUNTIME_CACHE);
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Only handle real page navigations. `mode: 'navigate'` covers link clicks,
+  // 1) Immutable same-origin assets (GET only) → cache-first runtime cache.
+  if (request.method === 'GET' && isImmutableAsset(new URL(request.url))) {
+    event.respondWith(cacheFirstAsset(request));
+    return;
+  }
+
+  // 2) Only handle real page navigations. `mode: 'navigate'` covers link clicks,
   // address-bar loads, and reloads; it excludes fetch()/XHR/asset subrequests.
   if (request.mode !== 'navigate') return;
 

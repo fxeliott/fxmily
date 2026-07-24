@@ -4,13 +4,23 @@ name: E2E Mobile (golden path)
 # running the full 46-spec suite on `mobile-iphone-15` would cost (that trade-off
 # is documented in `e2e.yml`, which deliberately skips the mobile project).
 #
-# Scope on purpose: this job runs ONLY the canonical golden-path spec
-# (`smoke-tour-j6.spec.ts` — login → dashboard 30d/7d → admin member detail) on
-# the `mobile-iphone-15` Playwright project. That single spec renders the
-# heaviest mobile surface (dashboard + Recharts at 393px) where viewport-overflow
-# / touch-target regressions actually show up, so we get real mobile signal for a
-# fraction of the cost. What is dropped vs the desktop run: the other ~45 specs
-# are NOT re-run on mobile here (by design — see the note above).
+# Scope on purpose: this job runs a SHORT allow-list of specs on the
+# `mobile-iphone-15` Playwright project — not the whole suite.
+#
+#   1. `smoke-tour-j6.spec.ts` (J7) — the canonical golden path (login →
+#      dashboard 30d/7d → admin member detail). It renders the heaviest mobile
+#      surface (dashboard + Recharts at 393px) where viewport-overflow /
+#      touch-target regressions actually show up.
+#   2. `j8-pwa-offline.spec.ts` (J8) — the iOS install hint + `/offline`
+#      auto-reload gates. These assertions are WebKit-ONLY by construction: the
+#      spec self-skips unless `browserName === 'webkit'`, and `<IOSInstallHint>`
+#      only mounts under an iOS-Safari UA. `e2e.yml` runs chromium only, so this
+#      job is the ONLY place in CI where they execute at all — leaving them out
+#      would ship a test that never runs. The spec seeds its own member in
+#      `beforeAll`, so it needs no extra seed step beyond the migrations below.
+#
+# What is dropped vs the desktop run: the other ~44 specs are NOT re-run on
+# mobile here (by design — see the runtime trade-off above).
 #
 # NON-BLOCKING BY DESIGN: this workflow is intentionally NOT wired into `main`'s
 # required status checks (the required check stays "Playwright (chromium)" in
@@ -59,7 +69,12 @@ jobs:
     name: Playwright (mobile-iphone-15, golden path)
     if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 25, not 20: the J8 spec added to the allow-list budgets a COLD Turbopack
+    # compile (`test.setTimeout(90_000)` in j8-pwa-offline.spec.ts) and
+    # playwright.config.ts runs CI with `retries: 2` + `workers: 1` — so its
+    # worst case is ~3 serial attempts on top of install + webkit + migrations +
+    # seed. The extra 5 min only ever elapses on a run that is already failing.
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -144,11 +159,13 @@ jobs:
       - name: Seed J6 demo data for smoke-tour spec
         run: pnpm --filter @fxmily/web exec tsx scripts/seed-j6-demo.ts
 
-      # ONLY the golden-path spec, ONLY the mobile project. The `smoke-tour-j6`
-      # filter is a path substring — it matches `smoke-tour-j6.spec.ts` and NOT
-      # `smoke-tour.spec.ts`.
-      - name: Run golden-path spec on mobile-iphone-15 (webkit)
-        run: pnpm --filter @fxmily/web exec playwright test --project=mobile-iphone-15 smoke-tour-j6.spec.ts
+      # The allow-list documented at the top of this file, ONLY on the mobile
+      # project. Each argument is a path SUBSTRING, not a glob: `smoke-tour-j6`
+      # matches `smoke-tour-j6.spec.ts` and NOT `smoke-tour.spec.ts`, and
+      # `j8-pwa-offline` matches only that spec. Adding a spec here is the ONLY
+      # way it ever runs on WebKit in CI — keep the list short and deliberate.
+      - name: Run mobile allow-list on mobile-iphone-15 (webkit)
+        run: pnpm --filter @fxmily/web exec playwright test --project=mobile-iphone-15 smoke-tour-j6.spec.ts j8-pwa-offline.spec.ts
 
       - name: Upload Playwright traces + screenshots (on failure)
         if: failure()

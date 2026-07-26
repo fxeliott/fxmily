@@ -2262,8 +2262,19 @@
    cookie-banner is mounted, the install hint stays hidden. The banner returns
    `null` once dismissed (its `data-slot` leaves the DOM), so `:has()` stops
    matching and the hint is free to appear on the next paint. No JS coupling
-   between the two islands — this is a pure CSS precedence rule. */
-body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
+   between the two islands — this is a pure CSS precedence rule.
+
+   J8 — `ios-install-hint` JOINS THIS ARBITRATION. It copies `a2hs-hint`'s
+   geometry verbatim (`fixed inset-x-3 bottom-[max(0.75rem,safe-area)] z-40`,
+   opaque `--bg-1`) but is the iOS-Safari counterpart, so it needs the SAME five
+   clearances (cookie-banner, FAB, sidebar, bottom-nav, FAB+nav). Without them it
+   painted OVER the mobile bottom-nav (z-30) on the priority 375×667 viewport —
+   icons and labels hidden, taps swallowed. The two hints are mutually exclusive
+   at runtime (iOS never fires `beforeinstallprompt`, so `<A2hsHint>` renders
+   nothing there), so enrolling both in every rule can never double-shift one
+   banner. Enforced by `bottom-slot-arbitration.test.ts`. */
+body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'],
+body:has([data-slot='cookie-banner']) [data-slot='ios-install-hint'] {
   display: none;
 }
 
@@ -2279,7 +2290,8 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
    no rule, no layout shift. */
 @media (max-width: 815px) {
   body:has([data-slot='log-express-fab']) [data-slot='cookie-banner'],
-  body:has([data-slot='log-express-fab']) [data-slot='a2hs-hint'] {
+  body:has([data-slot='log-express-fab']) [data-slot='a2hs-hint'],
+  body:has([data-slot='log-express-fab']) [data-slot='ios-install-hint'] {
     /* Lift above the FAB. FAB top ≈ max(1.25rem, safe-area) + 3.5rem (h-14).
        `max(5.5rem, safe-area + 4.75rem)` clears it on every device: 5.5rem
        (88px) on non-notch (FAB top 76px), and safe-area+4.75rem on notched
@@ -2302,7 +2314,8 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
    so this never shifts the mobile layout. */
 @media (min-width: 1024px) {
   body:has([data-slot='app-sidebar']) [data-slot='cookie-banner'],
-  body:has([data-slot='app-sidebar']) [data-slot='a2hs-hint'] {
+  body:has([data-slot='app-sidebar']) [data-slot='a2hs-hint'],
+  body:has([data-slot='app-sidebar']) [data-slot='ios-install-hint'] {
     left: calc(16rem + 0.75rem); /* clear the 16rem sidebar, keep the inset-x-3 gutter */
   }
   body:has([data-slot='app-sidebar']) [data-slot='legal-footer'] {
@@ -2966,7 +2979,8 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
     bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
   body:has([data-slot='app-bottom-nav']) [data-slot='cookie-banner'],
-  body:has([data-slot='app-bottom-nav']) [data-slot='a2hs-hint'] {
+  body:has([data-slot='app-bottom-nav']) [data-slot='a2hs-hint'],
+  body:has([data-slot='app-bottom-nav']) [data-slot='ios-install-hint'] {
     bottom: calc(4.25rem + env(safe-area-inset-bottom));
   }
 }
@@ -2983,7 +2997,7 @@ body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
    the FAB's raised top, with safe-area folded in for notched devices. */
 @media (max-width: 815px) {
   body:has([data-slot='app-bottom-nav']):has([data-slot='log-express-fab'])
-    :is([data-slot='cookie-banner'], [data-slot='a2hs-hint']) {
+    :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint']) {
     bottom: calc(env(safe-area-inset-bottom) + 8.5rem); /* ≈136px > FAB top ≈132px */
   }
 }

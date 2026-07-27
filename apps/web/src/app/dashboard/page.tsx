@@ -47,6 +47,7 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { Magnetic } from '@/components/ui/magnetic';
 import { Tilt3D } from '@/components/ui/tilt-3d';
+import { checkinCta } from '@/lib/checkin/checkin-cta';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { safeTimeZone } from '@/lib/checkin/timezone';
@@ -366,7 +367,15 @@ export default async function DashboardPage() {
             <h2 id="first-run-heading" className="sr-only">
               Bienvenue sur Fxmily
             </h2>
-            <FirstRunWelcome needsProfile={needsProfile} todayIsOff={todayIsOff} />
+            {/* J8 scope 4 — the CTA follows the member's CURRENT slot in THEIR
+                timezone. Computed here (not inside the component) so the
+                component stays a pure server component fed by the page, and
+                only for the first-run branch that actually renders it. */}
+            <FirstRunWelcome
+              cta={checkinCta(new Date(), timezone)}
+              needsProfile={needsProfile}
+              todayIsOff={todayIsOff}
+            />
           </section>
         ) : null}
 

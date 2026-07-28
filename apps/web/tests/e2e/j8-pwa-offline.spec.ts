@@ -389,6 +389,49 @@ test.describe('J8 — cold offline start is styled, not a naked page', () => {
       'the body kept the transparent UA default — no app stylesheet applied',
     ).not.toBe('rgba(0, 0, 0, 0)');
 
+    // ── The "Réessayer" button must WORK on this cold start, not just exist ──
+    //
+    // The button lives in `<OfflineReload>`, a client island whose JS chunk is
+    // NOT pre-cached (the shell bucket carries HTML + CSS + icons, never route
+    // JS). So on this exact path — the one the pre-cache exists for — React
+    // never hydrates and `onClick` never binds. A painted control that does
+    // nothing is precisely the empty promise this page was rebuilt to remove,
+    // and it would have shipped invisibly: every other assertion here passes
+    // whether the button works or not.
+    //
+    // The page's inline fallback (pre-cached with the HTML) is what makes it
+    // real. Proven by sentinel: arm a flag on THIS document, click, and require
+    // the document to have been replaced.
+    const retry = page.getByRole('button', { name: 'Réessayer' });
+    await expect(retry).toBeVisible();
+
+    await page.evaluate(() => {
+      (window as unknown as { __fxmilyRetrySentinel?: string }).__fxmilyRetrySentinel = 'armed';
+    });
+    // Guard the guard: if the island HAD hydrated, the inline fallback stands
+    // down and this would be testing React instead of the cold path.
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { __fxmilyOfflineIslandReady?: boolean })
+            .__fxmilyOfflineIslandReady === true,
+      ),
+      'the island hydrated — this is no longer the cold-start path the fallback exists for',
+    ).toBe(false);
+
+    const reloaded = page.waitForEvent('load', { timeout: 15_000 });
+    await retry.click();
+    await reloaded;
+
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { __fxmilyRetrySentinel?: string }).__fxmilyRetrySentinel ?? 'gone',
+      ),
+      'the retry button did not reload the document — it is painted but inert offline',
+    ).toBe('gone');
+    await expect(page.getByRole('heading', { name: 'Tu es hors ligne' })).toBeVisible();
+
     await context.setOffline(false);
   });
 });

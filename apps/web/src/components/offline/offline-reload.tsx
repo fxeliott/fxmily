@@ -39,6 +39,13 @@ export function OfflineReload(): React.ReactElement {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // Tell the page's inline fallback that this island is live, so it stops
+    // handling the retry click itself (see `offline/page.tsx`). Without the
+    // flag the fallback would reload BEFORE React's own handler runs and the
+    // member would never see the button's loading state.
+    (window as unknown as { __fxmilyOfflineIslandReady?: boolean }).__fxmilyOfflineIslandReady =
+      true;
+
     const handleOnline = (): void => {
       // Re-attempt the navigation the member was making (URL is unchanged —
       // the SW served /offline in place). Now that the network is back, it
@@ -56,6 +63,11 @@ export function OfflineReload(): React.ReactElement {
         kind="secondary"
         size="m"
         loading={retrying}
+        // Point d'accroche du repli inline de `offline/page.tsx` : au démarrage
+        // à froid hors ligne, le chunk de cette île n'est pas en cache, donc
+        // `onClick` n'existe pas encore. L'attribut rend le bouton actionnable
+        // quand même, au lieu d'afficher un contrôle inerte.
+        data-offline-retry=""
         onClick={() => {
           setRetrying(true);
           window.location.reload();

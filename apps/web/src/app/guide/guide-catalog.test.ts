@@ -4,7 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { GUIDE_CATALOG, GUIDE_ROUTE_EXEMPTIONS, memberNavHrefs } from './guide-catalog';
+import {
+  GUIDE_CATALOG,
+  GUIDE_ROUTE_EXEMPTIONS,
+  guideEntryIcon,
+  memberNavHrefs,
+  navIconByHref,
+} from './guide-catalog';
+
+import { BOTTOM_NAV, NAV_GROUPS } from '@/components/nav/nav-items';
 
 /**
  * SSOT coverage guard — the HEART of the guide catalogue.
@@ -243,5 +251,100 @@ describe('guide catalogue — entry shape', () => {
   it('every href is unique within the catalogue', () => {
     const hrefs = GUIDE_CATALOG.map((entry) => entry.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Repère visuel — un glyphe par entrée, sans seconde source de vérité
+// -----------------------------------------------------------------------------
+
+describe('guide catalogue — visual anchor', () => {
+  it('resolves an icon for EVERY entry (fails listing the ones without)', () => {
+    const iconless = GUIDE_CATALOG.filter((entry) => guideEntryIcon(entry) === null).map(
+      (entry) => entry.href,
+    );
+
+    expect(
+      iconless,
+      `Guide entries with no visual anchor: ${iconless.join(', ')}\n` +
+        `Fix by adding the route to nav-items.ts (preferred — the nav glyph is the ` +
+        `single source of truth) or, for a surface that legitimately has no nav ` +
+        `entry, by declaring \`icon\` on the catalogue entry.`,
+    ).toEqual([]);
+  });
+
+  it('never declares an `icon` on an entry the nav already covers (no second SSOT)', () => {
+    const navIcons = navIconByHref();
+    const duplicated = GUIDE_CATALOG.filter((entry) => entry.icon && navIcons.has(entry.href)).map(
+      (entry) => entry.href,
+    );
+
+    expect(
+      duplicated,
+      `These entries declare their own icon while nav-items.ts already defines one — ` +
+        `the two could drift apart and show different glyphs for the same screen: ` +
+        `${duplicated.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('takes the glyph nav-items.ts DECLARES, not one derived from itself', () => {
+    // Oracle INDÉPENDANT : on relit `nav-items.ts` à la main plutôt que de
+    // réutiliser `navIconByHref()`. Comparer `guideEntryIcon(entry)` à
+    // `navIconByHref().get(href)` serait une tautologie — c'est littéralement la
+    // définition de la fonction (`guide-catalog.ts`), donc l'assertion ne
+    // pourrait jamais échouer. En repartant de la structure source, une
+    // régression DANS la dérivation elle-même (mauvais filtre `admin`, priorité
+    // BOTTOM_NAV/NAV_GROUPS inversée, href mal recopié) devient visible.
+    const declared = new Map<string, unknown>();
+    for (const group of NAV_GROUPS) {
+      if (group.admin) continue;
+      for (const item of group.items) {
+        if (item.admin) continue;
+        if (!declared.has(item.href)) declared.set(item.href, item.icon);
+      }
+    }
+    for (const item of BOTTOM_NAV) {
+      if (item.admin) continue;
+      if (!declared.has(item.href)) declared.set(item.href, item.icon);
+    }
+
+    for (const entry of GUIDE_CATALOG) {
+      const fromNav = declared.get(entry.href);
+      if (!fromNav) continue;
+      expect(guideEntryIcon(entry), `glyphe rendu pour ${entry.href}`).toBe(fromNav);
+    }
+  });
+
+  it('pins a few landmark glyphes by name (external oracle, survives a refactor)', () => {
+    // Trois ancres écrites à la main : elles ne dépendent d'AUCUNE dérivation.
+    // Si la résolution se met un jour à renvoyer « une icône qui ressemble »,
+    // c'est ici que ça casse, y compris si toute la mécanique interne change.
+    const expected: Record<string, string> = {
+      '/dashboard': 'LayoutDashboard',
+      '/journal': 'BookOpen',
+      // La seule entrée sans contrepartie dans la nav : elle passe par le champ
+      // `icon` de l'entrée, l'autre branche de la résolution.
+      '/install': 'Smartphone',
+    };
+
+    for (const [href, displayName] of Object.entries(expected)) {
+      const entry = GUIDE_CATALOG.find((e) => e.href === href);
+      expect(entry, `entrée de catalogue pour ${href}`).toBeDefined();
+      const icon = guideEntryIcon(entry!) as { displayName?: string } | null;
+      expect(icon?.displayName, `glyphe attendu pour ${href}`).toBe(displayName);
+    }
+  });
+
+  it('derives an icon for every member nav route (anti-vacuity)', () => {
+    const hrefs = memberNavHrefs();
+    const icons = navIconByHref();
+
+    // A silently empty map would make the first test pass only via the declared
+    // `icon` escape hatch — i.e. exactly the second source of truth we forbid.
+    expect(icons.size, 'nav icons derived').toBe(hrefs.length);
+    for (const href of hrefs) {
+      expect(icons.get(href), `nav icon for ${href}`).toBeTruthy();
+    }
+    expect([...icons.keys()].some((href) => href.startsWith('/admin'))).toBe(false);
   });
 });

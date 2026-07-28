@@ -49,7 +49,7 @@ import { existsSync } from 'node:fs';
 
 import { chromium, expect, test } from './fixtures';
 
-import { GUIDE_CATALOG } from '@/app/guide/guide-catalog';
+import { GUIDE_CATALOG, guideEntryIcon } from '@/app/guide/guide-catalog';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
 
@@ -138,5 +138,72 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
 
     // Aucun overlay d'erreur Next (le rendu a réellement abouti).
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
+  });
+
+  /**
+   * 4ᵉ angle — le REPÈRE VISUEL, à la largeur qui compte.
+   *
+   * `guide-catalog.test.ts` prouve que chaque entrée RÉSOUT une icône ; il ne
+   * prouve pas qu'elle est PEINTE, ni que c'est bien le glyphe de la nav. Un
+   * rendu qui oublierait le badge, ou qui piocherait une icône « qui ressemble »,
+   * laisserait tout le reste au vert.
+   *
+   * L'assertion s'appuie sur la classe que lucide-react pose lui-même sur son
+   * `<svg>` (`lucide-layout-dashboard` pour `LayoutDashboard`) — même point
+   * d'accroche que `first-run-welcome.test.tsx`. C'est donc l'identité du
+   * composant qui est vérifiée, pas une approximation de forme.
+   *
+   * Le tout à 375 px (iPhone SE, la largeur prioritaire du repo) : la carte
+   * gagne un badge de 28 px sur la ligne du titre, c'est exactement là qu'un
+   * débordement horizontal apparaîtrait.
+   */
+  test('VISUAL: chaque carte peint le glyphe de la nav, sans débordement à 375 px', async ({
+    page,
+    request,
+  }) => {
+    if (!member) throw new Error('seed missing — beforeAll did not run');
+
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    await page.goto('/login');
+    await loginAs(page, request, member.email, member.password);
+    await page.goto('/guide');
+
+    const surfaces = page.getByRole('region', { name: SURFACES_REGION });
+    await expect(surfaces).toBeVisible();
+
+    // Un glyphe par entrée, et c'est CELUI de la nav.
+    for (const entry of GUIDE_CATALOG) {
+      const icon = guideEntryIcon(entry) as { displayName?: string } | null;
+      const displayName = icon?.displayName;
+      expect(displayName, `lucide displayName for ${entry.href}`).toBeTruthy();
+
+      const lucideClass = `lucide-${displayName!
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .toLowerCase()}`;
+
+      await expect(
+        surfaces.locator(`a[href="${entry.href}"] svg.${lucideClass}`),
+        `${entry.href} doit peindre le glyphe ${displayName}`,
+      ).toHaveCount(1);
+    }
+
+    // Zéro scroll horizontal à 375 px (porte « 0 débordement » du contrat frontend).
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(
+      overflow.scrollWidth,
+      `débordement horizontal à 375 px : ${overflow.scrollWidth} > ${overflow.clientWidth}`,
+    ).toBeLessThanOrEqual(overflow.clientWidth);
+
+    await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
+    expect(consoleErrors, `erreurs console : ${consoleErrors.join(' | ')}`).toEqual([]);
   });
 });

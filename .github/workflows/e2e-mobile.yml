@@ -70,7 +70,7 @@ jobs:
     if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     # 25, not 20: the J8 spec added to the allow-list budgets a COLD Turbopack
-    # compile (`test.setTimeout(90_000)` in j8-pwa-offline.spec.ts) and
+    # compile (`test.setTimeout(120_000)` in j8-pwa-offline.spec.ts) and
     # playwright.config.ts runs CI with `retries: 2` + `workers: 1` — so its
     # worst case is ~3 serial attempts on top of install + webkit + migrations +
     # seed. The extra 5 min only ever elapses on a run that is already failing.

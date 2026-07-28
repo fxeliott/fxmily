@@ -61,17 +61,31 @@ export default function OfflinePage(): React.ReactElement {
           tout seul. Rien n&apos;est perdu.
         </p>
 
-        {/* Chunk-independent auto-reload: this inline script ships INSIDE the
-            pre-cached static HTML, so it arms `online → reload` even when the
-            device is cold-offline and the island's JS chunk was never cached
-            (the SW only pre-caches the shell HTML + icons, not this route's JS).
-            It honors the "se recharge tout seul" copy above without depending on
-            React hydration. CSP allows it (`script-src 'self' 'unsafe-inline'`,
-            no nonce enforcement — apps/web/CLAUDE.md "Headers de sécurité"). */}
+        {/* Chunk-independent recovery: this inline script ships INSIDE the
+            pre-cached static HTML, so it works even when the device is
+            cold-offline and the island's JS chunk was never cached (the SW
+            pre-caches the shell HTML, its stylesheets and the icons — not this
+            route's JS). CSP allows it (`script-src 'self' 'unsafe-inline'`, no
+            nonce enforcement — apps/web/CLAUDE.md "Headers de sécurité").
+
+            Two things, for the same reason:
+            1. `online → reload`, which honors the "se recharge tout seul" copy
+               above without depending on React hydration.
+            2. A delegated fallback for the "Réessayer" button. Without it that
+               button is PAINTED but INERT on a cold start — a visible control
+               that does nothing, which is exactly the kind of empty promise
+               this page exists to stop making. It stands down as soon as the
+               island signals it is hydrated, so the hydrated path keeps its
+               loading state and its aria-live status. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "window.addEventListener('online',function(){window.location.reload()},{once:true});",
+              "window.addEventListener('online',function(){window.location.reload()},{once:true});" +
+              "document.addEventListener('click',function(e){" +
+              'if(window.__fxmilyOfflineIslandReady)return;' +
+              'var t=e.target;' +
+              "while(t&&t.nodeType===1){if(t.hasAttribute('data-offline-retry')){window.location.reload();return;}t=t.parentNode;}" +
+              '},true);',
           }}
         />
 

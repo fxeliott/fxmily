@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { GUIDE_CATALOG, GUIDE_ROUTE_EXEMPTIONS, memberNavHrefs } from './guide-catalog';
+import {
+  GUIDE_CATALOG,
+  GUIDE_ROUTE_EXEMPTIONS,
+  guideEntryIcon,
+  memberNavHrefs,
+  navIconByHref,
+} from './guide-catalog';
 
 /**
  * SSOT coverage guard — the HEART of the guide catalogue.
@@ -243,5 +249,63 @@ describe('guide catalogue — entry shape', () => {
   it('every href is unique within the catalogue', () => {
     const hrefs = GUIDE_CATALOG.map((entry) => entry.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Repère visuel — un glyphe par entrée, sans seconde source de vérité
+// -----------------------------------------------------------------------------
+
+describe('guide catalogue — visual anchor', () => {
+  it('resolves an icon for EVERY entry (fails listing the ones without)', () => {
+    const iconless = GUIDE_CATALOG.filter((entry) => guideEntryIcon(entry) === null).map(
+      (entry) => entry.href,
+    );
+
+    expect(
+      iconless,
+      `Guide entries with no visual anchor: ${iconless.join(', ')}\n` +
+        `Fix by adding the route to nav-items.ts (preferred — the nav glyph is the ` +
+        `single source of truth) or, for a surface that legitimately has no nav ` +
+        `entry, by declaring \`icon\` on the catalogue entry.`,
+    ).toEqual([]);
+  });
+
+  it('never declares an `icon` on an entry the nav already covers (no second SSOT)', () => {
+    const navIcons = navIconByHref();
+    const duplicated = GUIDE_CATALOG.filter((entry) => entry.icon && navIcons.has(entry.href)).map(
+      (entry) => entry.href,
+    );
+
+    expect(
+      duplicated,
+      `These entries declare their own icon while nav-items.ts already defines one — ` +
+        `the two could drift apart and show different glyphs for the same screen: ` +
+        `${duplicated.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('takes the nav glyph, not a look-alike, for every nav-backed entry', () => {
+    const navIcons = navIconByHref();
+    for (const entry of GUIDE_CATALOG) {
+      const fromNav = navIcons.get(entry.href);
+      if (!fromNav) continue;
+      // Identity, not shape: the guide must render the very component the nav
+      // renders, so a nav icon swap propagates here with zero edits.
+      expect(guideEntryIcon(entry), `icon for ${entry.href}`).toBe(fromNav);
+    }
+  });
+
+  it('derives an icon for every member nav route (anti-vacuity)', () => {
+    const hrefs = memberNavHrefs();
+    const icons = navIconByHref();
+
+    // A silently empty map would make the first test pass only via the declared
+    // `icon` escape hatch — i.e. exactly the second source of truth we forbid.
+    expect(icons.size, 'nav icons derived').toBe(hrefs.length);
+    for (const href of hrefs) {
+      expect(icons.get(href), `nav icon for ${href}`).toBeTruthy();
+    }
+    expect([...icons.keys()].some((href) => href.startsWith('/admin'))).toBe(false);
   });
 });

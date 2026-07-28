@@ -1,3 +1,5 @@
+import { Smartphone, type LucideIcon } from 'lucide-react';
+
 import { BOTTOM_NAV, NAV_GROUPS } from '@/components/nav/nav-items';
 
 /**
@@ -50,6 +52,20 @@ export interface GuideEntry {
    * Les déclarer ici est un choix explicite et relu, pas un trou silencieux.
    */
   covers?: readonly string[];
+  /**
+   * Icône de la surface — À NE RENSEIGNER QUE pour une entrée absente de la nav.
+   *
+   * Le repère visuel d'une surface est déjà défini une fois, dans `nav-items.ts` :
+   * c'est le glyphe que le membre voit dans la sidebar et la bottom-nav. Le guide
+   * le RÉUTILISE (voir {@link guideEntryIcon}) au lieu d'en choisir un second, pour
+   * qu'une carte du sommaire et l'entrée de nav correspondante ne puissent jamais
+   * montrer deux symboles différents pour le même écran.
+   *
+   * Ce champ n'existe donc que pour les surfaces qui n'ont pas d'entrée de nav —
+   * aujourd'hui `/install`. Le renseigner sur une entrée qui EST dans la nav
+   * dupliquerait la source de vérité : `guide-catalog.test.ts` le refuse.
+   */
+  icon?: LucideIcon;
 }
 
 /**
@@ -94,6 +110,43 @@ export function memberNavHrefs(): string[] {
   const fromBottom = BOTTOM_NAV.filter((item) => !item.admin).map((item) => item.href);
 
   return Array.from(new Set([...fromGroups, ...fromBottom]));
+}
+
+/**
+ * Le glyphe de chaque route membre, tel que la nav le montre déjà.
+ *
+ * Dérivé LIVE de `nav-items.ts` : changer l'icône d'un écran dans la nav change
+ * aussi sa vignette dans le guide, sans qu'on ait à y penser. C'est la version
+ * non-périssable du « repère visuel par entrée » : une capture d'écran serait un
+ * instantané qui se périme en silence à la première refonte de l'écran, alors
+ * qu'un glyphe SSOT reste vrai par construction.
+ */
+export function navIconByHref(): Map<string, LucideIcon> {
+  const entries = new Map<string, LucideIcon>();
+  for (const group of NAV_GROUPS) {
+    if (group.admin) continue;
+    for (const item of group.items) {
+      if (item.admin) continue;
+      entries.set(item.href, item.icon);
+    }
+  }
+  for (const item of BOTTOM_NAV) {
+    if (item.admin) continue;
+    if (!entries.has(item.href)) entries.set(item.href, item.icon);
+  }
+  return entries;
+}
+
+/**
+ * L'icône à afficher pour une entrée : celle de la nav si la surface y figure,
+ * sinon celle que l'entrée déclare elle-même.
+ *
+ * Retourne `null` quand aucune des deux n'existe — le rendu doit alors dégrader
+ * proprement plutôt qu'inventer un glyphe, et `guide-catalog.test.ts` casse pour
+ * signaler qu'une entrée est arrivée sans repère visuel.
+ */
+export function guideEntryIcon(entry: GuideEntry): LucideIcon | null {
+  return navIconByHref().get(entry.href) ?? entry.icon ?? null;
 }
 
 /**
@@ -294,6 +347,9 @@ export const GUIDE_CATALOG: GuideEntry[] = [
       'Les étapes pour poser Fxmily sur ton écran d’accueil, avec le parcours exact de ton téléphone ou de ton navigateur.',
     when: 'Une seule fois, au début, et obligatoire sur iPhone pour recevoir les notifications.',
     group: 'Compte',
+    // Seule entrée du catalogue absente de la nav : elle déclare donc son propre
+    // glyphe. Le même `Smartphone` que la carte « Sur ton téléphone » plus bas.
+    icon: Smartphone,
   },
   {
     href: '/account',

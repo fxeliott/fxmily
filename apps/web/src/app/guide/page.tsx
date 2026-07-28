@@ -29,7 +29,7 @@ import { checkinCta } from '@/lib/checkin/checkin-cta';
 import { safeTimeZone } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
-import { GUIDE_CATALOG, type GuideEntry } from './guide-catalog';
+import { GUIDE_CATALOG, guideEntryIcon, type GuideEntry } from './guide-catalog';
 
 export const metadata: Metadata = {
   title: 'Guide d’utilisation',
@@ -307,29 +307,48 @@ export default async function GuidePage() {
             <div key={group} className="flex flex-col gap-3">
               <h3 className="t-eyebrow text-[var(--t-3)]">{group}</h3>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {entries.map((entry) => (
-                  <Link
-                    key={entry.href}
-                    href={entry.href}
-                    className="rounded-card-lg group/surface flex flex-col gap-1 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                  >
-                    <span className="t-body font-medium text-[var(--t-1)] transition-colors group-hover/surface:text-[var(--acc-hi)]">
-                      {entry.title}
-                    </span>
-                    <span className="t-cap text-[var(--t-3)]">{entry.blurb}</span>
-                    {/* Scope 2 — le « quand ». Savoir à quoi sert un écran ne dit pas
-                        à quel moment l'ouvrir : c'est ce qui manquait au sommaire.
-                        Repère calme (posture §2), jamais une échéance. */}
-                    <span className="t-cap mt-1.5 flex items-start gap-1.5 text-[var(--t-3)]">
-                      <Clock
-                        className="mt-[3px] h-3 w-3 shrink-0 text-[var(--t-4)]"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                      <span className="min-w-0">{entry.when}</span>
-                    </span>
-                  </Link>
-                ))}
+                {entries.map((entry) => {
+                  // Scope 2 — le repère visuel. C'est le glyphe que la nav montre
+                  // DÉJÀ pour cet écran (SSOT `nav-items.ts`) : le membre retrouve
+                  // dans le sommaire exactement le symbole qu'il verra ensuite dans
+                  // la barre de navigation. Purement décoratif (`aria-hidden`) — le
+                  // titre et le blurb portent seuls le sens, donc rien ne se perd au
+                  // lecteur d'écran ni si l'icône ne charge pas.
+                  const EntryIcon = guideEntryIcon(entry);
+                  return (
+                    <Link
+                      key={entry.href}
+                      href={entry.href}
+                      className="rounded-card-lg group/surface flex flex-col gap-1 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                    >
+                      <span className="flex items-center gap-2">
+                        {EntryIcon ? (
+                          <span
+                            aria-hidden
+                            className="rounded-control grid h-7 w-7 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] transition-transform duration-200 group-hover/surface:scale-110"
+                          >
+                            <EntryIcon className="h-[15px] w-[15px]" strokeWidth={1.75} />
+                          </span>
+                        ) : null}
+                        <span className="t-body min-w-0 font-medium text-[var(--t-1)] transition-colors group-hover/surface:text-[var(--acc-hi)]">
+                          {entry.title}
+                        </span>
+                      </span>
+                      <span className="t-cap text-[var(--t-3)]">{entry.blurb}</span>
+                      {/* Scope 2 — le « quand ». Savoir à quoi sert un écran ne dit pas
+                          à quel moment l'ouvrir : c'est ce qui manquait au sommaire.
+                          Repère calme (posture §2), jamais une échéance. */}
+                      <span className="t-cap mt-1.5 flex items-start gap-1.5 text-[var(--t-3)]">
+                        <Clock
+                          className="mt-[3px] h-3 w-3 shrink-0 text-[var(--t-4)]"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                        <span className="min-w-0">{entry.when}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ))}

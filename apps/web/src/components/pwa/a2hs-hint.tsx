@@ -23,9 +23,13 @@ interface BeforeInstallPromptEvent extends Event {
  * Mounted once on the member dashboard. It renders NOTHING until the browser
  * fires `beforeinstallprompt` (Chromium: Android Chrome, desktop Chrome/Edge).
  * That gate is the whole design:
- *  - iOS Safari never fires the event, so nothing shows there (Apple's A2HS is
- *    a manual Share-sheet flow; a nag banner would be noise). Per brief we do
- *    NOT ship an iOS-specific banner — the app stays quiet on that platform.
+ *  - iOS Safari never fires the event, so THIS component renders nothing there
+ *    (Apple's A2HS is a manual Share-sheet flow, which no `prompt()` can drive).
+ *    That is a statement about `<A2HSHint>`, NOT about the app: since J8, iOS is
+ *    covered by the dedicated `<IOSInstallHint>`, mounted on the dashboard and
+ *    pointing at the `/install` step-by-step page. Do not read this block as
+ *    "the app stays quiet on iOS" — it deliberately no longer does, and removing
+ *    `<IOSInstallHint>` on the strength of this comment would regress J8 scope 1.
  *  - Already-installed PWAs (`display-mode: standalone`) never see it either.
  *  - Once dismissed (or once the native prompt is shown), the flag persists in
  *    localStorage so the hint appears at most once. Never blocking, never modal.

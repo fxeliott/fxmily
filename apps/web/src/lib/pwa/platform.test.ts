@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { detectPlatform, isStandalone } from './platform';
+import { detectDesktopInstallPath, detectPlatform, isStandalone } from './platform';
 
 describe('detectPlatform', () => {
   it('detects iOS from an iPhone UA', () => {
@@ -58,6 +58,61 @@ describe('detectPlatform', () => {
   it('is case-insensitive', () => {
     expect(detectPlatform('SOMETHING-IPHONE-SOMETHING')).toBe('ios');
     expect(detectPlatform('SOMETHING-ANDROID-SOMETHING')).toBe('android');
+  });
+});
+
+describe('detectDesktopInstallPath', () => {
+  const MAC_SAFARI =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15';
+  const WIN_CHROME =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  const WIN_EDGE = `${WIN_CHROME} Edg/126.0.2592.87`;
+  const WIN_FIREFOX =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0';
+  const MAC_FIREFOX =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0';
+  const WIN_OPERA = `${WIN_CHROME} OPR/111.0.0.0`;
+
+  it('trusts the install-prompt API over any UA — c’est le seul signal infalsifiable', () => {
+    // Un fork Chromium qui se renomme demain répond toujours `true` ici.
+    expect(detectDesktopInstallPath('Totally/Unknown Browser/1.0', true)).toBe('chromium');
+    expect(detectDesktopInstallPath('', true)).toBe('chromium');
+  });
+
+  it('reconnaît Safari macOS → parcours « Ajouter au Dock »', () => {
+    expect(detectDesktopInstallPath(MAC_SAFARI, false)).toBe('safari-dock');
+  });
+
+  it('reconnaît Firefox desktop → AUCUN parcours d’installation (mac + windows)', () => {
+    // MDN : « Firefox does not support installing PWAs using a manifest file. »
+    // Lui montrer des étapes serait un mensonge, d'où `'none'` et pas `'unknown'`.
+    expect(detectDesktopInstallPath(WIN_FIREFOX, false)).toBe('none');
+    expect(detectDesktopInstallPath(MAC_FIREFOX, false)).toBe('none');
+  });
+
+  it('ne prend JAMAIS un fork Chromium pour Safari (ils portent tous `Safari/`)', () => {
+    // Sans API (extension qui la masque, flag, build exotique) on doit tomber
+    // sur 'unknown' — jamais sur des instructions Safari inapplicables.
+    for (const ua of [WIN_CHROME, WIN_EDGE, WIN_OPERA]) {
+      expect(detectDesktopInstallPath(ua, false)).toBe('unknown');
+    }
+  });
+
+  it('rend `unknown` plutôt que de deviner, sur UA vide ou inconnu', () => {
+    expect(detectDesktopInstallPath('', false)).toBe('unknown');
+    expect(detectDesktopInstallPath('curl/8.4.0', false)).toBe('unknown');
+  });
+
+  it('n’exige pas `Version/` seul : `Safari/` sans `Version/` reste unknown', () => {
+    // Les webviews et scrapers portent souvent `Safari/` sans `Version/`.
+    expect(detectDesktopInstallPath('Mozilla/5.0 AppleWebKit/605 Safari/605.1.15', false)).toBe(
+      'unknown',
+    );
+  });
+
+  it('est insensible à la casse', () => {
+    expect(detectDesktopInstallPath(WIN_FIREFOX.toUpperCase(), false)).toBe('none');
+    expect(detectDesktopInstallPath(MAC_SAFARI.toUpperCase(), false)).toBe('safari-dock');
   });
 });
 

@@ -64,4 +64,55 @@ describe('checkinCta', () => {
     expect(result.href).toBe('/checkin/evening');
     expect(result.label).toBe('Faire mon check-in du soir');
   });
+
+  /**
+   * SCOPE 4 blind spot: every case above pins a SINGLE zone (Europe/Paris, or an
+   * invalid one that falls back to it), so an implementation that ignored the
+   * `timezone` argument entirely and always read the Paris hour would still pass
+   * them. The three cases below break that phantom implementation: they hold the
+   * UTC instant CONSTANT and vary only the zone, so the slot can only differ if
+   * the argument is actually honoured.
+   *
+   * Anchor instant: 2026-07-27T05:00:00Z
+   *   Asia/Tokyo       UTC+9  => 14:00 local => evening (>= 14)
+   *   America/New_York EDT-4  => 01:00 local => morning (< 14)
+   *   Europe/Paris     CEST+2 => 07:00 local => morning (control: the naive
+   *                                             implementation's answer)
+   * Tokyo is therefore the one that a Paris-hardcoded helper would get wrong.
+   */
+  const SAME_INSTANT = '2026-07-27T05:00:00Z';
+
+  it('Asia/Tokyo at 05:00Z => 14:00 local => evening (fails a Paris-hardcoded helper)', () => {
+    const result = checkinCta(new Date(SAME_INSTANT), 'Asia/Tokyo');
+    expect(result.slot).toBe('evening');
+  });
+
+  it('America/New_York at the SAME instant => 01:00 local => morning', () => {
+    const result = checkinCta(new Date(SAME_INSTANT), 'America/New_York');
+    expect(result.slot).toBe('morning');
+  });
+
+  it('same instant, opposite slots: href and label follow the slot of EACH timezone', () => {
+    const now = new Date(SAME_INSTANT);
+    const tokyo = checkinCta(now, 'Asia/Tokyo');
+    const newYork = checkinCta(now, 'America/New_York');
+
+    // The two zones disagree at the very same moment: that IS the SCOPE 4 rule.
+    expect(tokyo.slot).not.toBe(newYork.slot);
+
+    expect(tokyo).toEqual({
+      slot: 'evening',
+      href: '/checkin/evening',
+      label: 'Faire mon check-in du soir',
+    });
+    expect(newYork).toEqual({
+      slot: 'morning',
+      href: '/checkin/morning',
+      label: 'Faire mon check-in du matin',
+    });
+
+    // Control: Paris is 07:00 at that instant, i.e. morning. A helper that
+    // ignored `timezone` would return this for Tokyo too.
+    expect(checkinCta(now, 'Europe/Paris').slot).toBe('morning');
+  });
 });

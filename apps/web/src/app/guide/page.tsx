@@ -3,6 +3,7 @@ import {
   BookOpen,
   Brain,
   CalendarRange,
+  Clock,
   Compass,
   LineChart,
   NotebookPen,
@@ -316,6 +317,17 @@ export default async function GuidePage() {
                       {entry.title}
                     </span>
                     <span className="t-cap text-[var(--t-3)]">{entry.blurb}</span>
+                    {/* Scope 2 — le « quand ». Savoir à quoi sert un écran ne dit pas
+                        à quel moment l'ouvrir : c'est ce qui manquait au sommaire.
+                        Repère calme (posture §2), jamais une échéance. */}
+                    <span className="t-cap mt-1.5 flex items-start gap-1.5 text-[var(--t-3)]">
+                      <Clock
+                        className="mt-[3px] h-3 w-3 shrink-0 text-[var(--t-4)]"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <span className="min-w-0">{entry.when}</span>
+                    </span>
                   </Link>
                 ))}
               </div>

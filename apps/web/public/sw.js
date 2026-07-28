@@ -39,11 +39,24 @@
  * `/offline` page when the network is unreachable (network-first).
  *
  * J8 (SCOPE 3) — 5th responsibility: an app-SHELL cache. At install we ALSO
- * pre-cache the manifest icons, and at runtime we serve immutable same-origin
- * assets (`/_next/static/*`, `/icon*`, `/apple-icon`, `/favicon.svg`) CACHE-FIRST
+ * pre-cache the manifest icons AND the stylesheets the `/offline` document
+ * itself references, and at runtime we serve immutable same-origin assets
+ * (`/_next/static/*`, `/icon*`, `/apple-icon`, `/favicon.svg`) CACHE-FIRST
  * from a versioned runtime
  * bucket. Navigations stay network-first; the push handlers are untouched. See
  * the fetch handler for the production-build testing caveat.
+ *
+ * ⚠️ Why the stylesheets are pre-cached and not left to the runtime bucket:
+ * `cache.add(OFFLINE_URL)` stores the HTML *document* only — never its
+ * subresources. The runtime bucket only fills opportunistically, on a visit
+ * that actually happened online. A member who installs the PWA and then loses
+ * connectivity before ever painting a styled page would get the offline
+ * fallback as RAW UNSTYLED HTML. The J8 criterion is explicit — "/offline
+ * s'affiche avec assets stylés (pas de page nue)" / "pre-cache des assets
+ * critiques du shell (pas seulement le HTML)" — so the install step parses the
+ * freshly cached offline document and pre-caches every `/_next/static/**.css`
+ * it links. Best-effort (`allSettled`): a missing stylesheet degrades the paint,
+ * it must never block activation.
  *
  * NEVER log push payload content — RGPD data minimization (SPEC §16).
  */
@@ -51,7 +64,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* global self, clients, fetch, caches, Request */
 
-const VERSION = 'fxmily-sw-v4-j8';
+const VERSION = 'fxmily-sw-v5-j8-shell';
 
 // Bumping VERSION rotates every bucket name below, so `activate` can delete any
 // Cache Storage bucket that isn't part of the current version.
@@ -77,6 +90,29 @@ const SHELL_ICON_URLS = [
   '/icon-maskable-512.png',
 ];
 
+// Matches every same-origin stylesheet the offline document links, INCLUDING a
+// cache-busting query string (`next dev` emits `/_next/static/.../x.css?v=173…`,
+// `next build` emits a bare hashed path). Both `<link rel="stylesheet">` and
+// `<link rel="preload" as="style">` carry the same href, hence the Set dedupe.
+// Anchored on `/_next/static/` so a third-party CDN href can never enter the
+// shell bucket.
+const SHELL_CSS_HREF_RE = /href="(\/_next\/static\/[^"]*?\.css(?:\?[^"]*)?)"/g;
+
+/**
+ * Pull the stylesheet URLs out of a cached HTML document. Deliberately a regex
+ * and not DOMParser: a Service Worker has no DOM, and this only ever runs on
+ * OUR OWN freshly cached `/offline` response — never on third-party markup.
+ */
+function extractShellStylesheetUrls(html) {
+  const urls = new Set();
+  SHELL_CSS_HREF_RE.lastIndex = 0;
+  let match;
+  while ((match = SHELL_CSS_HREF_RE.exec(html)) !== null) {
+    urls.add(match[1].replace(/&amp;/g, '&'));
+  }
+  return Array.from(urls);
+}
+
 // ── Install / activate ──────────────────────────────────────────────────────
 
 self.addEventListener('install', (event) => {
@@ -96,8 +132,21 @@ self.addEventListener('install', (event) => {
       try {
         const cache = await caches.open(CACHE_NAME);
         await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+
+        // Read the document back FROM THE CACHE (not a second network fetch) and
+        // pre-cache the stylesheets it links. Without this, a cold offline start
+        // paints raw unstyled HTML: `cache.add(OFFLINE_URL)` stores the document
+        // ONLY — never its subresources.
+        let shellCssUrls = [];
+        const cachedOffline = await cache.match(OFFLINE_URL);
+        if (cachedOffline) {
+          shellCssUrls = extractShellStylesheetUrls(await cachedOffline.text());
+        }
+
         await Promise.allSettled(
-          SHELL_ICON_URLS.map((u) => cache.add(new Request(u, { cache: 'reload' }))),
+          [...SHELL_ICON_URLS, ...shellCssUrls].map((u) =>
+            cache.add(new Request(u, { cache: 'reload' })),
+          ),
         );
       } catch (_err) {
         /* shell not fully cached this time — non-fatal, see fetch handler */

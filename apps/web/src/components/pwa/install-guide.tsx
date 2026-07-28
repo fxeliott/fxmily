@@ -1,11 +1,17 @@
 'use client';
 
-import { Check, Download, Plus, Smartphone } from 'lucide-react';
+import { Check, Download, Info, MousePointerClick, Plus, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
-import { detectPlatform, isStandalone, type Platform } from '@/lib/pwa/platform';
+import {
+  detectDesktopInstallPath,
+  detectPlatform,
+  isStandalone,
+  type DesktopInstallPath,
+  type Platform,
+} from '@/lib/pwa/platform';
 
 /**
  * `<InstallGuide>` — platform-adapted "Add to Home Screen" instructions.
@@ -17,7 +23,17 @@ import { detectPlatform, isStandalone, type Platform } from '@/lib/pwa/platform'
  *   `beforeinstallprompt`, so this is the only path available there.
  * - **Android / desktop (Chromium)** → a one-tap install button when the browser
  *   has offered `beforeinstallprompt`, otherwise browser-menu instructions.
+ * - **Safari on macOS** → *Fichier ▸ Ajouter au Dock…* (macOS Sonoma / Safari 17+).
+ * - **Firefox desktop** → an honest dead-end: it cannot install a web app at all,
+ *   so we say so and offer the paths that DO work, instead of faking steps.
  * - **Already installed / standalone** → a calm confirmation, nothing to do.
+ *
+ * The desktop split is not cosmetic: three of the four desktop cases cannot
+ * follow Chromium's instructions, and J8's audit found all three being handed
+ * them (a Safari user told to open a "⋮ menu" it does not have; a Firefox user
+ * told to install something Firefox refuses to install). See
+ * `detectDesktopInstallPath` for how each is identified and why capability
+ * detection is preferred to UA sniffing.
  *
  * Hydration-safe: the first render (SSR + first client paint) is
  * platform-agnostic (a neutral "detecting your device" placeholder) via a
@@ -80,6 +96,36 @@ function KebabGlyph() {
       <circle cx="12" cy="5" r="1.6" />
       <circle cx="12" cy="12" r="1.6" />
       <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
+/** macOS menu-bar glyph — the "Fichier" menu Safari's install path lives in. */
+function MenuBarGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+      <rect
+        x="3"
+        y="4.5"
+        width="18"
+        height="4.5"
+        rx="1.25"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M6.5 6.75h2.5M11.5 6.75h2.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <rect x="6" y="11.5" width="9" height="8" rx="1.25" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M8.5 14h4M8.5 16.75h4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -246,12 +292,28 @@ function ChromiumSteps({
           <ol className="mt-5 flex flex-col gap-5">
             <Step
               n={1}
-              icon={<KebabGlyph />}
-              title="Ouvre le menu du navigateur"
+              icon={
+                isAndroid ? (
+                  <KebabGlyph />
+                ) : (
+                  <MousePointerClick className="h-4 w-4" strokeWidth={2} />
+                )
+              }
+              title={
+                isAndroid ? (
+                  'Ouvre le menu du navigateur'
+                ) : (
+                  <>
+                    Cherche l&apos;icône{' '}
+                    <span className="font-medium text-[var(--acc-hi)]">d&apos;installation</span>{' '}
+                    dans la barre d&apos;adresse
+                  </>
+                )
+              }
               detail={
                 isAndroid
                   ? 'Les trois points (⋮) en haut à droite.'
-                  : "L'icône du menu ou des trois points, à droite de la barre d'adresse."
+                  : "Un petit écran avec une flèche, à droite de l'adresse du site. C'est le chemin le plus direct."
               }
             />
             <Step
@@ -268,11 +330,17 @@ function ChromiumSteps({
                   </>
                 ) : (
                   <>
-                    Choisis{' '}
-                    <span className="font-medium text-[var(--acc-hi)]">« Installer Fxmily »</span>
+                    Sinon, ouvre le menu (⋮) et cherche{' '}
+                    <span className="font-medium text-[var(--acc-hi)]">« Installer »</span>
                   </>
                 )
               }
+              {...(isAndroid
+                ? {}
+                : {
+                    detail:
+                      'Selon la version, l’entrée peut être rangée sous « Diffuser, enregistrer et partager ».',
+                  })}
             />
             <Step
               n={3}
@@ -283,6 +351,157 @@ function ChromiumSteps({
           </ol>
         </>
       )}
+    </Card>
+  );
+}
+
+/** A calm, non-alarming caveat row. Used where we must be honest about a limit
+ * rather than promise something the browser may not do. */
+function CalmNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="t-cap mt-4 flex items-start gap-2 text-[var(--t-3)]">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      <span className="min-w-0">{children}</span>
+    </p>
+  );
+}
+
+/**
+ * Safari on macOS: *Fichier ▸ Ajouter au Dock…*.
+ *
+ * The version caveat is stated rather than detected, deliberately. "Add to Dock"
+ * is gated on macOS **Sonoma**, and macOS pins its UA at `10_15_7` forever — so
+ * the OS version is genuinely unknowable from the client. Safari's own
+ * `Version/` token does not settle it either (Safari 17 also shipped for Ventura,
+ * which has no Add to Dock). Faking a detection here would be a guess dressed as
+ * a fact; naming the condition lets the member check it in one glance instead.
+ */
+function SafariDockSteps() {
+  return (
+    <Card glass className="p-5 sm:p-6">
+      <SectionHeading>Sur Mac (Safari)</SectionHeading>
+      <p className="t-body mt-1.5 text-[var(--t-2)]">
+        Safari ajoute Fxmily à ton Dock. Elle s&apos;ouvre alors dans sa propre fenêtre, sans barre
+        d&apos;adresse.
+      </p>
+      <ol className="mt-5 flex flex-col gap-5">
+        <Step
+          n={1}
+          icon={<MenuBarGlyph />}
+          title={
+            <>
+              Ouvre le menu <span className="font-medium text-[var(--acc-hi)]">Fichier</span>
+            </>
+          }
+          detail="Dans la barre de menus, en haut de l'écran, pas dans la fenêtre de Safari."
+        />
+        <Step
+          n={2}
+          icon={<Plus className="h-4 w-4" strokeWidth={2} />}
+          title={
+            <>
+              Choisis <span className="font-medium text-[var(--acc-hi)]">« Ajouter au Dock… »</span>
+            </>
+          }
+        />
+        <Step
+          n={3}
+          icon={<Check className="h-4 w-4" strokeWidth={2} />}
+          title="Confirme le nom, puis « Ajouter »"
+          detail="L'icône Fxmily arrive dans ton Dock."
+        />
+      </ol>
+      <CalmNote>
+        Cette entrée existe à partir de macOS Sonoma. Si tu ne la vois pas, ton Mac est sur une
+        version antérieure : Fxmily fonctionne alors normalement dans Safari, et tu peux
+        l&apos;installer sur ton iPhone.
+      </CalmNote>
+    </Card>
+  );
+}
+
+/**
+ * Firefox desktop: an honest dead-end.
+ *
+ * MDN, "Making PWAs installable": "Firefox does not support installing PWAs using
+ * a manifest file." So there is no step to give. Inventing one — which is what
+ * the shared Chromium branch did — sends the member hunting through a menu for an
+ * entry that does not exist, and the app looks broken. We name the limit and
+ * point at the two paths that genuinely work.
+ */
+function NoDesktopInstallPath() {
+  return (
+    <Card glass className="p-5 sm:p-6">
+      <SectionHeading>Sur ce navigateur</SectionHeading>
+      <p className="t-body mt-1.5 text-[var(--t-2)]">
+        Firefox sur ordinateur n&apos;installe pas les applications web. Ce n&apos;est pas un
+        problème de ton côté : la fonctionnalité n&apos;existe pas.
+      </p>
+      <p className="t-body mt-3 text-[var(--t-2)]">
+        Fxmily marche très bien ici, dans l&apos;onglet : tu n&apos;as rien à faire. Si tu veux
+        l&apos;icône et le plein écran :
+      </p>
+      <ul className="mt-4 flex flex-col gap-2.5">
+        <li className="t-body flex items-start gap-2.5 text-[var(--t-2)]">
+          <Smartphone
+            className="mt-1 h-4 w-4 shrink-0 text-[var(--acc-hi)]"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <span className="min-w-0">
+            <span className="font-medium text-[var(--t-1)]">Sur ton téléphone</span> : c&apos;est là
+            que l&apos;app installée sert le plus (et la seule voie pour les notifications sur
+            iPhone).
+          </span>
+        </li>
+        <li className="t-body flex items-start gap-2.5 text-[var(--t-2)]">
+          <Download
+            className="mt-1 h-4 w-4 shrink-0 text-[var(--acc-hi)]"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <span className="min-w-0">
+            <span className="font-medium text-[var(--t-1)]">Sur cet ordinateur</span> : ouvre Fxmily
+            dans Chrome, Edge ou Safari, qui savent l&apos;installer.
+          </span>
+        </li>
+      </ul>
+    </Card>
+  );
+}
+
+/**
+ * Unidentified desktop browser. We know the platform is a desktop but not which
+ * engine, so we say what to look for without asserting that it exists — and we
+ * say what to do if it does not, so the page is never a dead end.
+ */
+function UnknownDesktopSteps() {
+  return (
+    <Card glass className="p-5 sm:p-6">
+      <SectionHeading>Sur ordinateur</SectionHeading>
+      <p className="t-body mt-1.5 text-[var(--t-2)]">
+        Selon ton navigateur, l&apos;installation s&apos;appelle « Installer », « Ajouter au Dock »
+        ou « Ajouter à l&apos;écran d&apos;accueil ». Deux endroits à regarder :
+      </p>
+      <ol className="mt-5 flex flex-col gap-5">
+        <Step
+          n={1}
+          icon={<MousePointerClick className="h-4 w-4" strokeWidth={2} />}
+          title="La barre d'adresse"
+          detail="Une petite icône à droite de l'adresse du site."
+        />
+        <Step
+          n={2}
+          icon={<KebabGlyph />}
+          title="Le menu du navigateur"
+          detail="Les trois points, les trois barres, ou le menu « Fichier » sur Mac."
+        />
+      </ol>
+      <CalmNote>
+        Si tu ne trouves ni l&apos;un ni l&apos;autre, ton navigateur ne propose probablement pas
+        l&apos;installation. Fxmily fonctionne normalement dans l&apos;onglet, et tu peux
+        l&apos;installer sur ton téléphone.
+      </CalmNote>
     </Card>
   );
 }
@@ -357,9 +576,17 @@ export function InstallGuide() {
   }, [deferredPrompt]);
 
   let platform: Platform | null = null;
+  let desktopPath: DesktopInstallPath = 'unknown';
   let standalone = false;
   if (isClient) {
     platform = detectPlatform(navigator.userAgent, navigator.maxTouchPoints);
+    // `onbeforeinstallprompt` on `window` is the engine stating it implements the
+    // Chromium install flow. Read once per render, alongside the UA, so the two
+    // signals describe the same moment.
+    desktopPath = detectDesktopInstallPath(
+      navigator.userAgent,
+      'onbeforeinstallprompt' in window || deferredPrompt !== null,
+    );
     standalone = isStandalone();
   }
 
@@ -388,12 +615,18 @@ export function InstallGuide() {
         <AlreadyInstalled />
       ) : platform === 'ios' ? (
         <IosSteps />
-      ) : (
+      ) : platform === 'android' || desktopPath === 'chromium' ? (
         <ChromiumSteps
           deferredPrompt={deferredPrompt}
           onInstall={handleInstall}
           installing={installing}
         />
+      ) : desktopPath === 'safari-dock' ? (
+        <SafariDockSteps />
+      ) : desktopPath === 'none' ? (
+        <NoDesktopInstallPath />
+      ) : (
+        <UnknownDesktopSteps />
       )}
     </section>
   );

@@ -6,12 +6,14 @@ import {
   NotebookPen,
   Sparkles,
   Sunrise,
+  Sunset,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { btnVariants } from '@/components/ui/btn';
+import type { CheckinCtaResult } from '@/lib/checkin/checkin-cta';
 import { cn } from '@/lib/utils';
 
 /**
@@ -49,9 +51,19 @@ const STEPS = [
 ] as const;
 
 export function FirstRunWelcome({
+  cta,
   needsProfile = false,
   todayIsOff = false,
 }: {
+  /**
+   * J8 scope 4 — the very first CTA a brand-new member sees must land on the
+   * wizard of THEIR current slot, computed from THEIR timezone (never UTC,
+   * never a hardcoded /checkin/morning). Required, not optional: a default
+   * here would silently resurrect the morning-only bug on any new call site.
+   * Computed once per request by the page (`checkinCta`) and passed down whole,
+   * so href, icon and label can never drift apart.
+   */
+  cta: CheckinCtaResult;
   needsProfile?: boolean;
   /**
    * Tour 14 — when the member's TODAY is an off day, the welcome never leads
@@ -64,6 +76,9 @@ export function FirstRunWelcome({
   // On an off day the check-in never leads as the primary CTA (the day is a
   // pont, not a first-gesture push). The profile still leads when it's missing.
   const checkinKind = needsProfile || todayIsOff ? 'secondary' : 'primary';
+  // Same convention as /guide (guide/page.tsx): Sunrise for the morning slot,
+  // Sunset for the evening one.
+  const CtaIcon = cta.slot === 'morning' ? Sunrise : Sunset;
   return (
     <Card
       primary
@@ -150,12 +165,11 @@ export function FirstRunWelcome({
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             </Link>
           ) : null}
-          <Link
-            href="/checkin/morning"
-            className={cn(btnVariants({ kind: checkinKind, size: 'm' }))}
-          >
-            <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            Commencer mon check-in
+          <Link href={cta.href} className={cn(btnVariants({ kind: checkinKind, size: 'm' }))}>
+            <CtaIcon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            {cta.slot === 'morning'
+              ? 'Commencer mon check-in du matin'
+              : 'Commencer mon check-in du soir'}
             {checkinKind === 'primary' ? (
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             ) : null}

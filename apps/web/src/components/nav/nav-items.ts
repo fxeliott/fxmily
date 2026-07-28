@@ -37,7 +37,11 @@ import {
  * objectifs / patterns), « Au quotidien » (les gestes du jour), « Mental &
  * vérité », « Suivi & orga ». Le dashboard redevient un hub d'action épuré ; les
  * surfaces analytiques rétrospectives vivent sous « Ma progression »
- * (/progression, /patterns). Cartographie : 75 routes (membre + admin).
+ * (/progression, /patterns). La nav expose 33 destinations ; l'app en compte 93
+ * (`find src/app -name page.tsx | wc -l`) — l'écart, ce sont les sous-écrans
+ * atteints depuis leur parent (wizards, détails, `[id]`), délibérément absents
+ * de la barre. Le guide, lui, doit les couvrir TOUS : c'est `guide-catalog.ts`
+ * (+ son test qui parcourt l'arbre de routes réel) qui en répond, pas ce fichier.
  *
  * Surlignage actif via `isNavItemActive()` (exact, ou préfixe de segment).
  */

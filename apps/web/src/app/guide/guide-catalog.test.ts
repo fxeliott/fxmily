@@ -12,6 +12,8 @@ import {
   navIconByHref,
 } from './guide-catalog';
 
+import { BOTTOM_NAV, NAV_GROUPS } from '@/components/nav/nav-items';
+
 /**
  * SSOT coverage guard — the HEART of the guide catalogue.
  *
@@ -285,14 +287,51 @@ describe('guide catalogue — visual anchor', () => {
     ).toEqual([]);
   });
 
-  it('takes the nav glyph, not a look-alike, for every nav-backed entry', () => {
-    const navIcons = navIconByHref();
+  it('takes the glyph nav-items.ts DECLARES, not one derived from itself', () => {
+    // Oracle INDÉPENDANT : on relit `nav-items.ts` à la main plutôt que de
+    // réutiliser `navIconByHref()`. Comparer `guideEntryIcon(entry)` à
+    // `navIconByHref().get(href)` serait une tautologie — c'est littéralement la
+    // définition de la fonction (`guide-catalog.ts`), donc l'assertion ne
+    // pourrait jamais échouer. En repartant de la structure source, une
+    // régression DANS la dérivation elle-même (mauvais filtre `admin`, priorité
+    // BOTTOM_NAV/NAV_GROUPS inversée, href mal recopié) devient visible.
+    const declared = new Map<string, unknown>();
+    for (const group of NAV_GROUPS) {
+      if (group.admin) continue;
+      for (const item of group.items) {
+        if (item.admin) continue;
+        if (!declared.has(item.href)) declared.set(item.href, item.icon);
+      }
+    }
+    for (const item of BOTTOM_NAV) {
+      if (item.admin) continue;
+      if (!declared.has(item.href)) declared.set(item.href, item.icon);
+    }
+
     for (const entry of GUIDE_CATALOG) {
-      const fromNav = navIcons.get(entry.href);
+      const fromNav = declared.get(entry.href);
       if (!fromNav) continue;
-      // Identity, not shape: the guide must render the very component the nav
-      // renders, so a nav icon swap propagates here with zero edits.
-      expect(guideEntryIcon(entry), `icon for ${entry.href}`).toBe(fromNav);
+      expect(guideEntryIcon(entry), `glyphe rendu pour ${entry.href}`).toBe(fromNav);
+    }
+  });
+
+  it('pins a few landmark glyphes by name (external oracle, survives a refactor)', () => {
+    // Trois ancres écrites à la main : elles ne dépendent d'AUCUNE dérivation.
+    // Si la résolution se met un jour à renvoyer « une icône qui ressemble »,
+    // c'est ici que ça casse, y compris si toute la mécanique interne change.
+    const expected: Record<string, string> = {
+      '/dashboard': 'LayoutDashboard',
+      '/journal': 'BookOpen',
+      // La seule entrée sans contrepartie dans la nav : elle passe par le champ
+      // `icon` de l'entrée, l'autre branche de la résolution.
+      '/install': 'Smartphone',
+    };
+
+    for (const [href, displayName] of Object.entries(expected)) {
+      const entry = GUIDE_CATALOG.find((e) => e.href === href);
+      expect(entry, `entrée de catalogue pour ${href}`).toBeDefined();
+      const icon = guideEntryIcon(entry!) as { displayName?: string } | null;
+      expect(icon?.displayName, `glyphe attendu pour ${href}`).toBe(displayName);
     }
   });
 

@@ -1,0 +1,137 @@
+name: Guide surfaces walk
+
+# Ouvre les 24 surfaces membre du GUIDE_CATALOG, en membre authentifié réel, et
+# échoue en listant celles qui ne s'ouvrent pas.
+#
+# POURQUOI CE JOB EXISTE
+# ----------------------
+# Le guide PROMET 24 écrans au membre. Jusqu'ici, rien ne vérifiait qu'ils
+# s'ouvrent : la CI teste une poignée de parcours, et le garde de couverture
+# (`guide-catalog.test.ts`) compare des listes, jamais des pages. Une surface
+# cassée restait donc invisible jusqu'à ce qu'un membre tombe dessus — envoyé
+# là par le guide lui-même.
+#
+# POURQUOI LA NUIT ET PAS SUR CHAQUE PR
+# -------------------------------------
+# Mesuré : la première compilation Turbopack d'une route coûte 59 s à 2 min. Sur
+# 24 routes, à chaque PR, c'est un quart d'heure ajouté au chemin critique de
+# tout le dépôt. Le cas fréquent (surface ajoutée sans vignette) est déjà gardé
+# à chaque PR par un test Vitest instantané. Ce job couvre l'autre moitié :
+# est-ce que les écrans s'ouvrent encore, aujourd'hui.
+#
+# POURQUOI IL NE RÉGÉNÈRE PAS LES CAPTURES
+# ----------------------------------------
+# Tentant, et faux. Une capture d'écran n'est pas déterministe d'un OS à
+# l'autre : la rasterisation des polices diffère, donc CHAQUE octet diffère
+# entre un poste Windows et un runner Linux. Un job « régénère et ouvre une PR
+# si ça a changé » ouvrirait une PR de 24 binaires TOUTES LES NUITS, sans qu'un
+# seul écran ait bougé. On laisserait ce bruit se fermer tout seul, et on ne
+# verrait plus la vraie dérive au milieu. La régénération reste explicite :
+# `pnpm --filter @fxmily/web guide:shots`.
+#
+# NON BLOQUANT PAR CONSTRUCTION : ce workflow n'est pas dans les required checks
+# de `main`, au même titre que `e2e-mobile`. C'est un signal, pas une porte.
+
+on:
+  workflow_dispatch: {}
+  # 04:00 UTC ≈ 05:00–06:00 Europe/Paris — après le nocturne mobile (03:00), pour
+  # ne pas se disputer les runners.
+  schedule:
+    - cron: '0 4 * * *'
+
+concurrency:
+  group: guide-surfaces
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  walk:
+    name: Les 24 surfaces du guide s'ouvrent
+    runs-on: ubuntu-latest
+    # Généreux à dessein : 24 routes × compilation à froid, et le spec re-visite
+    # une surface qui a échoué (le second passage ne paie plus la compilation).
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fxmily
+          POSTGRES_PASSWORD: fxmily_dev
+          POSTGRES_DB: fxmily
+          TZ: Europe/Paris
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U fxmily -d fxmily"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      HUSKY: 0
+      DATABASE_URL: postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
+      AUTH_TRUST_HOST: 'true'
+      VERIFICATION_ADMIN_BATCH_TOKEN: ci_placeholder_verification_admin_batch_token_min_32_chars
+      CI: 'true'
+      # L'interrupteur du spec (il se saute sans lui — voir son en-tête).
+      GUIDE_WALK: '1'
+      # Une route froide dépasse largement le défaut CI de 45 s.
+      PW_NAV_TIMEOUT: '180000'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers (chromium)
+        id: playwright-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
+      - name: Drop flaky Microsoft apt sources (install-deps NOSPLIT flake)
+        run: sudo find /etc/apt/sources.list.d -type f \( -name '*microsoft*' -o -name '*azure*' \) -print -delete
+
+      - name: Install Playwright browsers + system deps (chromium)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fxmily/web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit branch)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fxmily/web exec playwright install-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @fxmily/web prisma:migrate:deploy
+
+      - name: Walk every guide surface as a real member
+        run: pnpm --filter @fxmily/web exec playwright test --project=chromium guide-surfaces-walk.spec.ts
+
+      - name: Upload Playwright traces + screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-guide-surfaces
+          path: apps/web/test-results/
+          retention-days: 7

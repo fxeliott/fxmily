@@ -64,7 +64,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* global self, clients, fetch, caches, Request */
 
-const VERSION = 'fxmily-sw-v5-j8-shell';
+// v6 — le flux install/activate change (réparation opportuniste du document
+// hors ligne), donc la règle de versionnement ci-dessus s'applique. Le bump
+// vide au passage les anciens buckets, ce qui est voulu : un membre encore sur
+// v5 porte la version où une écriture de cache en échec peut casser un asset
+// parfaitement téléchargé (cf. `cacheFirstAsset`).
+const VERSION = 'fxmily-sw-v6-j8-resilient';
 
 // Bumping VERSION rotates every bucket name below, so `activate` can delete any
 // Cache Storage bucket that isn't part of the current version.
@@ -238,10 +243,69 @@ async function cacheFirstAsset(request) {
   if (cached) return cached;
   const response = await fetch(request);
   if (response && response.status === 200 && response.type === 'basic') {
-    const cache = await caches.open(RUNTIME_CACHE);
-    await cache.put(request, response.clone());
+    // ⚠️ A CACHE WRITE MUST NEVER DECIDE WHETHER THE MEMBER GETS THEIR ASSET.
+    //
+    // `cache.put` rejects with QuotaExceededError once the origin's storage
+    // budget is full — a real and TIGHT limit on iOS/WebKit, which is exactly
+    // the platform this SW was written for. Un-caught, that rejection escapes
+    // this function into `event.respondWith`, and a rejected promise there is
+    // turned into a NETWORK ERROR for the request. The bytes had already
+    // arrived, the member was online, and the asset would fail anyway.
+    //
+    // Every `/_next/static/*` chunk goes through this path (`isImmutableAsset`),
+    // so the failure mode is the whole app painting unstyled or never
+    // hydrating, ONLINE, with nothing in the UI to explain it — the exact
+    // inverse of what a service worker is here to do.
+    //
+    // The response is the product. The cache is an optimisation.
+    try {
+      const cache = await caches.open(RUNTIME_CACHE);
+      await cache.put(request, response.clone());
+    } catch (_err) {
+      // One self-repair attempt: a saturated runtime bucket is the likeliest
+      // cause, and that bucket is PURE cache (content-hashed immutable assets),
+      // so dropping it costs a re-download and can never lose member data.
+      // `response` itself is still unread here, so a second clone is valid.
+      try {
+        await caches.delete(RUNTIME_CACHE);
+        const fresh = await caches.open(RUNTIME_CACHE);
+        await fresh.put(request, response.clone());
+      } catch (_err2) {
+        /* still no room — serve it uncached, which is the whole point */
+      }
+    }
   }
   return response;
+}
+
+/**
+ * Re-cache the offline document if it went missing. At most once per SW start.
+ *
+ * `install` is the ONLY writer of OFFLINE_URL, and it re-runs only when the
+ * BYTES of sw.js change (`reg.update()` aborts on a byte-identical script). So a
+ * single failed `cache.add(OFFLINE_URL)` — one transient blip during install —
+ * leaves a service worker that intercepts every navigation with nothing to serve
+ * when the network drops: the member gets the browser's native error page
+ * instead of « Tu es hors ligne », and NOTHING ever retries. That silent,
+ * permanent degradation is what this repairs.
+ *
+ * Called from the navigation path on a SUCCESSFUL response — i.e. at a moment
+ * when the network is proven reachable, which is precisely when install's
+ * failure can be undone. The flag is set BEFORE the await on purpose: a repair
+ * that fails must not be retried on every navigation of the same SW lifetime.
+ */
+let offlineDocumentChecked = false;
+async function ensureOfflineDocument() {
+  if (offlineDocumentChecked) return;
+  offlineDocumentChecked = true;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    if (!(await cache.match(OFFLINE_URL))) {
+      await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+    }
+  } catch (_err) {
+    /* still unreachable — the next SW start tries again */
+  }
 }
 
 self.addEventListener('fetch', (event) => {
@@ -256,6 +320,10 @@ self.addEventListener('fetch', (event) => {
   // 2) Only handle real page navigations. `mode: 'navigate'` covers link clicks,
   // address-bar loads, and reloads; it excludes fetch()/XHR/asset subrequests.
   if (request.mode !== 'navigate') return;
+
+  // Opportunistic repair of the offline document, off the critical path
+  // (`waitUntil` keeps the SW alive without delaying this response).
+  event.waitUntil(ensureOfflineDocument());
 
   event.respondWith(
     (async () => {

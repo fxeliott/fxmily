@@ -19,8 +19,28 @@ name: Sync Caddyfile to prod
 #     BEFORE  app=200  apex=522
 #
 # The host config is byte-identical to the repo, apex block included, and the
-# apex is 522 anyway. So `apply` is NOT the fix for the 522 — the cause is
-# elsewhere, and `mode=diagnose` exists to find it instead of guessing again.
+# apex is 522 anyway. So `apply` is NOT the fix for the 522.
+#
+# `mode=diagnose` (run 30470665253) then located it, and the origin is INNOCENT:
+#
+#     apex  local : http=301 redirect=https://app.fxmilyapp.com/
+#     app   local : http=200
+#     /data/caddy/certificates/local/fxmilyapp.com/fxmilyapp.com.crt   (exists)
+#     LISTEN 0 65535 0.0.0.0:443 / 0.0.0.0:80
+#     from outside → HTTP/2 522, server: cloudflare
+#
+# Caddy serves the apex correctly, holds the internal certificate the config
+# asks for, and listens on both ports. No inbound request for that name appears
+# in its logs. So Cloudflare never completes a TCP connection to this origin —
+# 522 is "connection timed out", not a certificate rejection (that would be 526,
+# which rules out the "Full (strict) vs tls internal" theory the earlier comment
+# in ops/caddy/Caddyfile:79-88 leaned on).
+#
+# `app.fxmilyapp.com` is DNS-only and reaches this very host from the outside,
+# so port 443 IS open to the world. The remaining explanation is that the
+# PROXIED apex record sends Cloudflare somewhere else. That lives in the
+# Cloudflare dashboard — no amount of repo or host work can fix it, and this
+# workflow deliberately stops rather than pretend otherwise.
 #
 # What this workflow is actually worth, then: a drift DETECTOR and a safe
 # installer for the day the two copies do diverge (they are one hand-patch away

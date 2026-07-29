@@ -19,7 +19,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:format": "prisma format"
+    "prisma:format": "prisma format",
+    "guide:shots": "node scripts/capture-guide-shots.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",

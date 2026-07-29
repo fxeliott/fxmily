@@ -2,6 +2,7 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useAfterHydration } from '@/lib/hooks';
 import { useIsLightTheme } from '@/lib/use-chart-colors';
 
 /**
@@ -22,7 +23,26 @@ import { useIsLightTheme } from '@/lib/use-chart-colors';
  * Each node has a small bouncing entrance via `m.circle scale 0→1`
  * with stagger. The whole figure is decorative — `aria-hidden="true"`.
  *
- * Reduced-motion : single-frame final state via `useReducedMotion()`.
+ * ⚠️ L'ÉTAT FINAL EST LA BASE SSR — ne pas revenir à un `initial` calculé.
+ *
+ * Ce composant portait les deux défauts d'hydratation corrigés le 2026-07-29 sur
+ * `/mindset` et `/review`, réunis dans un seul fichier :
+ *
+ *   1. quatre `initial={reduceMotion ? false : {…}}`. `initial` EST sérialisé
+ *      (`pathLength` devient un `strokeDasharray`, `scale`/`opacity` un
+ *      `transform` et un `opacity`), et le serveur ne peut pas connaître la
+ *      préférence — il écrivait donc l'état d'ENTRÉE pendant qu'un client en
+ *      mouvement réduit rendait l'état FINAL ;
+ *   2. l'anneau du climax monté derrière `{!reduceMotion && …}` : une branche de
+ *      FORME d'arbre sur une valeur que seul le client connaît. C'est le défaut
+ *      DUR — React 19 ne réconcilie pas, il jette le sous-arbre : « Hydration
+ *      failed because the server rendered HTML didn't match the client. »
+ *
+ * Le rendu de base — serveur, premier rendu client, sans JS, et sous mouvement
+ * réduit — est donc la figure COMPLÈTE. L'entrée ne s'arme qu'après hydratation
+ * (`useAfterHydration`), et seulement si le membre accepte le mouvement. La
+ * réduction de l'anneau, elle, est déjà assurée par le CSS : `.v18-mirror-pulse`
+ * passe sous le filet global `prefers-reduced-motion` de `globals.css`.
  */
 // Node coordinates — placed on a soft sine curve for visual rhythm.
 // S20 — DARK keeps the dark→bright progression (resolution = brightest blue D on
@@ -47,7 +67,12 @@ const NODES_LIGHT = [
 
 export function ABCDHero({ className }: { className?: string }) {
   const reduceMotion = useReducedMotion();
+  // `false` au rendu serveur ET pendant l'hydratation : les deux côtés écrivent
+  // donc exactement les mêmes attributs. La préférence n'est lue qu'ENSUITE.
+  const armed = useAfterHydration() && !reduceMotion;
   const isLight = useIsLightTheme();
+  // `transition` n'est PAS sérialisé — une durée calculée depuis la préférence
+  // reste sans danger pour l'hydratation.
   const dur = reduceMotion ? 0.001 : 0.7;
 
   const nodes = isLight ? NODES_LIGHT : NODES_DARK;
@@ -94,8 +119,10 @@ export function ABCDHero({ className }: { className?: string }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeDasharray={i === 2 ? '0 0' : '0 0'}
-            initial={reduceMotion ? false : { pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
+            initial={false}
+            animate={
+              armed ? { pathLength: [0, 1], opacity: [0, 1] } : { pathLength: 1, opacity: 1 }
+            }
             transition={{
               pathLength: { duration: dur * 1.3, ease: 'easeInOut', delay: 0.3 + i * 0.35 },
               opacity: { duration: 0.2, delay: 0.3 + i * 0.35 },
@@ -113,8 +140,8 @@ export function ABCDHero({ className }: { className?: string }) {
             cy={n.cy}
             r={n.r + 6}
             fill="url(#v18-abcd-node)"
-            initial={reduceMotion ? false : { opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={false}
+            animate={armed ? { opacity: [0, 1], scale: [0.5, 1] } : { opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.2 + i * 0.35, ease: 'backOut' }}
           />
           {/* Outer ring */}
@@ -129,8 +156,8 @@ export function ABCDHero({ className }: { className?: string }) {
             stroke={n.color}
             strokeWidth="2"
             filter={i === 3 ? 'url(#v18-abcd-glow)' : undefined}
-            initial={reduceMotion ? false : { scale: 0 }}
-            animate={{ scale: 1 }}
+            initial={false}
+            animate={armed ? { scale: [0, 1] } : { scale: 1 }}
             transition={{ duration: 0.5, delay: 0.25 + i * 0.35, ease: 'backOut' }}
           />
           {/* Label */}
@@ -144,8 +171,8 @@ export function ABCDHero({ className }: { className?: string }) {
             // S19 — token text (was fixed light grays → invisible on white node
             // in light mode); --t-1/--t-2 flip to dark on the light node.
             fill={i === 3 ? 'var(--t-1)' : 'var(--t-2)'}
-            initial={reduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={false}
+            animate={armed ? { opacity: [0, 1] } : { opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.5 + i * 0.35 }}
           >
             {n.label}
@@ -153,19 +180,23 @@ export function ABCDHero({ className }: { className?: string }) {
         </g>
       ))}
 
-      {/* Climax accent ring on D — subtle continuous breathing */}
-      {!reduceMotion && (
-        <circle
-          cx={nodes[3].cx}
-          cy={nodes[3].cy}
-          r={nodes[3].r + 10}
-          fill="none"
-          stroke={climaxStroke}
-          strokeWidth="1"
-          className="v18-mirror-pulse"
-          style={{ transformOrigin: `${nodes[3].cx}px ${nodes[3].cy}px` }}
-        />
-      )}
+      {/* Climax accent ring on D — subtle continuous breathing.
+          ⚠️ RENDU INCONDITIONNELLEMENT, et c'est le correctif dur. Cet anneau
+          était monté derrière `{!reduceMotion && …}` : le serveur le rendait (la
+          préférence y vaut `null`), un membre en mouvement réduit ne le rendait
+          pas → l'arbre changeait de FORME et React 19 jetait tout le sous-arbre.
+          Le repos du mouvement est déjà assuré par le CSS : `.v18-mirror-pulse`
+          passe sous le filet global `prefers-reduced-motion` de `globals.css`. */}
+      <circle
+        cx={nodes[3].cx}
+        cy={nodes[3].cy}
+        r={nodes[3].r + 10}
+        fill="none"
+        stroke={climaxStroke}
+        strokeWidth="1"
+        className="v18-mirror-pulse"
+        style={{ transformOrigin: `${nodes[3].cx}px ${nodes[3].cy}px` }}
+      />
     </svg>
   );
 }

@@ -1,11 +1,43 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 /**
  * Réutilisables côté client pour le design system Sprint #1.
  * Tous les hooks honorent prefers-reduced-motion (WCAG 2.3.3).
  */
+
+/** Un abonnement qui ne notifie jamais : la valeur ne change qu'une fois, à l'hydratation. */
+const NEVER_CHANGES = (): (() => void) => () => {};
+
+/**
+ * `false` pendant le rendu serveur ET pendant l'hydratation, `true` ensuite.
+ *
+ * À QUOI ÇA SERT, ET POURQUOI PAS UN `useEffect`.
+ *
+ * Une animation d'entrée ne peut pas se décider à partir d'une valeur que seul
+ * le client connaît (`prefers-reduced-motion`, par exemple) : ce que Framer
+ * sérialise depuis `initial` partirait alors différent du serveur, et React 19
+ * ne répare pas les attributs — l'élément reste figé dans l'état du serveur.
+ * Le remède est de rendre l'état FINAL des deux côtés, puis d'armer l'animation
+ * une fois l'hydratation finie.
+ *
+ * Le réflexe `useState(false)` + `useEffect(() => setArmed(true))` fait le
+ * travail mais viole `react-hooks/set-state-in-effect` (cascade de rendus), et
+ * la règle pointe précisément vers l'idiome correct : `useSyncExternalStore`
+ * expose un instantané SERVEUR distinct de l'instantané CLIENT, et React
+ * planifie lui-même le re-rendu après l'hydratation. Aucun effet, aucune
+ * cascade, aucune désynchronisation possible.
+ *
+ * Usage : `const armed = useAfterHydration() && !prefersReducedMotion;`
+ */
+export function useAfterHydration(): boolean {
+  return useSyncExternalStore(
+    NEVER_CHANGES,
+    () => true, // client, après hydratation
+    () => false, // serveur, et premier rendu client
+  );
+}
 
 export function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));

@@ -84,6 +84,9 @@ const CAPTURING = process.env.CAPTURE_GUIDE_SHOTS === '1';
  */
 const WALKING = CAPTURING || process.env.GUIDE_WALK === '1';
 
+/** Parcourir les surfaces comme un membre en mouvement réduit (réglage d'accessibilité). */
+const REDUCED_MOTION = process.env.GUIDE_WALK_REDUCED_MOTION === '1';
+
 /**
  * Régénération PARTIELLE : `GUIDE_SHOTS_ONLY='/dashboard,/track'`.
  *
@@ -169,9 +172,11 @@ test.describe('J8 scope 2 — les 24 surfaces du guide s’ouvrent vraiment', ()
     test.setTimeout(GUIDE_CATALOG.length * 45_000);
 
     await page.setViewportSize(VIEWPORT);
-    // ⚠️ `emulateMedia({ reducedMotion: 'reduce' })` A ÉTÉ ESSAYÉ ICI, PUIS RETIRÉ
-    // — et ce qu'il a trouvé mérite d'être écrit noir sur blanc plutôt qu'effacé
-    // avec la ligne.
+    // Mouvement réduit : `GUIDE_WALK_REDUCED_MOTION=1` fait parcourir les 24
+    // surfaces comme les voit un membre qui a demandé moins d'animation.
+    if (REDUCED_MOTION) await page.emulateMedia({ reducedMotion: 'reduce' });
+
+    // ⚠️ HISTORIQUE — pourquoi cet interrupteur existe, et ce qu'il a trouvé.
     //
     // Sous mouvement réduit, QUATRE surfaces cassent leur hydratation :
     //   /review     → « Hydration failed because the server rendered HTML didn't

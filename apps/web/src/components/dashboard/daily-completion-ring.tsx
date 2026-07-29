@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { useRef } from 'react';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
+import { useAfterHydration } from '@/lib/hooks';
 import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
@@ -36,6 +37,7 @@ const CENTER = SIZE / 2;
 
 export function DailyCompletionRing({ done, total }: { done: number; total: number }) {
   const prefersReduced = useReducedMotion();
+  const armed = useAfterHydration() && !prefersReduced;
   const C = useChartColors();
 
   // `total === 0` ne doit jamais arriver (le parent ne rend pas l'anneau dans
@@ -73,9 +75,13 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
             strokeLinecap="round"
             transform={`rotate(-90 ${CENTER} ${CENTER})`}
             strokeDasharray={CIRC}
-            initial={prefersReduced ? { strokeDashoffset: offset } : { strokeDashoffset: CIRC }}
-            animate={{ strokeDashoffset: offset }}
-            transition={{ duration: prefersReduced ? 0 : 1.2, ease: [0.22, 1, 0.36, 1] }}
+            // Base SSR = anneau REMPLI, écrit à l'identique des deux côtés ; la
+            // fermeture ne s'arme qu'après hydratation. Un `initial` calculé
+            // depuis la préférence sérialisait deux `stroke-dashoffset`
+            // différents (client 144.51 / serveur 216.77, mesuré le 2026-07-30).
+            initial={false}
+            animate={armed ? { strokeDashoffset: [CIRC, offset] } : { strokeDashoffset: offset }}
+            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
@@ -131,8 +137,10 @@ export function MetricRing({
   const center = size / 2;
   const fraction = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
   const offset = circ - fraction * circ;
-  // Se dessine seulement une fois visible ; reduced-motion → directement plein.
-  const animateOffset = prefersReduced || inView ? offset : circ;
+  // Se dessine seulement une fois visible ET après hydratation ; au repos —
+  // serveur, premier rendu client, sans JS, mouvement réduit — l'anneau est
+  // directement à sa valeur finale.
+  const armed = useAfterHydration() && !prefersReduced;
 
   return (
     <div
@@ -161,9 +169,11 @@ export function MetricRing({
           strokeLinecap="round"
           transform={`rotate(-90 ${center} ${center})`}
           strokeDasharray={circ}
-          initial={{ strokeDashoffset: prefersReduced ? offset : circ }}
-          animate={{ strokeDashoffset: animateOffset }}
-          transition={{ duration: prefersReduced ? 0 : 1.2, ease: [0.22, 1, 0.36, 1] }}
+          initial={false}
+          animate={
+            armed && inView ? { strokeDashoffset: [circ, offset] } : { strokeDashoffset: offset }
+          }
+          transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
         />
       </svg>
       <span className="absolute inset-0 flex items-center justify-center">

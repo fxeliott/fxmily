@@ -2,14 +2,32 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useAfterHydration } from '@/lib/hooks';
+
 /**
  * DrawnRule — DS-v3 (J3) SVG path-draw accent under the masthead.
  *
  * A single luminous rule that draws left-to-right once on mount via
  * Framer Motion `pathLength` (0 → 1). A small filled dot rides the
  * leading edge. Hex stops (not `var()`) keep the gradient stable on
- * iOS WebView (the documented Recharts/SVG quirk). `useReducedMotion`
- * renders the rule fully drawn instantly — no motion for AT users.
+ * iOS WebView (the documented Recharts/SVG quirk).
+ *
+ * ⚠️ L'ÉTAT FINAL EST LA BASE SSR — ne pas revenir à un `initial` calculé.
+ *
+ * Ce composant faisait `initial={{ pathLength: prefersReducedMotion ? 1 : 0 }}`.
+ * Or `initial` EST sérialisé (`pathLength` devient un `strokeDasharray`), et le
+ * serveur ne peut pas connaître la préférence : il écrivait donc l'état NON
+ * dessiné pendant que le client en mouvement réduit rendait l'état dessiné.
+ * React 19 ne répare pas les attributs — le trait restait donc **invisible**
+ * pour exactement les membres qui ont demandé moins d'animation. Diff mesuré le
+ * 2026-07-29 sur `/mindset` : `- strokeDasharray="0 1"` / `+ "1 1"`, plus
+ * `opacity` et `transform` sur le point.
+ *
+ * Le rendu de base — serveur, premier rendu client, sans JS, et sous mouvement
+ * réduit — est donc le trait COMPLET. Le dessin ne s'arme qu'après hydratation,
+ * et seulement si le membre accepte le mouvement. Même patron que
+ * `components/ui/sparkline.tsx` (« 'final' = trait complet (SSR + no-JS +
+ * reduced) »), déjà éprouvé dans ce dépôt.
  *
  * `tone` defaults to `'blue'` (app-wide :root accent). `tone="cyan"` swaps
  * the gradient + dot to the §21.7 training "Mode entraînement" cyan. The
@@ -34,7 +52,11 @@ export function DrawnRule({
   tone?: 'blue' | 'cyan';
 }) {
   const prefersReducedMotion = useReducedMotion();
-  const start = prefersReducedMotion ? 1 : 0;
+  // `false` au rendu serveur ET pendant l'hydratation : serveur et client
+  // écrivent donc exactement les mêmes attributs. La préférence n'est lue
+  // qu'ENSUITE (cf. `useAfterHydration`).
+  const drawing = useAfterHydration() && !prefersReducedMotion;
+
   const stops = TONE_STOPS[tone];
   const gradId = `ds-rule-grad-${tone}`;
 
@@ -63,8 +85,11 @@ export function DrawnRule({
         stroke={`url(#${gradId})`}
         strokeWidth="1.5"
         strokeLinecap="round"
-        initial={{ pathLength: start }}
-        animate={{ pathLength: 1 }}
+        // `initial={false}` : aucun état d'entrée n'est sérialisé, Framer peint
+        // directement `animate`. Le trait est donc complet au premier rendu,
+        // identique serveur/client.
+        initial={false}
+        animate={drawing ? { pathLength: [0, 1] } : { pathLength: 1 }}
         transition={{ duration: 0.9, ease: DRAW_EASE, delay: 0.1 }}
       />
       <m.circle
@@ -72,8 +97,8 @@ export function DrawnRule({
         cy="1.5"
         r="2"
         fill={stops.dot}
-        initial={{ opacity: start, scale: start }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={false}
+        animate={drawing ? { opacity: [0, 1], scale: [0, 1] } : { opacity: 1, scale: 1 }}
         transition={{ duration: 0.3, delay: 0.9 }}
       />
     </svg>

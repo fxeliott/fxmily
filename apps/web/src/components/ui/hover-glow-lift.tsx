@@ -1,6 +1,6 @@
 'use client';
 
-import { m, useReducedMotion } from 'framer-motion';
+import { m } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -37,7 +37,6 @@ export interface HoverGlowLiftProps {
 }
 
 export function HoverGlowLift({ children, className, tone = 'acc', noLift }: HoverGlowLiftProps) {
-  const reduced = useReducedMotion();
   const glow =
     tone === 'cy'
       ? 'wow-hover-glow wow-hover-glow-cy'
@@ -49,9 +48,19 @@ export function HoverGlowLift({ children, className, tone = 'acc', noLift }: Hov
     <m.div
       className={cn(glow, className)}
       transition={SPRING}
-      {...(reduced || noLift
-        ? {}
-        : { whileHover: { scale: 1.02, y: -2 }, whileTap: { scale: 0.98 } })}
+      // `tabIndex` explicite : Framer en émet un tout seul (`0`) dès qu'un
+      // `whileTap` est présent, ce qui mettait ce conteneur DÉCORATIF dans
+      // l'ordre de tabulation (WCAG 2.4.3) et — plus grave — désynchronisait
+      // l'hydratation dès que la présence des gestes dépendait d'une valeur
+      // connue du seul client. Voir l'en-tête de `hover-lift.tsx` : le diff
+      // React mesuré nommait précisément `- tabindex="0"`.
+      tabIndex={-1}
+      // `noLift` vient du CALL-SITE : identique au rendu serveur et au rendu
+      // client, donc conditionner dessus est sûr. Le mouvement réduit, lui,
+      // n'est PAS traité ici : `<MotionConfig reducedMotion="user">`
+      // (`components/motion-provider.tsx`) neutralise déjà les animations de
+      // transform, des deux côtés à la fois.
+      {...(noLift ? {} : { whileHover: { scale: 1.02, y: -2 }, whileTap: { scale: 0.98 } })}
     >
       {children}
     </m.div>

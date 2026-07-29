@@ -3,6 +3,7 @@
 import { Check } from 'lucide-react';
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useAfterHydration } from '@/lib/hooks';
 import type { JourneyStage } from '@/lib/objectives/service';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,9 @@ export function JourneyRoadmap({
   cap: number | null;
 }) {
   const prefersReduced = useReducedMotion();
+  // `false` au rendu serveur ET au premier rendu client : les deux côtés
+  // sérialisent le même état, la préférence n'est lue qu'après hydratation.
+  const armed = useAfterHydration() && !prefersReduced;
   const currentIndex = Math.max(
     0,
     stages.findIndex((s) => s.current),
@@ -54,8 +58,11 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(90deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '0% 50%' }}
-              initial={prefersReduced ? { scaleX: fraction } : { scaleX: 0 }}
-              whileInView={{ scaleX: fraction }}
+              // `initial` est sérialisé (`transform: scaleX(…)`) : le calculer
+              // depuis la préférence désynchronise l'hydratation. Base = rail
+              // REMPLI des deux côtés ; le remplissage ne s'anime qu'ensuite.
+              initial={false}
+              whileInView={armed ? { scaleX: [0, fraction] } : { scaleX: fraction }}
               viewport={{ once: true }}
               transition={
                 prefersReduced
@@ -69,8 +76,8 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '50% 0%' }}
-              initial={prefersReduced ? { scaleY: fraction } : { scaleY: 0 }}
-              whileInView={{ scaleY: fraction }}
+              initial={false}
+              whileInView={armed ? { scaleY: [0, fraction] } : { scaleY: fraction }}
               viewport={{ once: true }}
               transition={
                 prefersReduced
@@ -92,12 +99,25 @@ export function JourneyRoadmap({
             >
               {/* Nœud */}
               <div className="relative grid h-9 w-9 shrink-0 place-items-center">
-                {isCurrent && !prefersReduced ? (
+                {/* ⚠️ LA CONDITION NE PORTE QUE SUR `isCurrent`, JAMAIS SUR LA PRÉFÉRENCE.
+                    Cet anneau s'écrivait `{isCurrent && !prefersReduced ? … : null}` :
+                    le serveur, qui ne connaît pas la préférence, le rendait ; un membre
+                    en mouvement réduit ne le rendait pas. L'arbre changeait donc de
+                    FORME, et React 19 régénère alors tout le sous-arbre (« Hydration
+                    failed », mesuré le 2026-07-30 sur `/objectifs`). La forme est
+                    maintenant identique des deux côtés ; c'est le BATTEMENT qui s'arme
+                    après hydratation, et seulement si le membre l'accepte. Au repos
+                    l'anneau est à `opacity: 0` — invisible, immobile, sans coût. */}
+                {isCurrent ? (
                   <m.span
                     aria-hidden="true"
                     className="absolute inset-0 rounded-full border border-[var(--b-acc-strong)]"
-                    animate={{ scale: [1, 1.55], opacity: [0.55, 0] }}
-                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+                    animate={
+                      armed ? { scale: [1, 1.55], opacity: [0.55, 0] } : { scale: 1, opacity: 0 }
+                    }
+                    transition={
+                      armed ? { duration: 1.8, repeat: Infinity, ease: 'easeOut' } : { duration: 0 }
+                    }
                   />
                 ) : null}
                 {/* Hover par palier (Tour 16) : un palier non encore atteint réchauffe

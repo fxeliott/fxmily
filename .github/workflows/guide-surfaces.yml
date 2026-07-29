@@ -1,7 +1,8 @@
 name: Guide surfaces walk
 
 # Ouvre les 24 surfaces membre du GUIDE_CATALOG, en membre authentifié réel, et
-# échoue en listant celles qui ne s'ouvrent pas.
+# échoue en listant celles qui ne s'ouvrent pas. Deux fois : une fois en
+# mouvement normal, une fois avec `prefers-reduced-motion: reduce`.
 #
 # POURQUOI CE JOB EXISTE
 # ----------------------
@@ -126,6 +127,26 @@ jobs:
         run: pnpm --filter @fxmily/web prisma:migrate:deploy
 
       - name: Walk every guide surface as a real member
+        run: pnpm --filter @fxmily/web exec playwright test --project=chromium guide-surfaces-walk.spec.ts
+
+      # DEUXIÈME PASSE — LE MÊME MEMBRE, AVEC `prefers-reduced-motion: reduce`.
+      #
+      # Ce réglage d'accessibilité système cassait l'hydratation React de six
+      # composants (mesuré le 2026-07-30 : `/review`, `/mindset`, `/calendrier`,
+      # `/guide`, puis `/objectifs` et `/track` révélés par ce balayage même).
+      # La passe en mouvement NORMAL était verte pendant tout ce temps : elle ne
+      # pouvait pas voir le défaut, puisqu'il n'existe QUE sous la préférence.
+      # D'où cette seconde passe — même spec, un seul interrupteur.
+      #
+      # `!cancelled()` et non `success()` : sans ça, un échec de la première
+      # passe masquerait le résultat de la seconde, et on corrigerait à l'aveugle.
+      #
+      # Coût réel : le serveur redémarre, mais le cache Turbopack du job est
+      # chaud — mesuré en local, 44 s contre 46 s pour la passe froide.
+      - name: Walk every guide surface under reduced motion
+        if: ${{ !cancelled() }}
+        env:
+          GUIDE_WALK_REDUCED_MOTION: '1'
         run: pnpm --filter @fxmily/web exec playwright test --project=chromium guide-surfaces-walk.spec.ts
 
       - name: Upload Playwright traces + screenshots (on failure)

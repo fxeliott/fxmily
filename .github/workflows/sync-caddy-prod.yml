@@ -1,0 +1,211 @@
+name: Sync Caddyfile to prod
+
+# Ops workflow — manual trigger only.
+#
+# WHY THIS EXISTS
+# ---------------
+# `ops/caddy/Caddyfile` is the IaC source of truth for the edge, but NOTHING
+# ever pushed it to the host: `deploy.yml` scp's `ops/cron/*` + `ops/scripts/*`
+# and stops there. The host copy at /etc/fxmily/Caddyfile has therefore been
+# drifting since provisioning, hot-patched by hand.
+#
+# The measured consequence: the repo Caddyfile carries a
+# `www.fxmilyapp.com, fxmilyapp.com { tls internal; redir … }` block (lines
+# 89-92) that the host does NOT have, so Cloudflare cannot complete the origin
+# TLS handshake for the bare apex and serves HTTP 522. `Cron Watch` has been
+# failing on that probe every ~2-3 hours, continuously — which also means the
+# heartbeat workflow is permanently red and can no longer signal a NEW outage.
+#
+# Same failure class as the uploads data-loss of tour 14 (a compose file that
+# lived in the repo but never reached the host).
+#
+# SAFETY MODEL
+# ------------
+#   * `inspect` (default) touches nothing: it prints ownership, the live file
+#     and its diff against the repo. Always run this first.
+#   * `apply` stages to a scratch dir, takes a timestamped backup, installs,
+#     asks Caddy itself to VALIDATE before any reload, then reloads gracefully.
+#   * Asymmetric rollback, on purpose:
+#       - app.fxmilyapp.com is the live member app. If it stops answering after
+#         the reload, we restore the backup and fail loudly.
+#       - the bare apex is ALREADY broken (522). If it does not recover we
+#         report it, but we do NOT roll back a change that cannot have made it
+#         worse — rolling back would only restore the outage we came to fix.
+#   * No secret is ever echoed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'inspect = read-only diff (safe) | apply = install + validate + reload'
+        required: true
+        type: choice
+        options:
+          - inspect
+          - apply
+        default: inspect
+
+permissions: {}
+
+concurrency:
+  group: sync-caddy-prod
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: ${{ inputs.mode }} Caddyfile on prod
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (ops/caddy only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          sparse-checkout: ops/caddy
+          sparse-checkout-cone-mode: true
+
+      # Stage into a scratch dir owned by `fxmily`. We never scp straight into
+      # /etc — the install (and its backup) is a deliberate, checked step in the
+      # SSH script below.
+      - name: Stage Caddyfile on host
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          source: 'ops/caddy/Caddyfile'
+          target: /home/fxmily/caddy-sync
+          strip_components: 2
+          overwrite: true
+
+      - name: SSH → ${{ inputs.mode }}
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 5m
+          envs: MODE
+          script: |
+            set -euo pipefail
+
+            LIVE=/etc/fxmily/Caddyfile
+            STAGED=/home/fxmily/caddy-sync/Caddyfile
+            CONTAINER=fxmily-caddy
+
+            [ -f "$STAGED" ] || { echo "::error::staged Caddyfile missing at $STAGED"; exit 1; }
+
+            echo "::group::Host state"
+            ls -l "$LIVE" 2>/dev/null || echo "(no $LIVE on host)"
+            id
+            docker inspect --format '{{ .State.Status }} (image {{ .Config.Image }})' "$CONTAINER" \
+              2>/dev/null || echo "(container $CONTAINER not found)"
+            echo "::endgroup::"
+
+            echo "::group::Diff — live (<) vs repo (>)"
+            if [ -f "$LIVE" ]; then
+              diff "$LIVE" "$STAGED" && echo "IDENTICAL — host already matches the repo."
+            else
+              echo "(no live file to diff)"
+            fi
+            echo "::endgroup::"
+
+            # ---- Probes, shared by both modes -------------------------------
+            probe() {
+              # $1 = url, prints the numeric status or 000 when unreachable.
+              curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$1" 2>/dev/null || echo 000
+            }
+
+            APP_BEFORE="$(probe https://app.fxmilyapp.com/api/health)"
+            APEX_BEFORE="$(probe https://fxmilyapp.com)"
+            echo "BEFORE  app=$APP_BEFORE  apex=$APEX_BEFORE"
+
+            if [ "$MODE" = "inspect" ]; then
+              echo "inspect mode — nothing was written. Re-run with mode=apply to install."
+              exit 0
+            fi
+
+            # ---- apply ------------------------------------------------------
+            if [ "$APP_BEFORE" != "200" ]; then
+              echo "::error::app.fxmilyapp.com/api/health is $APP_BEFORE BEFORE any change."
+              echo "Refusing to touch the edge while the app is already unhealthy."
+              exit 1
+            fi
+
+            # 1. Timestamped backup — reversible by construction.
+            BACKUP=""
+            if [ -f "$LIVE" ]; then
+              BACKUP="${LIVE}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+              cp -a "$LIVE" "$BACKUP" || {
+                echo "::error::cannot back up $LIVE — check ownership (see the Host state group above)"; exit 1; }
+              echo "Backup: $BACKUP"
+            fi
+
+            # 2. Install. The file is bind-mounted read-only into the container,
+            #    so writing the host path is what the proxy will read on reload.
+            if ! cp "$STAGED" "$LIVE" 2>/dev/null; then
+              echo "::error::$LIVE is not writable by the deploy user."
+              echo "Root operator, one command:  install -m 644 $STAGED $LIVE && docker exec $CONTAINER caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
+              exit 1
+            fi
+
+            # 3. Ask Caddy itself whether the config is valid, BEFORE any reload.
+            #    A bad Caddyfile that reaches `reload` takes the whole edge down;
+            #    `validate` is the gate that makes this step non-destructive.
+            if ! docker exec "$CONTAINER" caddy validate \
+                   --config /etc/caddy/Caddyfile --adapter caddyfile; then
+              echo "::error::caddy validate REJECTED the repo Caddyfile — restoring the backup, edge untouched."
+              [ -n "$BACKUP" ] && cp -a "$BACKUP" "$LIVE"
+              exit 1
+            fi
+
+            # 4. Graceful reload (zero-downtime; keeps in-flight connections).
+            if ! docker exec "$CONTAINER" caddy reload \
+                   --config /etc/caddy/Caddyfile --adapter caddyfile; then
+              echo "::error::caddy reload failed — restoring the backup and reloading it back."
+              if [ -n "$BACKUP" ]; then
+                cp -a "$BACKUP" "$LIVE"
+                docker exec "$CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              fi
+              exit 1
+            fi
+
+            # 5. Let the new config settle, then re-probe.
+            sleep 8
+            APP_AFTER="$(probe https://app.fxmilyapp.com/api/health)"
+            APEX_AFTER="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://fxmilyapp.com || echo 000)"
+            echo "AFTER   app=$APP_AFTER  apex=$APEX_AFTER"
+
+            # 5a. The member app is the thing that must never break. Roll back.
+            if [ "$APP_AFTER" != "200" ]; then
+              echo "::error::app.fxmilyapp.com went from $APP_BEFORE to $APP_AFTER — ROLLING BACK."
+              if [ -n "$BACKUP" ]; then
+                cp -a "$BACKUP" "$LIVE"
+                docker exec "$CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+                sleep 5
+                echo "app after rollback: $(probe https://app.fxmilyapp.com/api/health)"
+              fi
+              exit 1
+            fi
+
+            # 5b. The apex was already down. Report, do not roll back.
+            case "$APEX_AFTER" in
+              301|308)
+                echo "✅ apex now redirects (HTTP $APEX_AFTER) — the 522 class is closed."
+                ;;
+              5*)
+                echo "::warning title=Apex still failing::apex is HTTP $APEX_AFTER after the sync."
+                echo "The edge config is now the repo's, and the app is healthy, so this is NOT rolled back."
+                echo "Most likely remaining cause: Cloudflare SSL mode is 'Full (strict)', which rejects"
+                echo "the internal CA that ops/caddy/Caddyfile pins with 'tls internal'. Fix at the edge"
+                echo "(SSL mode Full, or a Cloudflare Redirect Rule apex -> app) — not on this host."
+                ;;
+              *)
+                echo "::warning title=Apex unexpected::apex is HTTP $APEX_AFTER (expected 301/308)."
+                ;;
+            esac
+
+            echo "Caddyfile on host now matches the repo. Backup kept at ${BACKUP:-<none>}."

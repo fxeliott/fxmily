@@ -1,0 +1,146 @@
+{
+  "/account": {
+    "file": "account.webp",
+    "sourceHash": "899c1de694c5e9f1",
+    "width": 393,
+    "height": 300
+  },
+  "/calendrier": {
+    "file": "calendrier.webp",
+    "sourceHash": "1ac0a2a7ae34dbc5",
+    "width": 393,
+    "height": 300
+  },
+  "/checkin": {
+    "file": "checkin.webp",
+    "sourceHash": "53598e8d118cb29e",
+    "width": 393,
+    "height": 300
+  },
+  "/checkin/history": {
+    "file": "checkin-history.webp",
+    "sourceHash": "0e9957d8fb041542",
+    "width": 393,
+    "height": 300
+  },
+  "/classement": {
+    "file": "classement.webp",
+    "sourceHash": "bc7c697a6eae609a",
+    "width": 393,
+    "height": 300
+  },
+  "/dashboard": {
+    "file": "dashboard.webp",
+    "sourceHash": "c3853bfe546889f1",
+    "width": 393,
+    "height": 300
+  },
+  "/debrief-mensuel": {
+    "file": "debrief-mensuel.webp",
+    "sourceHash": "d2ea8b306ab4d451",
+    "width": 393,
+    "height": 300
+  },
+  "/guide": {
+    "file": "guide.webp",
+    "sourceHash": "c436965929457bbb",
+    "width": 393,
+    "height": 300
+  },
+  "/install": {
+    "file": "install.webp",
+    "sourceHash": "7bb109d6bea36849",
+    "width": 393,
+    "height": 300
+  },
+  "/journal": {
+    "file": "journal.webp",
+    "sourceHash": "a734c3b507709dbc",
+    "width": 393,
+    "height": 300
+  },
+  "/library": {
+    "file": "library.webp",
+    "sourceHash": "3323243e74badc6a",
+    "width": 393,
+    "height": 300
+  },
+  "/mindset": {
+    "file": "mindset.webp",
+    "sourceHash": "285543aeb04ea0f7",
+    "width": 393,
+    "height": 300
+  },
+  "/objectifs": {
+    "file": "objectifs.webp",
+    "sourceHash": "7a817695daece3e4",
+    "width": 393,
+    "height": 300
+  },
+  "/patterns": {
+    "file": "patterns.webp",
+    "sourceHash": "de19c16886727ffe",
+    "width": 393,
+    "height": 300
+  },
+  "/pre-trade/new": {
+    "file": "pre-trade-new.webp",
+    "sourceHash": "56619e042ca6769a",
+    "width": 393,
+    "height": 300
+  },
+  "/profile": {
+    "file": "profile.webp",
+    "sourceHash": "80c45ec777121910",
+    "width": 393,
+    "height": 300
+  },
+  "/progression": {
+    "file": "progression.webp",
+    "sourceHash": "f6333c1a3682ad05",
+    "width": 393,
+    "height": 300
+  },
+  "/reflect": {
+    "file": "reflect.webp",
+    "sourceHash": "8d6810621799eae3",
+    "width": 393,
+    "height": 300
+  },
+  "/reunions": {
+    "file": "reunions.webp",
+    "sourceHash": "f4143e98692aecd0",
+    "width": 393,
+    "height": 300
+  },
+  "/review": {
+    "file": "review.webp",
+    "sourceHash": "7db88810d2cefa76",
+    "width": 393,
+    "height": 300
+  },
+  "/seances": {
+    "file": "seances.webp",
+    "sourceHash": "48f3fd9490e4dbcf",
+    "width": 393,
+    "height": 300
+  },
+  "/track": {
+    "file": "track.webp",
+    "sourceHash": "bd720eea9c1f1585",
+    "width": 393,
+    "height": 300
+  },
+  "/training": {
+    "file": "training.webp",
+    "sourceHash": "4a7eda70c039a4a8",
+    "width": 393,
+    "height": 300
+  },
+  "/verification": {
+    "file": "verification.webp",
+    "sourceHash": "33248ef4cfec501d",
+    "width": 393,
+    "height": 300
+  }
+}

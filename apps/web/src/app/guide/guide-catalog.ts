@@ -254,8 +254,15 @@ export const GUIDE_CATALOG: GuideEntry[] = [
   {
     href: '/reflect',
     title: 'Réflexion',
-    blurb: 'Ton espace de réflexion guidée, pour prendre du recul sur ta semaine et sur toi.',
-    when: 'Quand tu as besoin de poser quelque chose par écrit, sans format imposé.',
+    // Le « quand » disait « sans format imposé ». C'était FAUX : le module est un
+    // parcours ABCD en quatre étapes, chacune obligatoire et soumise à un
+    // minimum de caractères (`reflection-wizard.tsx` STEP_DEFS + isStepValid,
+    // REFLECTION_TEXT_MIN_CHARS). Un guide qui décrit un autre écran que celui
+    // qui existe est pire qu'un guide muet : il installe une attente que
+    // l'app dément trente secondes plus tard.
+    blurb:
+      'Le cadre ABCD (déclencheur, pensée automatique, émotion, reformulation) pour démonter à froid une pensée qui t’a fait dévier.',
+    when: 'Juste après un moment qui t’a secoué, tant que la pensée est encore nette dans ta tête.',
     group: 'Mental & vérité',
   },
   {

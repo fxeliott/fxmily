@@ -14,6 +14,7 @@ import {
   UserCircle,
 } from 'lucide-react';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
@@ -30,6 +31,7 @@ import { safeTimeZone } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
 import { GUIDE_CATALOG, guideEntryIcon, type GuideEntry } from './guide-catalog';
+import { guideShot } from './guide-shots';
 
 export const metadata: Metadata = {
   title: 'Guide d’utilisation',
@@ -58,6 +60,18 @@ interface Pillar {
   body: string;
   points: readonly string[];
   cta?: { href: string; label: string; icon: typeof BookOpen };
+  /**
+   * Ce pilier porte le CTA de check-in : son lien suit le créneau du membre
+   * (scope 4), il n'est donc PAS écrit ici.
+   *
+   * Ce drapeau remplace un couplage POSITIONNEL (`index === 0`) doublé d'un
+   * href en dur `/checkin/morning`. Réordonner ce tableau — un geste éditorial
+   * anodin — aurait déplacé la substitution sur le mauvais pilier ET rendu au
+   * pilier check-in son lien figé du matin : très exactement le bug que le
+   * scope 4 existe pour tuer, réintroduit en silence, sans qu'aucun test ne le
+   * voie. On supprime la possibilité plutôt que d'ajouter un garde.
+   */
+  dynamicCheckinCta?: true;
 }
 
 const PILLARS: readonly Pillar[] = [
@@ -71,7 +85,7 @@ const PILLARS: readonly Pillar[] = [
       'Journal de trade : plan, conviction, émotions, respect du plan et oublis.',
       'Bilan du soir : ce que tu as fait, ta formation suivie, ton travail sur toi.',
     ],
-    cta: { href: '/checkin/morning', label: 'Faire mon check-in', icon: Sunrise },
+    dynamicCheckinCta: true,
   },
   {
     icon: Brain,
@@ -235,13 +249,14 @@ export default async function GuidePage() {
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           aria-label="Les piliers de l’app"
         >
-          {PILLARS.map((pillar, index) => {
+          {PILLARS.map((pillar) => {
             const Icon = pillar.icon;
-            // Scope 4 — le CTA du 1er pilier (check-in) suit le créneau du membre.
-            const pillarCta =
-              index === 0 && pillar.cta
-                ? { ...pillar.cta, href: cta.href, label: cta.label, icon: CtaIcon }
-                : pillar.cta;
+            // Scope 4 — le pilier qui se DÉCLARE porteur du CTA de check-in
+            // reçoit le lien du créneau courant. Plus aucune dépendance à la
+            // position dans le tableau, et plus aucun href de repli à périmer.
+            const pillarCta = pillar.dynamicCheckinCta
+              ? { href: cta.href, label: cta.label, icon: CtaIcon }
+              : pillar.cta;
             return (
               <HoverLift key={pillar.title} className="h-full">
                 <Card className="wow-hover-glow rounded-card-lg group/pillar h-full p-6">
@@ -315,12 +330,47 @@ export default async function GuidePage() {
                   // titre et le blurb portent seuls le sens, donc rien ne se perd au
                   // lecteur d'écran ni si l'icône ne charge pas.
                   const EntryIcon = guideEntryIcon(entry);
+                  // Scope 2 — « 1 capture » par entrée. Vignette de l'écran réel,
+                  // prise sur un compte de démo local par
+                  // `tests/e2e/guide-surfaces-walk.spec.ts` : le membre RECONNAÎT
+                  // l'écran avant d'y aller, au lieu de le déduire d'un mot.
+                  //
+                  // `alt=""` : l'image est redondante avec le titre et le blurb
+                  // juste en dessous (WCAG 1.1.1 — une alternative qui répéterait
+                  // le lien ne ferait que bavarder au lecteur d'écran).
+                  // `sizes` évite de servir une image de desktop à un iPhone, et
+                  // le ratio est posé en dur depuis les dimensions enregistrées
+                  // au manifeste : la carte réserve sa place AVANT le chargement,
+                  // donc zéro décalage de mise en page (CLS).
+                  const shot = guideShot(entry.href);
                   return (
                     <Link
                       key={entry.href}
                       href={entry.href}
                       className="rounded-card-lg group/surface flex flex-col gap-1 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                     >
+                      {shot ? (
+                        <span
+                          className="rounded-control relative mb-2.5 block w-full overflow-hidden border border-[var(--b-subtle)] bg-[var(--bg-2)]"
+                          style={{ aspectRatio: `${shot.width} / ${shot.height}` }}
+                        >
+                          <Image
+                            src={shot.src}
+                            alt=""
+                            fill
+                            sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 92vw"
+                            // `unoptimized` volontaire : la source est DÉJÀ un
+                            // WebP de ~8 ko rendu à la largeur d'affichage
+                            // (393 px). Passer 24 vignettes dans l'optimiseur
+                            // ferait payer un ré-encodage par image au premier
+                            // visiteur, sur un serveur à 2 vCPU, pour gagner
+                            // quelques kilo-octets sur un total de 206 ko déjà
+                            // chargé en paresseux. Le coût dépasserait le gain.
+                            unoptimized
+                            className="object-cover object-top transition-transform duration-300 group-hover/surface:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover/surface:scale-100"
+                          />
+                        </span>
+                      ) : null}
                       <span className="flex items-center gap-2">
                         {EntryIcon ? (
                           <span

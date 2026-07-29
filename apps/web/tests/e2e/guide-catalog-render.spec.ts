@@ -193,6 +193,48 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
       ).toHaveCount(1);
     }
 
+    // La VIGNETTE de chaque entrée charge VRAIMENT (J8 scope 2, « 1 capture »).
+    //
+    // Pourquoi `naturalWidth` et pas la présence du `<img>` : une balise dont la
+    // source renvoie 404 — ou, ici, la PAGE DE LOGIN — existe dans le DOM,
+    // occupe sa place, et ne montre rien. Le piège est concret sur ce dépôt :
+    // le matcher du proxy d'auth (`src/proxy.ts`) intercepte tout sauf une
+    // liste blanche, `/guide-shots/*` n'y figure pas, et une requête SANS
+    // session reçoit du HTML à la place du WebP (vérifié en production :
+    // `content-type: text/html`, 39 ko). Ce test tourne AVEC session, donc il
+    // prouve exactement le cas du membre — et rougirait si quelqu'un durcissait
+    // le proxy au point de couper aussi les requêtes authentifiées.
+    const shots = surfaces.locator('img');
+    await expect(shots).toHaveCount(GUIDE_CATALOG.length);
+
+    // Les vignettes sont en chargement PARESSEUX (voulu : 24 images sur une
+    // page). Tant qu'une carte n'est jamais entrée dans le viewport, son
+    // `naturalWidth` vaut légitimement 0 — ce n'est pas une image cassée, c'est
+    // une image pas encore demandée. Il faut donc parcourir la page comme le
+    // ferait un membre AVANT de conclure. (Première version de ce test : elle
+    // ne scrollait pas et accusait 24 images saines.)
+    await page.evaluate(async () => {
+      const step = window.innerHeight;
+      for (let y = 0; y < document.body.scrollHeight; y += step) {
+        window.scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      window.scrollTo(0, 0);
+    });
+
+    await expect
+      .poll(
+        async () =>
+          shots.evaluateAll((nodes) =>
+            nodes
+              .map((n) => n as HTMLImageElement)
+              .filter((img) => img.naturalWidth === 0)
+              .map((img) => img.currentSrc || img.src),
+          ),
+        { timeout: 20_000, message: 'vignettes du sommaire qui ne chargent pas' },
+      )
+      .toEqual([]);
+
     // Zéro scroll horizontal à 375 px (porte « 0 débordement » du contrat frontend).
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,

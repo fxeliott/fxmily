@@ -2,6 +2,7 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useAfterHydration } from '@/lib/hooks';
 import { useIsLightTheme } from '@/lib/use-chart-colors';
 
 /**
@@ -26,6 +27,12 @@ import { useIsLightTheme } from '@/lib/use-chart-colors';
  */
 export function MirrorHero({ className }: { className?: string }) {
   const reduceMotion = useReducedMotion();
+  // Même patron que `dashboard/drawn-rule.tsx` : `false` au rendu serveur ET
+  // pendant l'hydratation, donc les deux côtés écrivent les mêmes attributs ;
+  // l'entrée ne s'arme qu'ensuite, et seulement si le membre accepte le
+  // mouvement. Un `initial` calculé à partir de `reduceMotion` se sérialise, lui,
+  // et désynchronise l'hydratation (mesuré sur `/review` le 2026-07-29).
+  const armed = useAfterHydration() && !reduceMotion;
   const isLight = useIsLightTheme();
 
   // Stagger draw animations across the SVG so the illustration "wakes up"
@@ -155,34 +162,39 @@ export function MirrorHero({ className }: { className?: string }) {
         // S19 — token (was fixed light blue → faint on white in light); --acc-hi
         // flips to a darker blue in light, staying the bright focal in dark.
         fill="var(--acc-hi)"
-        initial={reduceMotion ? false : { scale: 0 }}
-        animate={{ scale: 1 }}
+        initial={false}
+        animate={armed ? { scale: [0, 1] } : { scale: 1 }}
         transition={{ duration: 0.4, delay: 0.8, ease: 'backOut' }}
       />
-      {/* Pulse ring around center — emits continuously (low cadence, anti-spam) */}
-      {!reduceMotion && (
-        <>
-          <circle
-            cx="200"
-            cy="120"
-            r="6"
-            fill="none"
-            stroke={pulse1}
-            strokeWidth="1"
-            className="v18-mirror-pulse"
-          />
-          <circle
-            cx="200"
-            cy="120"
-            r="6"
-            fill="none"
-            stroke={pulse2}
-            strokeWidth="1"
-            className="v18-mirror-pulse"
-            style={{ animationDelay: '1.8s' }}
-          />
-        </>
-      )}
+      {/* Pulse ring around center — emits continuously (low cadence, anti-spam).
+          ⚠️ RENDU INCONDITIONNELLEMENT, et c'est le correctif. Ces deux cercles
+          étaient montés derrière `{!reduceMotion && …}` : une branche de FORME
+          d'arbre sur une valeur que seul le client connaît. Le serveur les
+          rendait (la préférence y vaut `null`), un membre en mouvement réduit
+          ne les rendait pas → « Hydration failed because the server rendered
+          HTML didn't match the client. As a result this tree will be
+          regenerated on the client. » React jetait tout le sous-arbre.
+          La réduction est déjà assurée par le CSS : `.v18-mirror-pulse` passe
+          sous le filet global `prefers-reduced-motion` de `globals.css`. */}
+      <circle
+        cx="200"
+        cy="120"
+        r="6"
+        fill="none"
+        stroke={pulse1}
+        strokeWidth="1"
+        className="v18-mirror-pulse"
+      />
+      <circle
+        cx="200"
+        cy="120"
+        r="6"
+        fill="none"
+        stroke={pulse2}
+        strokeWidth="1"
+        className="v18-mirror-pulse"
+        style={{ animationDelay: '1.8s' }}
+      />
 
       {/* Floating moment-dots along the axis (members' weekly moments) */}
       {[80, 130, 270, 320].map((cx, i) => (
@@ -194,8 +206,8 @@ export function MirrorHero({ className }: { className?: string }) {
           // S19 — token (was fixed light gray → invisible on white in light);
           // --t-3 flips dark on light canvas, light on dark.
           fill="var(--t-3)"
-          initial={reduceMotion ? false : { opacity: 0, y: 0 }}
-          animate={{ opacity: 0.75 }}
+          initial={false}
+          animate={armed ? { opacity: [0, 0.75] } : { opacity: 0.75 }}
           transition={{ duration: 0.6, delay: 1 + i * 0.12 }}
         />
       ))}

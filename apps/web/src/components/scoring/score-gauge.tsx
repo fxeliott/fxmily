@@ -5,6 +5,7 @@ import { Info, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 
 import { Sparkline } from '@/components/ui/sparkline';
+import { useAfterHydration } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
 /**
@@ -157,11 +158,17 @@ export function ScoreGauge({
   // The onboarding floor is only visible when it actually replaces a low band.
   const isRampUpFloor = tone.key === 'ramp';
   const prefersReducedMotion = useReducedMotion();
+  const armed = useAfterHydration() && !prefersReducedMotion;
 
   // Premium count-up via Framer `useMotionValue` (J6.6 M3 fix). No setState
   // in effect — the motion value drives a `<m.span>` text node directly,
   // bypassing React state. Honors `prefers-reduced-motion` (jumps to target).
-  const motionScore = useMotionValue(score === null || prefersReducedMotion ? (score ?? 0) : 0);
+  // Départ INCONDITIONNEL à 0 : ce compteur partait de `score` sous mouvement
+  // réduit et de `0` sinon, si bien que le serveur écrivait « 0 » dans le HTML
+  // pendant qu'un membre en mouvement réduit rendait sa vraie note — mismatch de
+  // TEXTE, que React 19 punit en régénérant le sous-arbre. L'effet ci-dessous
+  // pose la valeur finale dès l'hydratation quand le mouvement est refusé.
+  const motionScore = useMotionValue(0);
   const displayText = useTransform(motionScore, (v) => Math.round(v).toString());
   useEffect(() => {
     if (score === null) return;
@@ -255,13 +262,16 @@ export function ScoreGauge({
               fill="none"
               strokeLinecap="round"
               strokeDasharray={CIRCUMFERENCE}
-              initial={
-                prefersReducedMotion
-                  ? { strokeDashoffset: targetOffset }
-                  : { strokeDashoffset: CIRCUMFERENCE }
+              // Base SSR = jauge REMPLIE, identique des deux côtés ; le
+              // remplissage ne s'arme qu'après hydratation (cf. le commentaire
+              // du compteur ci-dessus, même cause).
+              initial={false}
+              animate={
+                armed
+                  ? { strokeDashoffset: [CIRCUMFERENCE, targetOffset] }
+                  : { strokeDashoffset: targetOffset }
               }
-              animate={{ strokeDashoffset: targetOffset }}
-              transition={{ duration: prefersReducedMotion ? 0 : 1.1, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
             />
           )}
         </svg>

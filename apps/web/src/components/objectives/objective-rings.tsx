@@ -4,6 +4,8 @@ import { animate, m, useMotionValue, useReducedMotion, useTransform } from 'fram
 import { Check } from 'lucide-react';
 import { useEffect } from 'react';
 
+import { Reveal } from '@/components/ui/reveal';
+import { useAfterHydration } from '@/lib/hooks';
 import type { ProcessObjective } from '@/lib/objectives/service';
 import { cn } from '@/lib/utils';
 
@@ -71,9 +73,19 @@ function pointOnCircle(f: number, r: number): [number, number] {
 export function ObjectiveRing({ objective }: { objective: ProcessObjective }) {
   const { current, target, gap, reached, label, hint } = objective;
   const prefersReduced = useReducedMotion();
+  const armed = useAfterHydration() && !prefersReduced;
   const tone = toneFor(current);
 
-  const motionScore = useMotionValue(current === null || prefersReduced ? (current ?? 0) : 0);
+  // ⚠️ VALEUR DE DÉPART INCONDITIONNELLE — c'est le correctif du mismatch de TEXTE.
+  // Ce compteur partait de `current` sous mouvement réduit et de `0` sinon. Le
+  // serveur ne connaît pas la préférence (`useReducedMotion()` y vaut `null`) : il
+  // écrivait donc « 0 » dans le HTML pendant qu'un membre en mouvement réduit
+  // rendait sa vraie note au premier rendu → « Hydration failed because the server
+  // rendered text didn't match the client » (mesuré le 2026-07-30 sur `/objectifs`,
+  // React 19 régénère alors tout le sous-arbre). Les deux côtés partent maintenant
+  // de 0 ; l'effet ci-dessous pose la valeur finale immédiatement quand le membre
+  // demande moins de mouvement, et la compte sinon.
+  const motionScore = useMotionValue(0);
   const displayText = useTransform(motionScore, (v) => Math.round(v).toString());
   useEffect(() => {
     if (current === null) return;
@@ -144,11 +156,21 @@ export function ObjectiveRing({ objective }: { objective: ProcessObjective }) {
               strokeLinecap="round"
               transform={`rotate(-90 ${CENTER} ${CENTER})`}
               strokeDasharray={CIRC}
-              initial={
-                prefersReduced ? { strokeDashoffset: targetOffset } : { strokeDashoffset: CIRC }
+              // L'état d'entrée n'est PAS sérialisé (`initial={false}`) et la
+              // base est l'anneau REMPLI, écrite à l'identique des deux côtés.
+              // Un `initial` inconditionnel + `transition: 0` ne suffisait pas :
+              // sous mouvement réduit Framer atteint la cible dès le premier
+              // rendu, si bien que le client écrivait `stroke-dashoffset` = cible
+              // là où le serveur avait écrit la circonférence (diff mesuré le
+              // 2026-07-30 : client 144.51 / serveur 216.77). Le remplissage ne
+              // s'arme donc qu'après hydratation, en keyframes.
+              initial={false}
+              animate={
+                armed
+                  ? { strokeDashoffset: [CIRC, targetOffset] }
+                  : { strokeDashoffset: targetOffset }
               }
-              animate={{ strokeDashoffset: targetOffset }}
-              transition={{ duration: prefersReduced ? 0 : 1.1, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
             />
           )}
           {/* Encoche cible (Maîtrise) */}
@@ -206,20 +228,24 @@ export function ObjectiveRing({ objective }: { objective: ProcessObjective }) {
   );
 }
 
+/**
+ * ⚠️ LA RÉVÉLATION PASSE PAR `<Reveal>`, PAS PAR UN `m.div` MAISON.
+ *
+ * Ce composant re-codait la révélation au scroll à la main, avec
+ * `initial={prefersReduced ? false : { opacity: 0, y: 10 }}` — exactement la
+ * branche que `ui/reveal.tsx` interdit dans son en-tête (« SURTOUT PAS de
+ * branche structurelle […] le serveur sérialise toujours le style initial »).
+ * Le serveur écrivait `opacity:0; transform:translateY(10px)`, un membre en
+ * mouvement réduit ne les écrivait pas, et React 19 ne répare pas les attributs.
+ * Déléguer au composant déjà éprouvé supprime le défaut ET le doublon.
+ */
 export function ObjectiveRings({ objectives }: { objectives: ReadonlyArray<ProcessObjective> }) {
-  const prefersReduced = useReducedMotion();
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {objectives.map((o, i) => (
-        <m.div
-          key={o.key}
-          initial={prefersReduced ? false : { opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-40px' }}
-          transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <Reveal key={o.key} y={10} delay={i * 80}>
           <ObjectiveRing objective={o} />
-        </m.div>
+        </Reveal>
       ))}
     </div>
   );

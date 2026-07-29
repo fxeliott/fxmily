@@ -4,6 +4,7 @@ import { m, useReducedMotion } from 'framer-motion';
 import { Brain, Coffee, Dumbbell, Moon, UtensilsCrossed } from 'lucide-react';
 import type { ComponentType, CSSProperties, SVGProps } from 'react';
 
+import { useAfterHydration } from '@/lib/hooks';
 import type { HabitKind } from '@/lib/schemas/habit-log';
 
 /**
@@ -20,12 +21,11 @@ import type { HabitKind } from '@/lib/schemas/habit-log';
  *     TRACK reste aligné app principale mono-accent bleu/discipline forte)
  *   - Pentagon layout : center node + 5 nodes radial
  *   - Entrance : Framer Motion `pathLength`/scale stagger — FINITE
- *     (≤ 0.8 s, no `repeat`), gated by `animate` (= !reduceMotion)
+ *     (≤ 0.8 s, no `repeat`), gated by `armed` (= hydraté && !reduceMotion)
  *
  * V2.1.5 premium enrich (ambient layer) :
- *   - Center pulse : 2 expanding rings (double-guarded like
- *     `mirror-hero.tsx` — `{!reduceMotion ? … : null}` JS conditional
- *     PLUS the CSS class `.track-pulse-ring`)
+ *   - Center pulse : 2 expanding rings, gardées par la SEULE classe CSS
+ *     `.track-pulse-ring` (le garde JS a été retiré — cf. plus bas)
  *   - Concentric echo rings (`.track-echo-ring`) + a 10-particle drift
  *     field (`.track-particle`, deterministic positions, no Math.random
  *     at render → SSR-safe)
@@ -38,9 +38,15 @@ import type { HabitKind } from '@/lib/schemas/habit-log';
  * ambient uses `.track-*` classes which that filet genuinely kills →
  * reduced-motion users get the crisp static composition (faint static
  * echo rings + static particles, no pulse). This is the proven
- * `mirror-hero` `.v18-mirror-pulse` pattern. The `useReducedMotion()`
- * JS gate is kept as a second guard on the pulse rings (defense in
- * depth, robust even if the hook value is SSR-frozen).
+ * `mirror-hero` `.v18-mirror-pulse` pattern.
+ *
+ * ⚠️ Le « second garde JS » qui accompagnait ce filet a été RETIRÉ le
+ * 2026-07-30, et sa disparition est une correction, pas une régression :
+ * `{!reduceMotion ? … : null}` n'était pas de la défense en profondeur mais
+ * une branche de FORME d'arbre sur une valeur que le serveur ne connaît pas.
+ * Il cassait l'hydratation de toute la page pour exactement les membres qu'il
+ * prétendait protéger. Le filet CSS, lui, s'applique identiquement des deux
+ * côtés — c'est le seul des deux qui pouvait tenir cette promesse.
  *
  * NO Black Hat gamification :
  *   - Pas de "X/5 piliers complétés aujourd'hui" counter visible ici
@@ -130,7 +136,21 @@ export interface TrackHeroProps {
 
 export function TrackHero({ loggedToday }: TrackHeroProps) {
   const reduceMotion = useReducedMotion();
-  const animate = !reduceMotion;
+  // ⚠️ `armed` REMPLACE l'ancien `const animate = !reduceMotion`, ET C'EST LE CORRECTIF.
+  //
+  // Les quatre entrées de cette illustration s'écrivaient
+  // `initial={animate ? {…} : false}`. Or `initial` EST sérialisé : le serveur,
+  // qui ne peut pas connaître la préférence (`useReducedMotion()` y vaut `null`),
+  // écrivait `opacity="0"` et `transform: scale(0.7)` pendant qu'un membre en
+  // mouvement réduit rendait l'état final. React 19 ne réconcilie pas et jette
+  // le sous-arbre (« Hydration failed because the server rendered HTML didn't
+  // match the client », mesuré le 2026-07-30 sur `/track`).
+  //
+  // `useAfterHydration()` vaut `false` au rendu serveur ET au premier rendu
+  // client : les deux côtés partent donc de l'état FINAL, écrit à l'identique,
+  // et l'entrée ne s'arme qu'ensuite — via des keyframes dans `animate`, jamais
+  // via `initial`.
+  const armed = useAfterHydration() && !reduceMotion;
 
   return (
     <div className="relative mx-auto w-full max-w-xl" aria-hidden="true">
@@ -172,8 +192,8 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           cy={CENTER}
           r={RADIUS - 10}
           fill="url(#track-center-glow)"
-          initial={animate ? { scale: 0.7, opacity: 0 } : false}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={false}
+          animate={armed ? { scale: [0.7, 1], opacity: [0, 1] } : { scale: 1, opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         />
 
@@ -219,34 +239,40 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           );
         })}
 
-        {/* V2.1.5 ambient — center pulse rings. Double-guarded exactly like
-            `mirror-hero.tsx` : NOT rendered when `reduceMotion` (JS gate)
-            AND the `.track-pulse-ring` loop is itself killed by the global
-            reduced-motion @media filet (robust even if the hook value is
-            SSR-frozen). */}
-        {!reduceMotion ? (
-          <g>
-            <circle
-              className="track-pulse-ring"
-              cx={CENTER}
-              cy={CENTER}
-              r={CENTER_RADIUS}
-              fill="none"
-              stroke="var(--acc)"
-              strokeWidth={1.5}
-            />
-            <circle
-              className="track-pulse-ring"
-              cx={CENTER}
-              cy={CENTER}
-              r={CENTER_RADIUS}
-              fill="none"
-              stroke="var(--acc)"
-              strokeWidth={1.5}
-              style={{ animationDelay: '1.8s' }}
-            />
-          </g>
-        ) : null}
+        {/* V2.1.5 ambient — center pulse rings.
+            ⚠️ RENDUES INCONDITIONNELLEMENT. Ce bloc était monté derrière
+            `{!reduceMotion ? … : null}`, et son commentaire invoquait « le
+            double garde de `mirror-hero.tsx` » — or c'est exactement le défaut
+            qui a été RETIRÉ de `mirror-hero.tsx` le 2026-07-29. Un « double
+            garde » dont la première moitié est une branche de FORME d'arbre
+            n'est pas plus robuste : le serveur ne connaît pas la préférence et
+            rendait donc ce `<g>`, qu'un membre en mouvement réduit n'écrivait
+            pas. Le compte d'enfants du `<svg>` différait, React 19 régénérait
+            tout le sous-arbre (diff mesuré le 2026-07-30 sur `/track` : un
+            `<line>` côté client là où le serveur avait ce `<g>`).
+            La seconde moitié du garde, elle, suffit et reste : `.track-pulse-ring`
+            passe sous le filet global `prefers-reduced-motion` de `globals.css`. */}
+        <g>
+          <circle
+            className="track-pulse-ring"
+            cx={CENTER}
+            cy={CENTER}
+            r={CENTER_RADIUS}
+            fill="none"
+            stroke="var(--acc)"
+            strokeWidth={1.5}
+          />
+          <circle
+            className="track-pulse-ring"
+            cx={CENTER}
+            cy={CENTER}
+            r={CENTER_RADIUS}
+            fill="none"
+            stroke="var(--acc)"
+            strokeWidth={1.5}
+            style={{ animationDelay: '1.8s' }}
+          />
+        </g>
 
         {/* Connecting paths — drawn from center to each pillar node */}
         {PILLARS.map((p, i) => {
@@ -262,8 +288,10 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
               stroke="var(--b-acc)"
               strokeWidth={1.5}
               strokeDasharray="4 6"
-              initial={animate ? { pathLength: 0, opacity: 0 } : false}
-              animate={{ pathLength: 1, opacity: 0.6 }}
+              initial={false}
+              animate={
+                armed ? { pathLength: [0, 1], opacity: [0, 0.6] } : { pathLength: 1, opacity: 0.6 }
+              }
               transition={{ duration: 0.6, delay: 0.2 + i * 0.08, ease: 'easeOut' }}
             />
           );
@@ -278,8 +306,8 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           stroke="var(--acc)"
           strokeWidth={2}
           filter="url(#track-node-shadow)"
-          initial={animate ? { scale: 0, opacity: 0 } : false}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={false}
+          animate={armed ? { scale: [0, 1], opacity: [0, 1] } : { scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
         />
         <text
@@ -326,8 +354,8 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           return (
             <m.g
               key={`pillar-${p.kind}`}
-              initial={animate ? { scale: 0, opacity: 0 } : false}
-              animate={{ scale: 1, opacity: 1 }}
+              initial={false}
+              animate={armed ? { scale: [0, 1], opacity: [0, 1] } : { scale: 1, opacity: 1 }}
               transition={{
                 duration: 0.5,
                 delay: 0.4 + i * 0.1,

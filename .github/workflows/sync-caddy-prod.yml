@@ -6,18 +6,30 @@ name: Sync Caddyfile to prod
 # ---------------
 # `ops/caddy/Caddyfile` is the IaC source of truth for the edge, but NOTHING
 # ever pushed it to the host: `deploy.yml` scp's `ops/cron/*` + `ops/scripts/*`
-# and stops there. The host copy at /etc/fxmily/Caddyfile has therefore been
-# drifting since provisioning, hot-patched by hand.
+# and stops there (line 169). Nothing detected drift either — same failure class
+# as the tour-14 uploads data loss, where a compose file lived in the repo and
+# never reached the host.
 #
-# The measured consequence: the repo Caddyfile carries a
-# `www.fxmilyapp.com, fxmilyapp.com { tls internal; redir … }` block (lines
-# 89-92) that the host does NOT have, so Cloudflare cannot complete the origin
-# TLS handshake for the bare apex and serves HTTP 522. `Cron Watch` has been
-# failing on that probe every ~2-3 hours, continuously — which also means the
-# heartbeat workflow is permanently red and can no longer signal a NEW outage.
+# ⚠️ CORRECTION, MEASURED 2026-07-29 (run 30469208706). The first version of this
+# file asserted that the host was MISSING the apex block and that this caused the
+# permanent HTTP 522 on `fxmilyapp.com`. `mode=inspect` REFUTED that:
 #
-# Same failure class as the uploads data-loss of tour 14 (a compose file that
-# lived in the repo but never reached the host).
+#     -rw-r--r-- 1 root root 3843 Jul  4 19:41 /etc/fxmily/Caddyfile
+#     IDENTICAL — host already matches the repo.
+#     BEFORE  app=200  apex=522
+#
+# The host config is byte-identical to the repo, apex block included, and the
+# apex is 522 anyway. So `apply` is NOT the fix for the 522 — the cause is
+# elsewhere, and `mode=diagnose` exists to find it instead of guessing again.
+#
+# What this workflow is actually worth, then: a drift DETECTOR and a safe
+# installer for the day the two copies do diverge (they are one hand-patch away
+# from it, and nothing else would notice). That is a smaller claim than the
+# original one, and it is the true one.
+#
+# `Cron Watch` has been failing on the apex probe every ~2-3 hours continuously,
+# which also means the heartbeat is permanently red and can no longer signal a
+# NEW outage — the real cost of leaving this open.
 #
 # SAFETY MODEL
 # ------------
@@ -37,11 +49,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'inspect = read-only diff (safe) | apply = install + validate + reload'
+        description: 'inspect = diff (safe) | diagnose = why is the apex 522 (safe) | apply = install + reload'
         required: true
         type: choice
         options:
           - inspect
+          - diagnose
           - apply
         default: inspect
 
@@ -125,6 +138,50 @@ jobs:
 
             if [ "$MODE" = "inspect" ]; then
               echo "inspect mode — nothing was written. Re-run with mode=apply to install."
+              exit 0
+            fi
+
+            # ---- diagnose : pourquoi l'apex est-il 522 ? ---------------------
+            # Écrit rien. Sépare les deux seules familles de cause possibles :
+            #   A. Caddy ne sert pas ce nom  → la sonde LOCALE échoue.
+            #   B. Caddy sert ce nom mais Cloudflare n'arrive pas jusqu'à lui
+            #      (mode SSL, pare-feu, mauvais enregistrement DNS)
+            #      → la sonde locale répond, et les logs ne montrent AUCUNE
+            #        requête venue de l'extérieur pour ce nom.
+            if [ "$MODE" = "diagnose" ]; then
+              echo "::group::A — Caddy répond-il localement pour l'apex ?"
+              # `--resolve` force le SNI `fxmilyapp.com` vers le Caddy local ;
+              # `-k` accepte le certificat interne (c'est justement ce que la
+              # config y pose). On mesure Caddy, pas la chaîne Cloudflare.
+              curl -sS -o /dev/null -k --max-time 15 \
+                -w '  apex  local : http=%{http_code} redirect=%{redirect_url}\n' \
+                --resolve 'fxmilyapp.com:443:127.0.0.1' https://fxmilyapp.com \
+                || echo "  apex  local : ÉCHEC (curl rc=$?) — Caddy ne sert pas ce nom"
+              curl -sS -o /dev/null -k --max-time 15 \
+                -w '  app   local : http=%{http_code}\n' \
+                --resolve 'app.fxmilyapp.com:443:127.0.0.1' https://app.fxmilyapp.com/api/health \
+                || echo "  app   local : ÉCHEC (curl rc=$?)"
+              echo "::endgroup::"
+
+              echo "::group::B — certificats détenus par Caddy"
+              docker exec "$CONTAINER" find /data/caddy/certificates -maxdepth 3 2>/dev/null \
+                | head -40 || echo "  (aucun dossier de certificats)"
+              echo "::endgroup::"
+
+              echo "::group::C — lignes de log Caddy citant l'apex (400 dernières)"
+              docker logs --tail 400 "$CONTAINER" 2>&1 | grep -i 'fxmilyapp\.com' | tail -30 \
+                || echo "  (aucune ligne — Cloudflare n'atteint peut-être jamais l'origine)"
+              echo "::endgroup::"
+
+              echo "::group::D — ce que le monde extérieur voit"
+              curl -sSI --max-time 20 https://fxmilyapp.com | head -15 || true
+              echo "::endgroup::"
+
+              echo "::group::E — écoute réseau du bord"
+              (ss -ltnp 2>/dev/null || netstat -ltn 2>/dev/null) | grep -E ':(80|443)\b' || echo "  (indisponible)"
+              echo "::endgroup::"
+
+              echo "diagnose mode — rien n'a été écrit."
               exit 0
             fi
 

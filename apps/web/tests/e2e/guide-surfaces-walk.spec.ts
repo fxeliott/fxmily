@@ -304,7 +304,7 @@ test.describe('J8 scope 2 — les 24 surfaces du guide s’ouvrent vraiment', ()
     if (ONLY.length > 0) {
       // Ne jamais rétrécir le périmètre en silence (canon du dépôt) : ce que la
       // passe NE couvre pas se lit dans la sortie, pas dans le code.
-       
+
       console.log(
         `[guide-shots] passe PARTIELLE sur ${targets.length}/${GUIDE_CATALOG.length} surfaces : ${targets.map((t) => t.href).join(', ')}`,
       );
@@ -351,7 +351,7 @@ test.describe('J8 scope 2 — les 24 surfaces du guide s’ouvrent vraiment', ()
         if (record) sorted[href] = record;
       }
       writeFileSync(SHOTS_MANIFEST_PATH, `${JSON.stringify(sorted, null, 2)}\n`, 'utf8');
-       
+
       console.log(
         `[guide-shots] ${Object.keys(sorted).length}/${GUIDE_CATALOG.length} captures écrites dans ${SHOTS_PUBLIC_DIR}`,
       );

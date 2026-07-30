@@ -77,12 +77,24 @@ export function JourneyRoadmap({
               // `MetricRing` quarante lignes plus loin, avec une doctrine écrite.
               // Appliquer cette doctrine à un jumeau et pas à l'autre, dans le
               // même commit, n'était pas un arbitrage : c'était un oubli.
+              //
+              // ⚠️ PLUS DE `delay` — L'ALIGNEMENT SUR `MetricRing` ÉTAIT INCOMPLET.
+              // Le commentaire ci-dessus présentait la transplantation du
+              // correctif comme totale ; elle ne l'était pas. `MetricRing` anime
+              // sans délai, précisément pour que le rembobinage « dure une
+              // image » ; ce rail gardait `delay: 0.2`. Or un délai ne peut, au
+              // mieux, que laisser la cible inchangée pendant 200 ms — et au
+              // pire afficher le premier keyframe, c'est-à-dire un rail VIDE,
+              // sous les yeux du membre. ⚠️ Cette seconde branche n'a PAS été
+              // reproduite au runtime (le membre semé est au 1ᵉʳ palier, donc
+              // `fraction` vaut 0 et les deux hypothèses prédisent la même
+              // image) ; le retrait ne s'appuie donc pas sur une mesure, mais
+              // sur le fait qu'il est strictement plus sûr et qu'il rend enfin
+              // vraie la phrase « même construit que MetricRing ».
               initial={false}
               animate={armed ? { scaleX: [0, fraction] } : { scaleX: fraction }}
               transition={
-                prefersReduced
-                  ? { duration: 0 }
-                  : { duration: 1, ease: [0.22, 1, 0.36, 1], delay: 0.2 }
+                prefersReduced ? { duration: 0 } : { duration: 1, ease: [0.22, 1, 0.36, 1] }
               }
             />
           </div>
@@ -91,15 +103,13 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '50% 0%' }}
-              // Même correctif que le rail horizontal ci-dessus : la vérité vit
-              // dans `animate`, et l'entrée s'arme à l'hydratation — jamais un
-              // rembobinage déclenché au scroll.
+              // Même correctif que le rail horizontal ci-dessus, `delay` retiré
+              // compris : la vérité vit dans `animate`, l'entrée s'arme à
+              // l'hydratation, et rien ne retient le rail à zéro entre les deux.
               initial={false}
               animate={armed ? { scaleY: [0, fraction] } : { scaleY: fraction }}
               transition={
-                prefersReduced
-                  ? { duration: 0 }
-                  : { duration: 1, ease: [0.22, 1, 0.36, 1], delay: 0.2 }
+                prefersReduced ? { duration: 0 } : { duration: 1, ease: [0.22, 1, 0.36, 1] }
               }
             />
           </div>

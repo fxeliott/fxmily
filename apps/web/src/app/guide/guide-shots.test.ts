@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -50,10 +50,17 @@ const manifest = manifestJson as GuideShotManifest;
  * l'autre, un job nocturne ouvrirait une PR de 24 binaires chaque nuit sans
  * qu'un écran ait bougé.
  *
- * Il n'y a donc AUCUN rattrapage de fraîcheur, ni bloquant ni asynchrone. Le
- * `sourceHash` du manifeste n'est lu par personne : c'est une trace de
- * provenance (cf. `src/test/guide-shot-source.ts`), pas un pré-contrôle. La
- * régénération reste un geste explicite : `pnpm --filter @fxmily/web guide:shots`.
+ * ⚠️ ET CETTE RECTIFICATION A ELLE-MÊME VIEILLI DANS LA JOURNÉE. Elle finissait
+ * par « le `sourceHash` du manifeste n'est lu par personne » — c'était vrai le
+ * matin, ça ne l'est plus : `guide-shots-staleness.test.ts` le relit chaque nuit
+ * et signale les vignettes prises avant une refonte de leur route.
+ *
+ * L'état exact aujourd'hui, pour que la prochaine lecture n'ait pas à le
+ * redécouvrir : la péremption n'est toujours PAS bloquante — le rapport tourne
+ * dans `guide-surfaces.yml`, hors PR, en `continue-on-error`, pour la raison
+ * mesurée plus haut. Ce qui bloque, à chaque PR, c'est la FORME du champ et le
+ * fait que le job l'arme réellement (les deux tests plus bas). La régénération
+ * reste un geste explicite : `pnpm --filter @fxmily/web guide:shots`.
  */
 describe('guide shots — parité manifeste ↔ catalogue', () => {
   const catalogueHrefs = GUIDE_CATALOG.map((entry) => entry.href).sort();
@@ -136,16 +143,6 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
   });
 
   /**
-   * LA FORME DU CHAMP, GARDÉE À CHAQUE PR — et c'est ici que la permanence se
-   * joue vraiment.
-   *
-   * Le rapport de péremption ne tourne que la nuit. Si `sourceHash` disparaissait
-   * du manifeste ou se remplissait de chaînes vides — une passe de « nettoyage »
-   * du générateur suffit —, le rapport deviendrait vert par vacuité et personne
-   * ne le saurait avant longtemps. Ce test-ci est instantané, tourne dans les
-   * checks requis, et rend cette disparition impossible en silence.
-   */
-  /**
    * L'EMPREINTE NE DOIT PAS DÉPENDRE DE LA PLATEFORME — appris par l'échec.
    *
    * Première version du rapport de péremption : verte sur mon poste, elle a
@@ -181,13 +178,106 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
     ).not.toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
   });
 
-  it('chaque entrée porte un sourceHash de la forme attendue (16 hex)', () => {
+  /**
+   * ⚠️ `null` EST UNE VALEUR LÉGITIME, ET LA PREMIÈRE VERSION DE CE TEST L'AVAIT
+   * OUBLIÉ. Elle exigeait 16 hex de TOUTE entrée, alors que `GuideShotRecord`
+   * type le champ `string | null` et documente `null` « quand la route n'a pas
+   * de dossier propre » — cas que le rapport de péremption traite lui-même comme
+   * légitime. Une surface rendue par un segment dynamique parent aurait donc
+   * rendu ce check requis rouge, en accusant un manifeste « hors forme » sur un
+   * chemin que le code déclare supporté. Latent, mais c'est un piège posé.
+   *
+   * La règle exacte : `null` est admis SI ET SEULEMENT SI la route n'a
+   * effectivement pas de dossier propre. Sinon, 16 hex — sans quoi le rapport
+   * n'aurait plus rien à comparer et virerait vert par vacuité.
+   */
+  /**
+   * LA FORME DU CHAMP, GARDÉE À CHAQUE PR — et c'est ici que la permanence se
+   * joue vraiment.
+   *
+   * Le rapport de péremption ne tourne que la nuit. Si `sourceHash` disparaissait
+   * du manifeste ou se remplissait de chaînes vides — une passe de « nettoyage »
+   * du générateur suffit —, le rapport deviendrait vert par vacuité et personne
+   * ne le saurait avant longtemps. Ce test-ci est instantané, tourne dans les
+   * checks requis, et rend cette disparition impossible en silence.
+   */
+  it('chaque entrée porte un sourceHash de 16 hex, ou null si la route n’a pas de dossier', () => {
     for (const [href, record] of Object.entries(manifest)) {
+      if (record.sourceHash === null) {
+        expect(
+          routeSourceHash(href),
+          `${href} : sourceHash null alors que la route A un dossier propre — ` +
+            `le rapport de péremption ne pourrait rien comparer pour elle`,
+        ).toBeNull();
+        continue;
+      }
       expect(
         record.sourceHash,
-        `${href} : sourceHash absent ou hors forme — le rapport de péremption ` +
+        `${href} : sourceHash hors forme — le rapport de péremption ` +
           `(guide-shots-staleness.test.ts) n'aurait plus rien à comparer`,
       ).toMatch(/^[0-9a-f]{16}$/);
     }
+  });
+
+  /**
+   * LE RAPPORT NOCTURNE EST-IL SEULEMENT ARMÉ ? — la garde qui manquait.
+   *
+   * Le rapport de péremption s'auto-saute sans `GUIDE_SHOTS_STALENESS=1`, et sa
+   * propre « garde de la garde » vit À L'INTÉRIEUR du `describe.skipIf`. Elle ne
+   * peut donc pas voir le désarmement le plus probable : quelqu'un renomme la
+   * variable ou retire l'étape, tout se saute, exit 0, et le `continue-on-error`
+   * du job masque jusqu'à l'absence de sortie. Vérifié : sans la variable, la
+   * commande rend « 2 skipped » et sort en 0.
+   *
+   * Ce test-ci regarde donc le WORKFLOW depuis les checks requis. Même technique
+   * que `j8-mount-sites.test.ts` : un garde de source vaut mieux qu'un garde
+   * qu'on croit armé.
+   */
+  it('le workflow nocturne arme réellement le rapport de péremption', () => {
+    const workflow = readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        '.github',
+        'workflows',
+        'guide-surfaces.yml',
+      ),
+      'utf8',
+    );
+
+    // ⚠️ ON ISOLE LE BLOC DE L'ÉTAPE AVANT D'ASSERTER, ET C'EST UNE CORRECTION.
+    // La première rédaction faisait `workflow.includes("github.event_name !=
+    // 'pull_request'")` sur le fichier ENTIER. Or cette chaîne figure aussi dans
+    // le commentaire qui explique la condition : retirer la condition du `if:`
+    // laissait donc le test VERT (mesuré — mutation appliquée, 8 tests passés).
+    // Un garde qui se contente d'une présence textuelle quelque part dans un
+    // fichier ne garde pas un comportement ; on lie chaque assertion à l'étape.
+    const step = /- name: Report stale guide thumbnails[\s\S]*?(?=\n {6}- name:|\n {4}\w|$)/.exec(
+      workflow,
+    )?.[0];
+
+    expect(
+      step,
+      "guide-surfaces.yml n'a plus d'étape « Report stale guide thumbnails » — le rapport ne " +
+        'tournerait nulle part et personne ne verrait une vignette périmée',
+    ).toBeTruthy();
+
+    expect(
+      /run:[^\n]*guide-shots-staleness\.test\.ts/.test(step ?? ''),
+      "l'étape ne lance plus `guide-shots-staleness.test.ts`",
+    ).toBe(true);
+    expect(
+      /GUIDE_SHOTS_STALENESS:\s*'1'/.test(step ?? ''),
+      "l'étape n'arme plus GUIDE_SHOTS_STALENESS : le rapport se sauterait en silence, exit 0",
+    ).toBe(true);
+    expect(
+      /^\s*if:[^\n]*github\.event_name\s*!=\s*'pull_request'/m.test(step ?? ''),
+      'le rapport doit rester hors des PR : les fichiers qui déclenchent ce workflow sont ' +
+        "ceux-là mêmes qui composent l'empreinte de /guide, il serait rouge par construction",
+    ).toBe(true);
   });
 });

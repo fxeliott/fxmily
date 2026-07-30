@@ -130,17 +130,12 @@ export function checkServiceWorker(source) {
     const putIndex = cacheFirst.indexOf('cache.put(');
     if (putIndex === -1) {
       failures.push('cacheFirstAsset() no longer writes to the runtime cache.');
-    } else {
-      const before = cacheFirst.slice(0, putIndex);
-      const lastTry = before.lastIndexOf('try {');
-      const lastCatch = before.lastIndexOf('catch');
-      if (lastTry === -1 || lastTry < lastCatch) {
-        failures.push(
-          'cacheFirstAsset(): `cache.put` must sit inside a try/catch. Without it a full ' +
-            'Cache Storage quota turns an ALREADY-DOWNLOADED asset into a network error ' +
-            'for a member who is online (the v5 bug, fixed in v6).',
-        );
-      }
+    } else if (!isGuardedByTry(cacheFirst, putIndex)) {
+      failures.push(
+        'cacheFirstAsset(): `cache.put` must sit inside a try/catch. Without it a full ' +
+          'Cache Storage quota turns an ALREADY-DOWNLOADED asset into a network error ' +
+          'for a member who is online (the v5 bug, fixed in v6).',
+      );
     }
   }
 
@@ -173,14 +168,29 @@ export function checkServiceWorker(source) {
   // relevé que l'invariant 6 ci-dessus ne couvrait que `cache.put` : retirer le
   // try/catch autour de `caches.match` laissait tout vert, alors que cette
   // rejection-là devient elle aussi une erreur réseau pour un asset que le
-  // réseau aurait servi. Même doctrine, même garde.
-  if (cacheFirst && !/try\s*\{[\s\S]{0,200}?await caches\.match\(request\)/.test(cacheFirst)) {
-    failures.push(
-      'cacheFirstAsset(): `caches.match` must sit inside a try/catch too. A cache ' +
-        'READ can reject (corrupted storage, quota, private mode) and that rejection ' +
-        'reaches event.respondWith as a network error — for an asset the network ' +
-        'would have served.',
-    );
+  // réseau aurait servi.
+  //
+  // ⚠️ ET LA PREMIÈRE VERSION DE CE GARDE-CI DISAIT « même doctrine, même garde »
+  // EN ÉTANT PLUS FAIBLE QUE SON JUMEAU. Elle testait une regex de PROXIMITÉ
+  // (`try {` à moins de 200 caractères avant la lecture), que n'importe quel
+  // `try { … } catch {}` déjà refermé placé juste avant suffisait à satisfaire.
+  // Une seconde revue l'a prouvé par mutation : lecture nue + leurre → zéro
+  // échec, CI verte, tandis que le MÊME leurre contre `cache.put` était bien
+  // attrapé. Écrire « même doctrine » ne la met pas en œuvre : les deux passent
+  // maintenant par la MÊME fonction, ce qui rend l'asymétrie impossible à
+  // réintroduire par distraction.
+  if (cacheFirst) {
+    const matchIndex = cacheFirst.indexOf('await caches.match(request)');
+    if (matchIndex === -1) {
+      failures.push('cacheFirstAsset() no longer reads the runtime cache before the network.');
+    } else if (!isGuardedByTry(cacheFirst, matchIndex)) {
+      failures.push(
+        'cacheFirstAsset(): `caches.match` must sit inside a try/catch too. A cache ' +
+          'READ can reject (corrupted storage, quota, private mode) and that rejection ' +
+          'reaches event.respondWith as a network error — for an asset the network ' +
+          'would have served.',
+      );
+    }
   }
 
   // La réparation opportuniste du document hors ligne doit rester CÂBLÉE.
@@ -221,6 +231,27 @@ export function checkServiceWorker(source) {
   }
 
   return failures;
+}
+
+/**
+ * L'opération à `index` est-elle enveloppée dans un `try` encore OUVERT ?
+ *
+ * Heuristique volontairement conservatrice, et c'est le point : on compare le
+ * dernier `try {` au dernier `catch` qui le précèdent. Si un `catch` est plus
+ * récent que le `try`, c'est que ce bloc est déjà refermé — donc l'opération
+ * n'est PAS protégée par lui. C'est précisément ce qui neutralise un leurre
+ * (`try { … } catch {}` posé juste avant l'appel pour tromper une regex de
+ * proximité).
+ *
+ * Conservatrice dans le bon sens : elle peut crier à tort si le vrai `try`
+ * englobe un petit try/catch imbriqué. Un garde qui réclame une relecture
+ * quand il doute vaut mieux qu'un garde qui se laisse berner.
+ */
+function isGuardedByTry(body, index) {
+  const before = body.slice(0, index);
+  const lastTry = before.lastIndexOf('try {');
+  const lastCatch = before.lastIndexOf('catch');
+  return lastTry !== -1 && lastTry > lastCatch;
 }
 
 /**

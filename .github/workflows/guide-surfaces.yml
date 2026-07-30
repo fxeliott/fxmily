@@ -190,8 +190,18 @@ jobs:
       # exigerait une régénération Playwright complète pour un changement de
       # phrase. Il informe donc, il ne bloque pas — et c'est déjà tout l'écart
       # avec l'état précédent, où rien ne regardait.
+      #
+      # ⚠️ `github.event_name != 'pull_request'` — AJOUTÉ APRÈS COUP, ET LA PREMIÈRE
+      # VERSION SE CONTREDISAIT ELLE-MÊME. L'en-tête du test annonce en toutes
+      # lettres « POURQUOI IL NE TOURNE PAS SUR LES PR » ; l'étape, elle, ne
+      # portait que `!cancelled()`, donc elle tournait sur toute PR touchant
+      # `apps/web/src/app/guide/**` (le filtre de `pull_request` ci-dessus).
+      # Pire que contradictoire : ces fichiers-là sont EXACTEMENT ceux qui
+      # composent l'empreinte de la route `/guide`, si bien que le seul type de
+      # PR qui armait le rapport était celui qui garantissait son échec — avalé
+      # en silence par `continue-on-error`. Le rapport appartient à la nuit.
       - name: Report stale guide thumbnails (informational)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
         continue-on-error: true
         env:
           GUIDE_SHOTS_STALENESS: '1'

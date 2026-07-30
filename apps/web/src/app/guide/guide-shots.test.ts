@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SHOTS_PUBLIC_DIR,
+  hashSourceFiles,
   routeSourceHash,
   shotSlug,
   type GuideShotManifest,
@@ -114,15 +115,79 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
     ).toEqual([]);
   });
 
-  it('le hash de source enregistré reste calculable (le pré-contrôle du job nocturne tient)', () => {
-    // On ne compare PAS à la valeur enregistrée (cf. l'en-tête : mesuré, écarté).
-    // On vérifie seulement que la fonction sur laquelle le job de régénération
-    // s'appuie répond encore quelque chose pour les routes qui ont un dossier —
-    // sinon le pré-contrôle nocturne deviendrait un no-op silencieux.
+  /**
+   * ⚠️ CE TEST S'APPELAIT « le pré-contrôle du job nocturne tient » ALORS QUE CE
+   * JOB N'EXISTAIT PAS. `guide-surfaces.yml` n'avait aucune étape de péremption,
+   * et `sourceHash` n'était relu par personne : le test gardait la calculabilité
+   * d'une fonction au nom d'un travail imaginaire. Le rapport existe désormais
+   * pour de vrai — `guide-shots-staleness.test.ts`, armé par
+   * `GUIDE_SHOTS_STALENESS=1` dans le job nocturne — et ce test redevient ce
+   * qu'il prétendait être : la garantie que ce rapport a de quoi travailler.
+   */
+  it('le hash de source reste calculable (sans quoi le rapport nocturne serait un no-op)', () => {
+    // On ne compare PAS à la valeur enregistrée : c'est le rôle du rapport
+    // nocturne, et une comparaison bloquante ici serait rouge sur un simple
+    // commentaire (mesuré le 2026-07-30 sur `/guide`).
     const resolvable = GUIDE_CATALOG.filter((entry) => routeSourceHash(entry.href) !== null);
     expect(
       resolvable.length,
-      'aucune route du catalogue ne résout vers un dossier src/app — le pré-contrôle serait mort',
+      'aucune route du catalogue ne résout vers un dossier src/app — le rapport serait mort',
     ).toBeGreaterThan(GUIDE_CATALOG.length / 2);
+  });
+
+  /**
+   * LA FORME DU CHAMP, GARDÉE À CHAQUE PR — et c'est ici que la permanence se
+   * joue vraiment.
+   *
+   * Le rapport de péremption ne tourne que la nuit. Si `sourceHash` disparaissait
+   * du manifeste ou se remplissait de chaînes vides — une passe de « nettoyage »
+   * du générateur suffit —, le rapport deviendrait vert par vacuité et personne
+   * ne le saurait avant longtemps. Ce test-ci est instantané, tourne dans les
+   * checks requis, et rend cette disparition impossible en silence.
+   */
+  /**
+   * L'EMPREINTE NE DOIT PAS DÉPENDRE DE LA PLATEFORME — appris par l'échec.
+   *
+   * Première version du rapport de péremption : verte sur mon poste, elle a
+   * signalé **les 24 captures** au premier run CI. Cause : ce dépôt se checkout
+   * en CRLF sous Windows et en LF sous Linux, donc chaque octet de chaque
+   * fichier diffère entre l'auteur et le runner. Le rapport aurait été rouge
+   * intégralement toutes les nuits — et un rapport toujours rouge ne se lit
+   * plus.
+   *
+   * Le test ci-dessous est l'oracle de cette classe de bug, et il tourne à
+   * CHAQUE PR : deux contenus identiques aux fins de ligne près doivent donner
+   * la même empreinte, et un contenu réellement différent doit en donner une
+   * autre (sans quoi « tout normaliser » réussirait en ne mesurant plus rien).
+   */
+  it('l’empreinte ignore les fins de ligne mais pas le contenu', () => {
+    const lf = Buffer.from('export const a = 1;\nexport const b = 2;\n', 'utf8');
+    const crlf = Buffer.from('export const a = 1;\r\nexport const b = 2;\r\n', 'utf8');
+    const other = Buffer.from('export const a = 2;\nexport const b = 2;\n', 'utf8');
+
+    expect(
+      hashSourceFiles([{ name: 'page.tsx', content: crlf }]),
+      'CRLF et LF doivent donner la même empreinte (poste Windows vs runner Linux)',
+    ).toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+
+    expect(
+      hashSourceFiles([{ name: 'page.tsx', content: other }]),
+      'un contenu réellement différent doit encore bouger l’empreinte',
+    ).not.toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+
+    expect(
+      hashSourceFiles([{ name: 'autre.tsx', content: lf }]),
+      'le NOM du fichier entre dans l’empreinte',
+    ).not.toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+  });
+
+  it('chaque entrée porte un sourceHash de la forme attendue (16 hex)', () => {
+    for (const [href, record] of Object.entries(manifest)) {
+      expect(
+        record.sourceHash,
+        `${href} : sourceHash absent ou hors forme — le rapport de péremption ` +
+          `(guide-shots-staleness.test.ts) n'aurait plus rien à comparer`,
+      ).toMatch(/^[0-9a-f]{16}$/);
+    }
   });
 });

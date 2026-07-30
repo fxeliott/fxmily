@@ -357,8 +357,15 @@ test.describe('J8 scope 2 — les 24 surfaces du guide s’ouvrent vraiment', ()
       }
       writeFileSync(SHOTS_MANIFEST_PATH, `${JSON.stringify(sorted, null, 2)}\n`, 'utf8');
 
+      // ⚠️ COMPTER LES CAPTURES PRISES, PAS LES ENTRÉES DU MANIFESTE. Cette
+      // ligne affichait `Object.keys(sorted).length`, c'est-à-dire la taille du
+      // manifeste — donc « 24/24 captures écrites » à la fin d'une passe
+      // PARTIELLE d'une seule surface (constaté le 2026-07-30 en régénérant
+      // `/guide` seul). Le manifeste conserve évidemment les 23 autres entrées ;
+      // il n'a pas pour autant repris 23 photos. Un journal qui surestime son
+      // propre travail est un piège pour qui relit la sortie plus tard.
       console.log(
-        `[guide-shots] ${Object.keys(sorted).length}/${GUIDE_CATALOG.length} captures écrites dans ${SHOTS_PUBLIC_DIR}`,
+        `[guide-shots] ${targets.length}/${GUIDE_CATALOG.length} captures prises, manifeste à ${Object.keys(sorted).length} entrées, dans ${SHOTS_PUBLIC_DIR}`,
       );
     }
 

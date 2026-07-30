@@ -77,7 +77,27 @@ function isUnder(route: string, prefix: string): boolean {
 
 /** The prefixes a catalogue entry claims to explain. */
 function claimedPrefixes(): string[] {
-  return GUIDE_CATALOG.flatMap((entry) => [entry.href, ...(entry.covers ?? [])]);
+  return GUIDE_CATALOG.flatMap((entry) => [
+    entry.href,
+    ...(entry.covers ?? []).map((coverage) => coverage.prefix),
+  ]);
+}
+
+/**
+ * Routes expliquées UNIQUEMENT parce qu'elles descendent d'une entrée — jamais
+ * nommées par un `href` ni par un `covers`, jamais exemptées.
+ *
+ * C'est la zone d'ombre du garde, et elle est vaste : 35 des 75 pages membre au
+ * 2026-07-30. Le test qui les épingle plus bas explique pourquoi.
+ */
+function descentOnlyRoutes(): string[] {
+  const named = new Set(claimedPrefixes());
+  return memberPageRoutes().filter(
+    (route) =>
+      !named.has(route) &&
+      !(route in GUIDE_ROUTE_EXEMPTIONS) &&
+      [...named].some((prefix) => isUnder(route, prefix)),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -185,7 +205,7 @@ describe('guide catalogue — member route coverage (real route tree)', () => {
     const dead: string[] = [];
 
     for (const entry of GUIDE_CATALOG) {
-      for (const prefix of entry.covers ?? []) {
+      for (const { prefix } of entry.covers ?? []) {
         // A `covers` prefix earns its place only if it explains a real page that
         // the entry's own href does not already reach.
         const explains = routes.some(
@@ -196,6 +216,108 @@ describe('guide catalogue — member route coverage (real route tree)', () => {
     }
 
     expect(dead, `Dead \`covers\` declarations: ${dead.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * Symétrie avec `GUIDE_ROUTE_EXEMPTIONS`, qui doit sa raison depuis toujours.
+   *
+   * Un `covers` tait le garde sur un SOUS-ARBRE entier — plus large qu'une
+   * exemption, qui ne tait qu'une page — et il ne devait rien justifier. Le
+   * champ le plus puissant des deux était le moins surveillé.
+   */
+  it('gives every `covers` prefix a non-empty reason (symmetry with exemptions)', () => {
+    for (const entry of GUIDE_CATALOG) {
+      for (const coverage of entry.covers ?? []) {
+        expect(coverage.prefix.startsWith('/'), `${entry.href}: prefix must be a route`).toBe(true);
+        expect(
+          coverage.prefix.endsWith('/'),
+          `${entry.href} covers ${coverage.prefix}: no trailing slash (isUnder appends it)`,
+        ).toBe(false);
+        expect(
+          coverage.why.trim().length,
+          `${entry.href} covers ${coverage.prefix}: reason is empty`,
+        ).toBeGreaterThan(20);
+      }
+    }
+  });
+
+  /**
+   * LA ZONE D'OMBRE DU GARDE, ÉPINGLÉE PLUTÔT QUE TUE.
+   *
+   * Tout ce qui précède ne casse que sur une page dont AUCUN préfixe déclaré
+   * n'est l'ancêtre — en pratique, un nouveau segment de premier niveau. Une
+   * page ajoutée SOUS une entrée existante est expliquée d'office par la règle
+   * de descendance et n'apparaît nulle part : `/account/security` créée demain
+   * passerait au vert sans qu'une ligne du guide bouge. Ce n'est pas rien :
+   * mesuré, 35 des 75 pages membre ne sont expliquées QUE par cette règle.
+   *
+   * La descendance reste le bon défaut — `/track/sleep/new` est une étape du
+   * flux « Habitudes », pas un écran à documenter à part, et exiger une entrée
+   * de guide par étape de formulaire produirait un sommaire illisible. Aucun
+   * garde statique ne sait distinguer « étape de flux » de « écran de plein
+   * droit » : c'est un jugement.
+   *
+   * Alors le test ne juge pas — il rend le silence VISIBLE. La liste est figée
+   * ici ; ajouter une page sous une entrée existante rend ce test rouge, et le
+   * corriger demande d'écrire la route dans cette liste. Une ligne de diff
+   * qu'un relecteur voit, et devant laquelle il peut poser la seule question
+   * qui compte : est-ce que le membre a besoin qu'on lui explique cet écran ?
+   *
+   * Coût assumé : cette liste bouge à chaque nouvelle sous-page. C'est le prix
+   * exact de la visibilité, et il se paie en une ligne.
+   */
+  it('pins the routes explained ONLY by descent (a new sub-page must be a decision)', () => {
+    const pinned = [
+      '/account/data',
+      '/account/delete',
+      '/account/notifications',
+      '/account/photo',
+      '/account/rythme',
+      '/account/timezone',
+      '/account/visibilite',
+      '/calendar/questionnaire/new',
+      '/checkin/evening',
+      '/checkin/morning',
+      '/journal/[id]',
+      '/journal/[id]/close',
+      '/journal/new',
+      '/library/[slug]',
+      '/library/favorites',
+      '/library/inbox',
+      '/mindset/new',
+      '/pre-trade/done/[id]',
+      '/reflect/[id]',
+      '/reflect/new',
+      '/review/[id]',
+      '/review/new',
+      '/seances/[date]/[slot]',
+      '/track/caffeine/new',
+      '/track/meditation/new',
+      '/track/nutrition/new',
+      '/track/sleep/new',
+      '/track/sport/new',
+      '/tracking/[instrument]',
+      '/training/[trainingTradeId]',
+      '/training/debrief',
+      '/training/debrief/new',
+      '/training/new',
+      '/training/sessions/[sessionId]',
+      '/training/sessions/new',
+    ];
+
+    const actual = descentOnlyRoutes().sort();
+    const added = actual.filter((route) => !pinned.includes(route));
+    const removed = pinned.filter((route) => !actual.includes(route));
+
+    expect(
+      { added, removed },
+      `Le silence de la règle de descendance a bougé.\n` +
+        `  NOUVELLES pages expliquées sans le dire : ${added.join(', ') || '(aucune)'}\n` +
+        `  Pages disparues de la liste : ${removed.join(', ') || '(aucune)'}\n` +
+        `Pour chaque nouvelle : soit c'est une étape d'un flux déjà expliqué et il ` +
+        `suffit de l'ajouter à \`pinned\` ci-dessus, soit c'est un écran que le membre ` +
+        `doit trouver dans le guide et il lui faut une entrée GUIDE_CATALOG.`,
+    ).toEqual({ added: [], removed: [] });
   });
 });
 

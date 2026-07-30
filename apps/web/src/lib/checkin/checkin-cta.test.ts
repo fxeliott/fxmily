@@ -24,13 +24,49 @@ describe('checkinCta', () => {
     expect(result.label).toBe('Faire mon check-in du soir');
   });
 
-  it('21:00 Europe/Paris in winter (CET, UTC+1) => evening — DST is honoured per-instant', () => {
-    // 20:00Z + 1h = 21:00 local Paris (hiver). Proves the offset is read for the
-    // queried instant, not assumed +2 year-round.
-    const result = checkinCta(new Date('2026-01-15T20:00:00Z'), 'Europe/Paris');
+  /**
+   * ⚠️ CE COUPLE DE CAS REMPLACE UN TEST QUI NE FALSIFIAIT RIEN.
+   *
+   * L'ancien s'appelait « 21:00 Europe/Paris en hiver (CET, UTC+1) => evening »
+   * et se réclamait d'une preuve : « prouve que l'offset est lu pour l'instant
+   * demandé, pas supposé +2 toute l'année ». Mesuré, c'est faux. À
+   * `2026-01-15T20:00:00Z`, l'heure locale vraie est 21 h et l'heure d'une
+   * implémentation qui supposerait +2 serait 22 h : les deux sont ≥ 14, donc
+   * les deux répondent `evening`. Le test passait au vert sur l'implémentation
+   * exacte ET sur celle qu'il prétendait exclure. Il ne mesurait que l'heure
+   * qu'on lui avait donnée, loin de la seule frontière qui décide.
+   *
+   * Un cas ne falsifie une hypothèse que s'il tombe LÀ OÙ LES DEUX RÉPONSES
+   * DIVERGENT — ici, de part et d'autre de 14 h locales. `12:30Z` est cet
+   * endroit, et il sert dans les deux sens :
+   *
+   *   hiver (CET, +1) : 13:30 vrai → morning | supposé +2 → 14:30 → evening
+   *   été   (CEST, +2): 14:30 vrai → evening | supposé +1 → 13:30 → morning
+   *
+   * Ensemble, ils tuent les deux offsets figés possibles. Un seul des deux ne
+   * suffirait pas : le cas d'hiver laisserait passer un helper codé sur +1.
+   */
+  it('winter 12:30Z => 13:30 CET => morning (kills a helper hardcoded on +2)', () => {
+    const result = checkinCta(new Date('2026-01-15T12:30:00Z'), 'Europe/Paris');
+    expect(result.slot).toBe('morning');
+    expect(result.href).toBe('/checkin/morning');
+    expect(result.label).toBe('Faire mon check-in du matin');
+  });
+
+  it('summer 12:30Z => 14:30 CEST => evening (kills a helper hardcoded on +1)', () => {
+    const result = checkinCta(new Date('2026-07-15T12:30:00Z'), 'Europe/Paris');
     expect(result.slot).toBe('evening');
     expect(result.href).toBe('/checkin/evening');
     expect(result.label).toBe('Faire mon check-in du soir');
+  });
+
+  it('the SAME wall-clock 12:30Z flips slot between the two DST halves of the year', () => {
+    // La formulation la plus directe de la règle : à heure UTC identique, le
+    // même fuseau ne répond pas la même chose en janvier et en juillet. Aucune
+    // implémentation à offset figé ne peut satisfaire cette assertion.
+    const winter = checkinCta(new Date('2026-01-15T12:30:00Z'), 'Europe/Paris');
+    const summer = checkinCta(new Date('2026-07-15T12:30:00Z'), 'Europe/Paris');
+    expect(winter.slot).not.toBe(summer.slot);
   });
 
   it('08:00 Europe/Paris => morning', () => {

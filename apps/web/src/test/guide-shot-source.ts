@@ -134,7 +134,24 @@ export function routeSourceHash(href: string): string | null {
   if (!dir) return null;
 
   const names = readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.(tsx|ts|css)$/.test(entry.name))
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        /\.(tsx|ts|css)$/.test(entry.name) &&
+        // ⚠️ LES FICHIERS DE TEST SORTENT DE L'EMPREINTE. Un test co-localisé ne
+        // peut pas déplacer un pixel de l'écran ; l'y compter ne produit que du
+        // faux positif. Mesuré le 2026-07-30 : ~9 des 24 routes du catalogue
+        // hébergent au moins un test dans leur dossier propre (`/checkin` en a
+        // deux, `src/app/guide/` en a trois), donc une PR ne touchant qu'un
+        // `*.test.ts` déclarait la vignette périmée et réclamait une
+        // régénération Playwright + base de données pour rien.
+        //
+        // Le mémo qui justifie le caractère non bloquant du rapport chiffrait le
+        // bruit à « 1 capture sur 24, pour un commentaire » — il ignorait cette
+        // source-là, bien plus large. Retirer du bruit sans retirer de signal,
+        // c'est la même règle que la normalisation des fins de ligne.
+        !/\.(test|spec)\.(tsx|ts)$/.test(entry.name),
+    )
     .map((entry) => entry.name);
 
   if (names.length === 0) return null;

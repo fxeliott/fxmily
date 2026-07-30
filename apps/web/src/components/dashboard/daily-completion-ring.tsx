@@ -118,6 +118,23 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
  * déjà plein dont le CHIFFRE se remettait à 0 pour recompter sous ses yeux.
  * Couper le compteur plutôt que le rembobiner : la valeur est juste dès le
  * premier rendu, l'anneau porte le mouvement, et plus rien ne ment.
+ *
+ * ⚠️ PORTÉE DE CETTE RÈGLE : ELLE VAUT ICI, PAS PARTOUT — et une seconde revue
+ * a eu raison de relever que la première rédaction laissait croire l'inverse.
+ * Le dépôt compte une douzaine d'autres `AnimatedNumber` (podium, trade-card,
+ * north-star-hero, progression…) qui gardent `startOnView` à `true` et
+ * rembobinent donc aussi leur chiffre à l'entrée du viewport. Ce n'est PAS un
+ * oubli du même correctif : ici le problème est une DÉSYNCHRONISATION — l'arc
+ * s'anime à l'hydratation, donc un chiffre encore gaté au scroll repart à zéro
+ * dans un anneau déjà plein, et l'incohérence entre les deux est ce qui se voit.
+ * Ailleurs, le compteur est seul : son décompte à l'apparition est un parti pris
+ * d'animation, pas une contradiction visible.
+ *
+ * Faut-il pour autant garder un compteur qui repart de zéro sur une valeur que
+ * le serveur a déjà écrite juste ? C'est une question de DESIGN, pas de
+ * correction — elle change le ressenti d'une douzaine d'écrans et appartient à
+ * Eliot, pas à un commit de clôture technique. Elle est donc posée, pas tranchée
+ * en silence.
  */
 export function MetricRing({
   value,

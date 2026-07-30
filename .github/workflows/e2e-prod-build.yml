@@ -99,7 +99,12 @@ jobs:
       AUTH_TRUST_HOST: 'true'
       # Requis par le schéma dès que NODE_ENV=production. Valeurs ostensiblement
       # factices : ce job ne joue aucune route /api/cron/* ni /api/admin/*.
+      #
+      # La liste EXHAUSTIVE se relit d'une commande, et c'est comme ça qu'il faut
+      # la maintenir plutôt qu'en ajoutant un token à chaque échec de build :
+      #   grep -oE "[A-Z_]+ est requis en production" apps/web/src/lib/env.ts | sort -u
       CRON_SECRET: ci_placeholder_cron_secret_must_be_at_least_32_chars
+      PROFILE_ADMIN_BATCH_TOKEN: ci_placeholder_profile_admin_batch_token_min_32
       ADMIN_BATCH_TOKEN: ci_placeholder_admin_batch_token_min_32_characters
       MONTHLY_ADMIN_BATCH_TOKEN: ci_placeholder_monthly_admin_batch_token_min_32
       CALENDAR_ADMIN_BATCH_TOKEN: ci_placeholder_calendar_admin_batch_token_32ch

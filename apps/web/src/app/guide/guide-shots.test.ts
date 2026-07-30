@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SHOTS_PUBLIC_DIR,
+  hashSourceFiles,
   routeSourceHash,
   shotSlug,
   type GuideShotManifest,
@@ -144,6 +145,42 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
    * ne le saurait avant longtemps. Ce test-ci est instantané, tourne dans les
    * checks requis, et rend cette disparition impossible en silence.
    */
+  /**
+   * L'EMPREINTE NE DOIT PAS DÉPENDRE DE LA PLATEFORME — appris par l'échec.
+   *
+   * Première version du rapport de péremption : verte sur mon poste, elle a
+   * signalé **les 24 captures** au premier run CI. Cause : ce dépôt se checkout
+   * en CRLF sous Windows et en LF sous Linux, donc chaque octet de chaque
+   * fichier diffère entre l'auteur et le runner. Le rapport aurait été rouge
+   * intégralement toutes les nuits — et un rapport toujours rouge ne se lit
+   * plus.
+   *
+   * Le test ci-dessous est l'oracle de cette classe de bug, et il tourne à
+   * CHAQUE PR : deux contenus identiques aux fins de ligne près doivent donner
+   * la même empreinte, et un contenu réellement différent doit en donner une
+   * autre (sans quoi « tout normaliser » réussirait en ne mesurant plus rien).
+   */
+  it('l’empreinte ignore les fins de ligne mais pas le contenu', () => {
+    const lf = Buffer.from('export const a = 1;\nexport const b = 2;\n', 'utf8');
+    const crlf = Buffer.from('export const a = 1;\r\nexport const b = 2;\r\n', 'utf8');
+    const other = Buffer.from('export const a = 2;\nexport const b = 2;\n', 'utf8');
+
+    expect(
+      hashSourceFiles([{ name: 'page.tsx', content: crlf }]),
+      'CRLF et LF doivent donner la même empreinte (poste Windows vs runner Linux)',
+    ).toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+
+    expect(
+      hashSourceFiles([{ name: 'page.tsx', content: other }]),
+      'un contenu réellement différent doit encore bouger l’empreinte',
+    ).not.toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+
+    expect(
+      hashSourceFiles([{ name: 'autre.tsx', content: lf }]),
+      'le NOM du fichier entre dans l’empreinte',
+    ).not.toBe(hashSourceFiles([{ name: 'page.tsx', content: lf }]));
+  });
+
   it('chaque entrée porte un sourceHash de la forme attendue (16 hex)', () => {
     for (const [href, record] of Object.entries(manifest)) {
       expect(

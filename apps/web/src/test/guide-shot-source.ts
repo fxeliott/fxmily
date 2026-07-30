@@ -92,6 +92,34 @@ export function routeDir(href: string): string | null {
 }
 
 /**
+ * Empreinte d'une liste de fichiers `(nom, contenu)`. Pure, testable, sans I/O.
+ *
+ * ⚠️ LES FINS DE LIGNE SONT NORMALISÉES, ET C'EST OBLIGATOIRE — pas une
+ * élégance. Sans ça, l'empreinte dépend de la plateforme : ce dépôt se checkout
+ * en CRLF sur un poste Windows et en LF sur un runner Linux, donc CHAQUE octet
+ * de CHAQUE fichier diffère entre les deux. Mesuré le 2026-07-30, et par le
+ * pire chemin : le rapport de péremption était vert en local et signalait
+ * **les 24 captures** sur le premier run CI. Un rapport rouge intégralement,
+ * toutes les nuits, ne dit plus rien — on apprend à ne plus le lire, et la
+ * vraie dérive se noie dedans.
+ *
+ * Une fin de ligne ne change pas un pixel du rendu. La normaliser retire donc
+ * du bruit sans retirer un seul signal.
+ */
+export function hashSourceFiles(files: ReadonlyArray<{ name: string; content: Buffer }>): string {
+  const hash = createHash('sha256');
+  for (const { name, content } of [...files].sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    // Le NOM entre dans l'empreinte : supprimer un fichier de la route doit
+    // suffire à la faire bouger, même si le reste est inchangé.
+    hash.update(name);
+    hash.update('\0');
+    hash.update(content.toString('utf8').replace(/\r\n/g, '\n'));
+    hash.update('\0');
+  }
+  return hash.digest('hex').slice(0, 16);
+}
+
+/**
  * Empreinte des sources PROPRES de la route (non récursif).
  *
  * Non récursif à dessein : `src/app/journal/` contient `new/`, qui est une autre
@@ -105,23 +133,15 @@ export function routeSourceHash(href: string): string | null {
   const dir = routeDir(href);
   if (!dir) return null;
 
-  const files = readdirSync(dir, { withFileTypes: true })
+  const names = readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.(tsx|ts|css)$/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort();
+    .map((entry) => entry.name);
 
-  if (files.length === 0) return null;
+  if (names.length === 0) return null;
 
-  const hash = createHash('sha256');
-  for (const name of files) {
-    // Le NOM entre dans l'empreinte : supprimer un fichier de la route doit
-    // suffire à la faire bouger, même si le reste est inchangé.
-    hash.update(name);
-    hash.update('\0');
-    hash.update(readFileSync(path.join(dir, name)));
-    hash.update('\0');
-  }
-  return hash.digest('hex').slice(0, 16);
+  return hashSourceFiles(
+    names.map((name) => ({ name, content: readFileSync(path.join(dir, name)) })),
+  );
 }
 
 // Les TYPES du manifeste vivent avec la page (`src/app/guide/guide-shots.ts`,

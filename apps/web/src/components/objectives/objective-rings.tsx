@@ -161,9 +161,15 @@ export function ObjectiveRing({ objective }: { objective: ProcessObjective }) {
               // Un `initial` inconditionnel + `transition: 0` ne suffisait pas :
               // sous mouvement réduit Framer atteint la cible dès le premier
               // rendu, si bien que le client écrivait `stroke-dashoffset` = cible
-              // là où le serveur avait écrit la circonférence (diff mesuré le
-              // 2026-07-30 : client 144.51 / serveur 216.77). Le remplissage ne
+              // là où le serveur avait écrit la circonférence. Le remplissage ne
               // s'arme donc qu'après hydratation, en keyframes.
+              //
+              // (Le diff chiffré « client 144.51 / serveur 216.77 » qui figurait
+              // ici a été mesuré sur `dashboard/daily-completion-ring.tsx`, pas
+              // sur ce composant : 216.77 = 2π×34.5, la circonférence de CET
+              // anneau-là. Le mécanisme est le même, la mesure ne venait pas
+              // d'ici — retiré plutôt que de laisser un chiffre emprunté servir
+              // de preuve.)
               initial={false}
               animate={
                 armed

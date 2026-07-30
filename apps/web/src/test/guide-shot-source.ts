@@ -10,24 +10,38 @@ import path from 'node:path';
  * manifeste JSON (`src/app/guide/guide-shots.manifest.json`), qui est de la
  * donnée pure.
  *
- * Deux consommateurs, et c'est le point :
- *   - le générateur (`tests/e2e/guide-surfaces-walk.spec.ts`) ÉCRIT le hash de
- *     source de chaque route au moment où il prend la capture ;
- *   - le garde (`src/app/guide/guide-shots.test.ts`) RECALCULE ce hash et casse
- *     s'il a bougé.
+ * ⚠️ CE FICHIER A LONGTEMPS DÉCRIT UN GARDE QUI N'EXISTE PAS. Rectifié le
+ * 2026-07-30, après qu'une revue adverse l'a mesuré.
  *
- * Ce n'est pas une tautologie (la fonction est la même des deux côtés, mais son
- * ENTRÉE — le contenu des fichiers — change dans le temps) : c'est exactement ce
- * qui rend la péremption détectable. Une capture prise avant une refonte de
- * `dashboard/page.tsx` devient rouge à la première exécution de la suite.
+ * Le texte précédent affirmait, comme un fait : « le garde
+ * (`guide-shots.test.ts`) RECALCULE ce hash et casse s'il a bougé […] une
+ * capture prise avant une refonte de `dashboard/page.tsx` devient rouge ».
+ * Vérifiable en une commande — `grep -rn sourceHash apps/web/src apps/web/tests`
+ * — et faux : le champ est ÉCRIT par le générateur
+ * (`tests/e2e/guide-surfaces-walk.spec.ts:342`) et n'est LU par personne. Aucune
+ * péremption n'est détectée nulle part dans le dépôt.
  *
- * CE QUE CE GARDE NE VOIT PAS, dit franchement : le hash ne couvre que les
- * fichiers du dossier de la route elle-même. Une refonte d'un composant partagé
- * (`components/ui/card.tsx`, un token de `globals.css`) change l'écran sans
- * changer ce hash. Hasher tout l'arbre d'imports rendrait le garde rouge à
- * chaque commit et il finirait désarmé — un garde qu'on ignore ne garde rien.
- * Le filet retenu attrape le cas de loin le plus fréquent (on refait l'écran, on
- * oublie sa capture) et l'assume pour le reste.
+ * Un commentaire qui ment est pire qu'un commentaire absent : il fait passer le
+ * relecteur suivant — moi compris — à côté du trou en le lui décrivant comme
+ * couvert. D'où cette rectification, avant tout autre travail sur le sujet.
+ *
+ * CE QUE LE CHAMP EST RÉELLEMENT, aujourd'hui : une trace de PROVENANCE. Il
+ * enregistre l'état des sources de la route à l'instant où sa capture a été
+ * prise, ce qui permet à un humain — ou à une future porte — de dire « cette
+ * vignette date d'avant telle refonte ». Rien de plus, et le garde de parité
+ * n'exige que sa présence.
+ *
+ * POURQUOI PAS DE PORTE BLOQUANTE, décision mesurée et maintenue :
+ * `dashboard/page.tsx` totalise 13 commits sur 30 jours, l'ensemble des routes
+ * plus de 130. Une assertion de péremption serait rouge une PR sur deux et
+ * exigerait à chaque fois une régénération Playwright complète pour un commit
+ * qui n'a parfois changé qu'un commentaire. Un garde qu'on apprend à contourner
+ * ne garde rien. La conséquence est assumée ET ÉCRITE : la péremption d'une
+ * vignette n'est, à ce jour, rattrapée par aucun automatisme.
+ *
+ * Limite supplémentaire du hash lui-même : il ne couvre que les fichiers du
+ * dossier de la route. Une refonte d'un composant partagé (`components/ui/…`,
+ * un token de `globals.css`) change l'écran sans changer ce hash.
  */
 
 /** Racine `src/app`, résolue depuis ce fichier (`src/test/`). */

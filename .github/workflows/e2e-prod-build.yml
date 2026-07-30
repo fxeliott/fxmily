@@ -1,0 +1,195 @@
+name: E2E service worker (build de production)
+
+# POURQUOI CE WORKFLOW EXISTE — un trou nommé par le jalon, jamais couvert
+# ------------------------------------------------------------------------
+# `D:\Fxmily-jalons\J8-guide-pwa.md`, section « Pièges spécifiques », exige :
+#
+#     « Service worker : tester en build prod locale (le SW ne tourne pas pareil
+#       en dev) ; invalidation de cache à vérifier après deploy (pas de vieux
+#       shell servi). »
+#
+# Or `apps/web/playwright.config.ts` démarre `pnpm dev`. TOUTE la suite e2e —
+# y compris en CI, y compris les gates 4/5/6 du service worker — s'exécute donc
+# contre `next dev`. Mesuré le 2026-07-30, pas supposé : la ligne 14 du config
+# dit `command: 'pnpm dev'`, et aucun autre workflow ne lance `next start`.
+#
+# Ce n'est pas un détail de forme. En dev, Turbopack sert des chunks CSS non
+# hachés, recompilés à chaque requête ; en production les feuilles de style sont
+# des fichiers IMMUABLES à nom haché, et c'est précisément cette immuabilité qui
+# rend le cache-first du service worker à la fois utile et dangereux — un seau
+# non éventré peut épingler indéfiniment le CSS d'un déploiement mort. Un gate
+# qui n'a jamais vu un asset haché n'a jamais vu le cas qu'il prétend garder.
+#
+# CE QU'IL LANCE, ET CE QU'IL NE LANCE PAS
+# ----------------------------------------
+# Uniquement les trois gates « démarrage à froid » : elles vivent sur `/offline`
+# et sur l'API `caches`, sans session ni donnée membre. Les gates 1 et 3 (bandeau
+# d'installation iOS, honnêteté de /offline) restent dans `e2e-mobile.yml` sur
+# WebKit, où elles ont leur sens — les rejouer ici n'ajouterait rien et
+# obligerait à authentifier un membre contre un serveur volontairement mal
+# configuré pour l'auth (voir ci-dessous).
+#
+# LE COMPROMIS ASSUMÉ SUR `AUTH_URL`
+# ----------------------------------
+# `next start` impose `NODE_ENV=production`, et `apps/web/src/lib/env.ts:66`
+# refuse alors un `AUTH_URL` non-HTTPS — un durcissement JUSTE qu'on ne contourne
+# pas. On déclare donc `https://localhost:3000` pour satisfaire le schéma, tandis
+# que le serveur écoute en clair sur `http://localhost:3000`. Les trois gates
+# retenues n'ouvrent aucune session : l'écart est inoffensif POUR ELLES, et c'est
+# exactement pourquoi elles sont les seules ici. Si un jour on veut y ajouter un
+# parcours authentifié, il faudra un vrai TLS local, pas élargir ce compromis.
+# Même logique pour les tokens de lot ci-dessous : en production le schéma les
+# EXIGE (sans eux les routes /api/admin/* répondent 503 en silence), donc on les
+# fournit en valeurs manifestement factices plutôt que d'affaiblir le schéma.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/public/sw.js'
+      - 'apps/web/src/app/offline/**'
+      - 'apps/web/tests/e2e/j8-pwa-offline.spec.ts'
+      - '.github/workflows/e2e-prod-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/public/sw.js'
+      - 'apps/web/src/app/offline/**'
+      - 'apps/web/tests/e2e/j8-pwa-offline.spec.ts'
+      - '.github/workflows/e2e-prod-build.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  sw-prod:
+    name: Le service worker tient sur un build de production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fxmily
+          POSTGRES_PASSWORD: fxmily_dev
+          POSTGRES_DB: fxmily
+          TZ: Europe/Paris
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U fxmily -d fxmily"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      HUSKY: 0
+      CI: 'true'
+      DATABASE_URL: postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public
+      # HTTPS : imposé par le refine de production (cf. en-tête). Le serveur, lui,
+      # écoute en clair — aucune des gates retenues n'ouvre de session.
+      AUTH_URL: https://localhost:3000
+      AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
+      AUTH_TRUST_HOST: 'true'
+      # Requis par le schéma dès que NODE_ENV=production. Valeurs ostensiblement
+      # factices : ce job ne joue aucune route /api/cron/* ni /api/admin/*.
+      CRON_SECRET: ci_placeholder_cron_secret_must_be_at_least_32_chars
+      ADMIN_BATCH_TOKEN: ci_placeholder_admin_batch_token_min_32_characters
+      MONTHLY_ADMIN_BATCH_TOKEN: ci_placeholder_monthly_admin_batch_token_min_32
+      CALENDAR_ADMIN_BATCH_TOKEN: ci_placeholder_calendar_admin_batch_token_32ch
+      VERIFICATION_ADMIN_BATCH_TOKEN: ci_placeholder_verification_admin_batch_token_min_32_chars
+      SEANCES_ADMIN_BATCH_TOKEN: ci_placeholder_seances_admin_batch_token_min_32
+      # Playwright n'ouvre PAS de serveur : c'est ce job qui lance `next start`.
+      PLAYWRIGHT_NO_SERVER: '1'
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers (chromium)
+        id: playwright-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
+      - name: Drop flaky Microsoft apt sources (install-deps NOSPLIT flake)
+        run: sudo find /etc/apt/sources.list.d -type f \( -name '*microsoft*' -o -name '*azure*' \) -print -delete
+
+      - name: Install Playwright browsers + system deps (chromium)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fxmily/web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit branch)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fxmily/web exec playwright install-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @fxmily/web prisma:migrate:deploy
+
+      # `global-setup.ts` charge `apps/web/.env` avant tout. Le fichier est
+      # gitignoré (il porte des secrets), donc absent du runner : sans lui,
+      # `dotenv` n'injecte rien, mais les variables du job sont déjà dans
+      # l'environnement du process — `dotenv` ne les écrase pas. On crée
+      # néanmoins un fichier VIDE pour que le chargement ne soit pas une
+      # non-opération silencieuse dont on douterait au prochain incident.
+      - name: Placeholder .env (le global-setup lit ce chemin exact)
+        run: touch apps/web/.env
+
+      - name: Build de production
+        run: pnpm --filter @fxmily/web build
+
+      # `next start` sert le build. On attend que la racine réponde plutôt que
+      # de dormir un temps arbitraire : un `sleep` trop court rend le job
+      # faussement rouge, un `sleep` trop long le rend lent pour rien.
+      - name: Démarrer le serveur de production
+        run: |
+          pnpm --filter @fxmily/web exec next start --port 3000 &
+          echo "$!" > /tmp/next-start.pid
+          for i in $(seq 1 60); do
+            if curl -sfo /dev/null http://localhost:3000/offline; then
+              echo "serveur de production prêt après ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::le serveur de production n'a pas répondu sur /offline en 60 s"
+          exit 1
+
+      - name: Gates service worker contre le build de production
+        run: >-
+          pnpm --filter @fxmily/web exec playwright test
+          --project=chromium j8-pwa-offline.spec.ts
+          --grep "Gate 4|Gate 5|Gate 6"
+
+      - name: Upload traces + captures (en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-sw-prod
+          path: apps/web/test-results/
+          retention-days: 7

@@ -435,3 +435,115 @@ test.describe('J8 — cold offline start is styled, not a naked page', () => {
     await context.setOffline(false);
   });
 });
+
+/**
+ * J8 — LE DÉPLOIEMENT SUIVANT. C'est le piège que le jalon nomme lui-même
+ * (`D:\Fxmily-jalons\J8-guide-pwa.md`, « Pièges spécifiques ») :
+ *
+ *     « invalidation de cache à vérifier après deploy (pas de vieux shell servi) »
+ *
+ * Les gates 4 et 5 prouvent la PREMIÈRE installation. Elles ne disent rien du
+ * cas qui arrive à CHAQUE déploiement et qui est donc infiniment plus fréquent :
+ * un membre a déjà une génération de service worker installée, on en déploie une
+ * neuve. Si l'`activate` n'éventre pas les anciens seaux, ils survivent — et
+ * comme `cacheFirstAsset` répond depuis `caches.match(request)`, qui cherche
+ * dans TOUS les seaux, un vieux CSS peut être servi par-dessus le nouveau. Le
+ * membre voit alors l'app d'avant-hier, sans rien pour le lui dire.
+ *
+ * Le test simule la génération précédente en écrivant à la main un seau au nom
+ * de la v5 (celui qui existait réellement avant la v6), avec une ressource
+ * dedans, puis laisse la v6 s'installer. Ce qu'on exige ensuite :
+ *   1. le seau v5 a DISPARU — pas « il existe mais on ne s'en sert plus » ;
+ *   2. un seau de la génération courante existe ;
+ *   3. la ressource empoisonnée n'est plus servie depuis aucun cache.
+ *
+ * Falsifiable par construction : retirer le `caches.delete(key)` de l'`activate`
+ * de `public/sw.js` fait échouer l'assertion 1 en nommant le seau survivant.
+ */
+test.describe('J8 — le déploiement suivant ne sert pas le shell d’avant', () => {
+  test.skip(
+    ({ browserName }) => browserName !== 'chromium',
+    'Cache Storage introspection (chromium project)',
+  );
+
+  const LEGACY_BUCKET = 'fxmily-shell-fxmily-sw-v5-j8-shell';
+  const LEGACY_RUNTIME = 'fxmily-runtime-fxmily-sw-v5-j8-shell';
+  const POISON_URL = '/_next/static/css/__legacy-poison.css';
+
+  test('Gate 6 — activate éventre les seaux de la génération précédente', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Se placer sur l'origine SANS service worker actif, puis fabriquer l'état
+    // « génération précédente installée ».
+    await page.goto('/offline');
+    await page.evaluate(async () => {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((r) => r.unregister()));
+      for (const name of await caches.keys()) await caches.delete(name);
+    });
+
+    const seeded = await page.evaluate(
+      async ({ legacy, legacyRuntime, poison }) => {
+        for (const bucket of [legacy, legacyRuntime]) {
+          const cache = await caches.open(bucket);
+          await cache.put(
+            new Request(poison),
+            new Response('body{outline:9px solid red}', {
+              headers: { 'content-type': 'text/css' },
+            }),
+          );
+        }
+        return caches.keys();
+      },
+      { legacy: LEGACY_BUCKET, legacyRuntime: LEGACY_RUNTIME, poison: POISON_URL },
+    );
+    expect(seeded, 'la génération précédente doit bien être en place avant la bascule').toEqual(
+      expect.arrayContaining([LEGACY_BUCKET, LEGACY_RUNTIME]),
+    );
+
+    // Déployer : le SW courant s'installe et s'active (skipWaiting + claim).
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+      await navigator.serviceWorker.ready;
+    });
+
+    // ⚠️ ON SONDE, ON NE LIT PAS UNE SEULE FOIS.
+    //
+    // `navigator.serviceWorker.ready` promet un worker ACTIF ; il ne promet pas
+    // que le `event.waitUntil(...)` de son `activate` soit retombé — or c'est
+    // exactement là que vit l'éviction des seaux. Une lecture unique juste après
+    // `ready` est donc une course : mesurée verte quand ce gate tournait seul,
+    // rouge dès que les gates 4 et 5 réchauffent le worker avant lui. Sonder
+    // jusqu'à disparition teste l'invariant réel — « les seaux de la génération
+    // précédente finissent par partir » — sans dépendre du cadencement.
+    const buckets = async () => page.evaluate(() => caches.keys());
+
+    await expect
+      .poll(buckets, {
+        timeout: 15_000,
+        message: `le seau ${LEGACY_BUCKET} a survécu à l’activation — un membre déjà installé continuerait de recevoir le shell précédent`,
+      })
+      .not.toContain(LEGACY_BUCKET);
+    await expect
+      .poll(buckets, {
+        timeout: 15_000,
+        message: `le seau ${LEGACY_RUNTIME} a survécu à l’activation — un vieil asset peut encore être servi par-dessus le neuf`,
+      })
+      .not.toContain(LEGACY_RUNTIME);
+
+    const after = await page.evaluate(async () => ({
+      buckets: await caches.keys(),
+      poisonStillServed:
+        (await caches.match('/_next/static/css/__legacy-poison.css')) !== undefined,
+    }));
+
+    expect(
+      after.buckets.some((n) => n.startsWith('fxmily-shell-')),
+      'aucun seau de shell courant après activation — la nouvelle génération n’a rien pré-caché',
+    ).toBe(true);
+    expect(
+      after.poisonStillServed,
+      'une ressource de la génération précédente est encore servie depuis un cache',
+    ).toBe(false);
+  });
+});

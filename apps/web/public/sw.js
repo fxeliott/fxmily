@@ -239,7 +239,19 @@ function isImmutableAsset(url) {
 // stored (never a redirect/opaque/error). A network failure with no cached copy
 // rejects naturally — there is no asset to invent.
 async function cacheFirstAsset(request) {
-  const cached = await caches.match(request);
+  // ⚠️ LA LECTURE AUSSI. La doctrine ci-dessous — « une opération de cache ne
+  // décide jamais si le membre reçoit son asset » — n'était appliquée qu'à
+  // l'ÉCRITURE. Or `caches.match` peut rejeter lui aussi (stockage corrompu,
+  // quota, navigation privée sur certains WebKit) ; non capturée, cette
+  // rejection remonte dans `event.respondWith` et se transforme en erreur
+  // réseau — pour un asset que le réseau, lui, aurait servi. On dégrade donc
+  // vers le réseau plutôt que d'échouer.
+  let cached;
+  try {
+    cached = await caches.match(request);
+  } catch (_err) {
+    cached = undefined;
+  }
   if (cached) return cached;
   const response = await fetch(request);
   if (response && response.status === 200 && response.type === 'basic') {
@@ -289,22 +301,37 @@ async function cacheFirstAsset(request) {
  * instead of « Tu es hors ligne », and NOTHING ever retries. That silent,
  * permanent degradation is what this repairs.
  *
- * Called from the navigation path on a SUCCESSFUL response — i.e. at a moment
- * when the network is proven reachable, which is precisely when install's
- * failure can be undone. The flag is set BEFORE the await on purpose: a repair
- * that fails must not be retried on every navigation of the same SW lifetime.
+ * ⚠️ LE DRAPEAU NE SE POSE QU'EN CAS DE SUCCÈS — corrigé le 2026-07-30.
+ *
+ * La version précédente le posait AVANT l'await, avec ce commentaire : « called
+ * on a SUCCESSFUL response — i.e. at a moment when the network is proven
+ * reachable ». C'était faux : l'appel part du gestionnaire de navigation AVANT
+ * toute tentative réseau. Conséquence exacte — un membre qui ouvre la PWA hors
+ * ligne réveille le worker, la réparation part, `cache.add` échoue faute de
+ * réseau, et l'unique tentative de cette vie du worker est consommée. S'il
+ * retrouve le réseau trente secondes plus tard et continue à naviguer, plus
+ * aucune réparation n'est tentée — précisément au moment où elle aurait réussi.
+ *
+ * On garde la propriété utile (ne pas re-tenter à CHAQUE navigation d'une vie
+ * qui a déjà réussi) sans la propriété nuisible (brûler la tentative sur un
+ * échec) : `offlineDocumentRepairing` évite la ruée de navigations parallèles,
+ * `offlineDocumentChecked` ne se pose qu'une fois la réparation prouvée.
  */
 let offlineDocumentChecked = false;
+let offlineDocumentRepairing = false;
 async function ensureOfflineDocument() {
-  if (offlineDocumentChecked) return;
-  offlineDocumentChecked = true;
+  if (offlineDocumentChecked || offlineDocumentRepairing) return;
+  offlineDocumentRepairing = true;
   try {
     const cache = await caches.open(CACHE_NAME);
     if (!(await cache.match(OFFLINE_URL))) {
       await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
     }
+    offlineDocumentChecked = true;
   } catch (_err) {
-    /* still unreachable — the next SW start tries again */
+    /* réseau encore absent — la prochaine navigation réessaiera */
+  } finally {
+    offlineDocumentRepairing = false;
   }
 }
 

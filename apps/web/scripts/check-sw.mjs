@@ -13,6 +13,13 @@
  *   3. `/offline` is pre-cached at install.
  *   4. Stale cache buckets are cleaned up at activate.
  *   5. The push + notificationclick handlers are still present (never regressed).
+ *   6. `cacheFirstAsset` wraps its `cache.put` in try/catch (v6 : un quota plein
+ *      ne doit jamais transformer un asset deja telecharge en erreur reseau).
+ *   7. `activate` evince les seaux perimes ET appelle `clients.claim()`.
+ *   8. `install` appelle `skipWaiting()` (sinon un correctif deploye n'atteint
+ *      personne tant qu'un onglet reste ouvert).
+ *   9. `ensureOfflineDocument()` est defini ET appele (une fonction morte ne
+ *      repare rien).
  *
  * Run: `node scripts/check-sw.mjs` (from apps/web) → exit 0 when all pass.
  * Also imported by `check-sw.test.ts` so the CI vitest run enforces it.
@@ -91,7 +98,100 @@ export function checkServiceWorker(source) {
     failures.push('notificationclick handler missing — the offline work must not remove it.');
   }
 
+  // ── 6. Ce que la v6 a réparé, et que RIEN ne gardait ────────────────────────
+  //
+  // Mesuré le 2026-07-30, pas supposé : sur le fichier alors committé, retirer
+  // le try/catch autour de `cache.put` — c'est-à-dire restaurer à l'identique le
+  // bug v5 — laissait `checkServiceWorker` rendre `[]`, le Vitest vert et les
+  // quatre shards Playwright verts. Une passe de simplification aurait pu le
+  // supprimer en jugeant la protection superflue, et le mode d'échec serait
+  // reparti en production sans un seul signal : sur iOS, un quota plein
+  // transformait un asset DÉJÀ TÉLÉCHARGÉ en erreur réseau, alors que le membre
+  // était en ligne.
+  //
+  // Ces invariants sont structurels, comme les cinq précédents : ils ne prouvent
+  // pas le comportement (c'est le rôle des gates Playwright 4/5/6), ils
+  // interdisent la SUPPRESSION silencieuse de ce qui le produit.
+  const cacheFirst = extractFunctionBody(source, 'cacheFirstAsset');
+  if (!cacheFirst) {
+    failures.push('cacheFirstAsset() not found — the cache-first asset path is the v6 fix site.');
+  } else {
+    const putIndex = cacheFirst.indexOf('cache.put(');
+    if (putIndex === -1) {
+      failures.push('cacheFirstAsset() no longer writes to the runtime cache.');
+    } else {
+      const before = cacheFirst.slice(0, putIndex);
+      const lastTry = before.lastIndexOf('try {');
+      const lastCatch = before.lastIndexOf('catch');
+      if (lastTry === -1 || lastTry < lastCatch) {
+        failures.push(
+          'cacheFirstAsset(): `cache.put` must sit inside a try/catch. Without it a full ' +
+            'Cache Storage quota turns an ALREADY-DOWNLOADED asset into a network error ' +
+            'for a member who is online (the v5 bug, fixed in v6).',
+        );
+      }
+    }
+  }
+
+  // L'éviction des seaux périmés : sans elle, un membre déjà installé continue
+  // de recevoir le shell du déploiement précédent (gate 6 le prouve au runtime).
+  const activateBody = extractHandler(source, 'activate');
+  if (!activateBody) {
+    failures.push('activate handler missing.');
+  } else {
+    if (!/caches\.delete\(/.test(activateBody)) {
+      failures.push(
+        'activate: no `caches.delete(...)` — stale buckets from the previous ' +
+          'deployment would survive, and `caches.match` searches every bucket.',
+      );
+    }
+    if (!/clients\.claim\(/.test(activateBody)) {
+      failures.push('activate: `clients.claim()` missing — the new worker never takes over.');
+    }
+  }
+
+  const installBody = extractHandler(source, 'install');
+  if (installBody && !/skipWaiting\(/.test(installBody)) {
+    failures.push(
+      'install: `skipWaiting()` missing — the new worker would idle in `waiting` ' +
+        'until every tab closes, so a deployed fix reaches nobody.',
+    );
+  }
+
+  // La réparation opportuniste du document hors ligne doit rester CÂBLÉE : la
+  // fonction peut exister et n'être appelée par personne.
+  if (/function\s+ensureOfflineDocument/.test(source)) {
+    const calls = source.match(/ensureOfflineDocument\(\)/g) ?? [];
+    if (calls.length < 2) {
+      failures.push(
+        'ensureOfflineDocument() is defined but never called — the offline document ' +
+          'would stay missing forever after a failed install.',
+      );
+    }
+  }
+
   return failures;
+}
+
+/**
+ * Extract the body of a top-level `async function <name>(...)` by brace
+ * balancing. Same deliberate crudeness que `extractHandler` ci-dessous :
+ * ce fichier garde un service worker écrit à la main, pas un bundle.
+ */
+function extractFunctionBody(source, name) {
+  const start = source.search(new RegExp(`(async\\s+)?function\\s+${name}\\s*\\(`));
+  if (start === -1) return null;
+  const open = source.indexOf('{', start);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  return null;
 }
 
 /**
@@ -126,5 +226,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log('[check-sw] OK — all 5 Service Worker invariants hold.');
+  console.log(
+    '[check-sw] OK — tous les invariants du Service Worker tiennent (5 historiques + 4 ajoutes en v6).',
+  );
 }

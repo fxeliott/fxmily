@@ -35,6 +35,28 @@ name: Guide surfaces walk
 
 on:
   workflow_dispatch: {}
+  # AJOUT DU 2026-07-30 — une revue adverse a mesuré que ce workflow ne tournait
+  # NI sur PR NI sur push : uniquement au cron de 04:00 UTC. Une régression du
+  # guide n'était donc vue qu'après merge, sur un run que personne n'est tenu de
+  # regarder.
+  #
+  # Le filtre est étroit À DESSEIN. Faire tourner les 24 surfaces sur toute PR
+  # ajouterait un quart d'heure au chemin critique du dépôt (mesuré : 59 s à
+  # 199 s de compilation à froid par route), et un job lent qu'on prend
+  # l'habitude d'ignorer ne garde rien. On ne déclenche donc que sur les
+  # fichiers qui définissent le guide lui-même — ceux dont un changement peut
+  # ajouter, retirer ou casser une entrée.
+  #
+  # ⚠️ Ce filtre ne couvre PAS un composant partagé qui casserait une surface.
+  # Cette moitié-là est gardée ailleurs, et dans un check REQUIS :
+  # `tests/e2e/reduced-motion-behaviour.spec.ts` tourne dans le projet chromium.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/src/app/guide/**'
+      - 'apps/web/tests/e2e/guide-surfaces-walk.spec.ts'
+      - 'apps/web/src/test/guide-shot-source.ts'
+      - '.github/workflows/guide-surfaces.yml'
   # 04:00 UTC ≈ 05:00–06:00 Europe/Paris — après le nocturne mobile (03:00), pour
   # ne pas se disputer les runners.
   schedule:

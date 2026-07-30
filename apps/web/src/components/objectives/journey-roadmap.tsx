@@ -58,10 +58,19 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(90deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '0% 50%' }}
-              // `initial` est sérialisé (`transform: scaleX(…)`) : le calculer
-              // depuis la préférence désynchronise l'hydratation. Base = rail
-              // REMPLI des deux côtés ; le remplissage ne s'anime qu'ensuite.
+              // ⚠️ `animate` PORTE LA VÉRITÉ, `whileInView` n'ajoute QUE l'entrée.
+              //
+              // Version précédente : `initial={false}` avec `whileInView` pour
+              // seule cible. Hors du viewport, Framer n'avait donc AUCUNE cible,
+              // le `<div>` gardait son `w-full` sans transform, et le rail se
+              // peignait à 100 % — quel que soit le palier réel du membre. Un
+              // membre au 1ᵉʳ palier voyait un parcours terminé, et le HTML rendu
+              // par le serveur affirmait la même chose. `initial` ne pouvait pas
+              // porter la vérité non plus (il est sérialisé, et le calculer
+              // depuis la préférence désynchronise l'hydratation) : la vérité va
+              // donc dans `animate`, qui ne dépend que de la donnée serveur.
               initial={false}
+              animate={{ scaleX: fraction }}
               whileInView={armed ? { scaleX: [0, fraction] } : { scaleX: fraction }}
               viewport={{ once: true }}
               transition={
@@ -76,7 +85,10 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '50% 0%' }}
+              // Même correctif que le rail horizontal ci-dessus : la vérité vit
+              // dans `animate`, jamais dans le seul `whileInView`.
               initial={false}
+              animate={{ scaleY: fraction }}
               whileInView={armed ? { scaleY: [0, fraction] } : { scaleY: fraction }}
               viewport={{ once: true }}
               transition={

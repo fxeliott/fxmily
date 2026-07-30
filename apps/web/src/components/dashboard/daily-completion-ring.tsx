@@ -1,8 +1,7 @@
 'use client';
 
-import { m, useInView, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { Check } from 'lucide-react';
-import { useRef } from 'react';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { useAfterHydration } from '@/lib/hooks';
@@ -106,9 +105,11 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
  * `DailyCompletionRing` (SVG natif, hex WebView-safe, rotate -90) mais sans la
  * sémantique « gestes du jour » : sert le score de constance et toute jauge 0-100.
  *
- * SSR-safe : un seul arbre. Le tracé démarre plein (offset = CIRC) et se dessine
- * quand l'élément entre dans le viewport (`useInView`, once) ; sous reduced-motion
- * il est rendu directement à sa valeur finale (offset cible), immobile. La valeur
+ * SSR-safe : un seul arbre. Le rendu de base — serveur, premier rendu client,
+ * sans JS, mouvement réduit — est la VALEUR FINALE ; le dessin s'arme juste après
+ * l'hydratation, le temps d'une image. Il n'est plus gaté par `useInView` : le
+ * dessin doit rembobiner l'anneau pour démarrer, et un rembobinage déclenché au
+ * scroll se voyait (anneau juste, puis vidé d'un coup, puis redessiné). La valeur
  * numérique est portée par `AnimatedNumber` (déjà SSR-correct + once-on-view).
  */
 export function MetricRing({
@@ -129,22 +130,18 @@ export function MetricRing({
 }) {
   const prefersReduced = useReducedMotion();
   const C = useChartColors();
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.5 });
-
   const radius = (size - strokeWidth) / 2;
   const circ = 2 * Math.PI * radius;
   const center = size / 2;
   const fraction = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
   const offset = circ - fraction * circ;
-  // Se dessine seulement une fois visible ET après hydratation ; au repos —
-  // serveur, premier rendu client, sans JS, mouvement réduit — l'anneau est
-  // directement à sa valeur finale.
+  // Au repos — serveur, premier rendu client, sans JS, mouvement réduit —
+  // l'anneau est directement à sa valeur finale ; le dessin s'arme après
+  // hydratation (cf. l'en-tête : plus de gate `inView`, il se voyait).
   const armed = useAfterHydration() && !prefersReduced;
 
   return (
     <div
-      ref={ref}
       role="img"
       aria-label={ariaLabel}
       className="relative grid shrink-0 place-items-center"
@@ -169,10 +166,21 @@ export function MetricRing({
           strokeLinecap="round"
           transform={`rotate(-90 ${center} ${center})`}
           strokeDasharray={circ}
+          // ⚠️ L'ARMEMENT NE DÉPEND PLUS DE `inView`, ET C'EST UN ARBITRAGE ASSUMÉ.
+          //
+          // Le rendu de base doit être la VALEUR FINALE (c'est ce que le serveur
+          // écrit, et ce qu'un membre sans JS ou en mouvement réduit doit voir).
+          // Un dessin « qui démarre vide » exige donc de REMBOBINER après coup.
+          // Tant que ce rembobinage suit immédiatement l'hydratation il dure une
+          // image et personne ne le voit ; gaté par `inView`, il pouvait survenir
+          // plusieurs SECONDES plus tard — l'anneau s'affichait juste, puis se
+          // vidait d'un coup sous les yeux du membre avant de se redessiner.
+          //
+          // Entre « le dessin se déclenche au scroll » et « l'anneau ne ment
+          // jamais », on garde le second. Le déclencheur `useInView` disparaît
+          // donc d'ici, et avec lui la seule chose qui l'utilisait.
           initial={false}
-          animate={
-            armed && inView ? { strokeDashoffset: [circ, offset] } : { strokeDashoffset: offset }
-          }
+          animate={armed ? { strokeDashoffset: [circ, offset] } : { strokeDashoffset: offset }}
           transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
         />
       </svg>

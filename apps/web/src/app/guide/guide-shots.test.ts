@@ -37,11 +37,22 @@ const manifest = manifestJson as GuideShotManifest;
  * exigerait à chaque fois une régénération Playwright complète (Postgres +
  * navigateurs) pour un commit qui n'a parfois changé qu'un commentaire.
  *
- * Un garde qu'on apprend à contourner ne garde rien. La fraîcheur est donc
- * traitée là où elle coûte zéro friction : `.github/workflows/guide-shots.yml`
- * régénère les vignettes et ouvre une PR quand elles ont bougé. Le `sourceHash`
- * du manifeste sert de pré-contrôle bon marché à ce job — il est de
- * l'information, pas une assertion bloquante ici.
+ * Un garde qu'on apprend à contourner ne garde rien.
+ *
+ * ⚠️ RECTIFICATION DU 2026-07-30 — CE COMMENTAIRE DÉSIGNAIT UN FILET INEXISTANT.
+ *
+ * Il disait : « la fraîcheur est traitée là où elle coûte zéro friction :
+ * `.github/workflows/guide-shots.yml` régénère les vignettes et ouvre une PR
+ * quand elles ont bougé ». Ce fichier n'existe pas (`ls .github/workflows/`), et
+ * le workflow qui existe réellement — `guide-surfaces.yml` — REFUSE ce rôle par
+ * écrit, dans son propre en-tête : une capture n'est pas déterministe d'un OS à
+ * l'autre, un job nocturne ouvrirait une PR de 24 binaires chaque nuit sans
+ * qu'un écran ait bougé.
+ *
+ * Il n'y a donc AUCUN rattrapage de fraîcheur, ni bloquant ni asynchrone. Le
+ * `sourceHash` du manifeste n'est lu par personne : c'est une trace de
+ * provenance (cf. `src/test/guide-shot-source.ts`), pas un pré-contrôle. La
+ * régénération reste un geste explicite : `pnpm --filter @fxmily/web guide:shots`.
  */
 describe('guide shots — parité manifeste ↔ catalogue', () => {
   const catalogueHrefs = GUIDE_CATALOG.map((entry) => entry.href).sort();

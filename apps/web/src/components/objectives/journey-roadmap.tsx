@@ -58,7 +58,7 @@ export function JourneyRoadmap({
             <m.div
               className="h-full w-full rounded-full bg-[linear-gradient(90deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '0% 50%' }}
-              // ⚠️ `animate` PORTE LA VÉRITÉ, `whileInView` n'ajoute QUE l'entrée.
+              // ⚠️ `animate` PORTE LA VÉRITÉ, ET L'ENTRÉE S'ARME À L'HYDRATATION.
               //
               // Version précédente : `initial={false}` avec `whileInView` pour
               // seule cible. Hors du viewport, Framer n'avait donc AUCUNE cible,
@@ -69,10 +69,16 @@ export function JourneyRoadmap({
               // porter la vérité non plus (il est sérialisé, et le calculer
               // depuis la préférence désynchronise l'hydratation) : la vérité va
               // donc dans `animate`, qui ne dépend que de la donnée serveur.
+              //
+              // Et l'entrée ne passe PLUS par `whileInView`. Une revue en contexte
+              // frais a relevé l'incohérence : `whileInView` en keyframes
+              // `[0, fraction]` REMBOBINE le rail de sa vraie valeur jusqu'à zéro
+              // au passage dans le viewport — exactement le construit retiré de
+              // `MetricRing` quarante lignes plus loin, avec une doctrine écrite.
+              // Appliquer cette doctrine à un jumeau et pas à l'autre, dans le
+              // même commit, n'était pas un arbitrage : c'était un oubli.
               initial={false}
-              animate={{ scaleX: fraction }}
-              whileInView={armed ? { scaleX: [0, fraction] } : { scaleX: fraction }}
-              viewport={{ once: true }}
+              animate={armed ? { scaleX: [0, fraction] } : { scaleX: fraction }}
               transition={
                 prefersReduced
                   ? { duration: 0 }
@@ -86,11 +92,10 @@ export function JourneyRoadmap({
               className="h-full w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
               style={{ transformOrigin: '50% 0%' }}
               // Même correctif que le rail horizontal ci-dessus : la vérité vit
-              // dans `animate`, jamais dans le seul `whileInView`.
+              // dans `animate`, et l'entrée s'arme à l'hydratation — jamais un
+              // rembobinage déclenché au scroll.
               initial={false}
-              animate={{ scaleY: fraction }}
-              whileInView={armed ? { scaleY: [0, fraction] } : { scaleY: fraction }}
-              viewport={{ once: true }}
+              animate={armed ? { scaleY: [0, fraction] } : { scaleY: fraction }}
               transition={
                 prefersReduced
                   ? { duration: 0 }

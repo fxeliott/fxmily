@@ -18,8 +18,19 @@
  *   7. `activate` evince les seaux perimes ET appelle `clients.claim()`.
  *   8. `install` appelle `skipWaiting()` (sinon un correctif deploye n'atteint
  *      personne tant qu'un onglet reste ouvert).
- *   9. `ensureOfflineDocument()` est defini ET appele (une fonction morte ne
- *      repare rien).
+ *   9. `cacheFirstAsset` protege aussi la LECTURE (`caches.match`) : une lecture
+ *      de cache peut rejeter, et cette rejection devient une erreur reseau.
+ *  10. `ensureOfflineDocument()` est defini ET appele (une fonction morte ne
+ *      repare rien) -- verifie SANS `if (la fonction existe)`, sinon la
+ *      supprimer entierement passerait en silence.
+ *  11. Le drapeau one-shot de `ensureOfflineDocument()` se pose APRES l'await :
+ *      une navigation hors ligne ne doit pas bruler l'unique tentative.
+ *
+ * ⚠️ CETTE LISTE EST TENUE A LA MAIN, ET UNE LISTE TENUE A LA MAIN DERIVE. La
+ * source de verite reste le corps de `checkServiceWorker` ; si les deux
+ * divergent, c'est le code qui a raison. C'est pour la meme raison que le
+ * message de succes ne compte plus les invariants : le compte precedent
+ * (« 5 + 4 ») etait deja faux trois invariants plus tard.
  *
  * Run: `node scripts/check-sw.mjs` (from apps/web) → exit 0 when all pass.
  * Also imported by `check-sw.test.ts` so the CI vitest run enforces it.
@@ -158,15 +169,54 @@ export function checkServiceWorker(source) {
     );
   }
 
-  // La réparation opportuniste du document hors ligne doit rester CÂBLÉE : la
-  // fonction peut exister et n'être appelée par personne.
-  if (/function\s+ensureOfflineDocument/.test(source)) {
+  // La LECTURE du cache, pas seulement l'écriture. Une revue en contexte frais a
+  // relevé que l'invariant 6 ci-dessus ne couvrait que `cache.put` : retirer le
+  // try/catch autour de `caches.match` laissait tout vert, alors que cette
+  // rejection-là devient elle aussi une erreur réseau pour un asset que le
+  // réseau aurait servi. Même doctrine, même garde.
+  if (cacheFirst && !/try\s*\{[\s\S]{0,200}?await caches\.match\(request\)/.test(cacheFirst)) {
+    failures.push(
+      'cacheFirstAsset(): `caches.match` must sit inside a try/catch too. A cache ' +
+        'READ can reject (corrupted storage, quota, private mode) and that rejection ' +
+        'reaches event.respondWith as a network error — for an asset the network ' +
+        'would have served.',
+    );
+  }
+
+  // La réparation opportuniste du document hors ligne doit rester CÂBLÉE.
+  //
+  // ⚠️ PAS DE `if (functionExists)` AUTOUR DE CE BLOC. La version précédente
+  // enveloppait tout dans `if (/function ensureOfflineDocument/)`, si bien que
+  // supprimer la fonction ET son appel passait en SILENCE — un garde qui se
+  // désarme exactement dans le cas qu'il devait attraper (une passe de
+  // simplification qui juge la réparation superflue).
+  if (!/function\s+ensureOfflineDocument/.test(source)) {
+    failures.push(
+      'ensureOfflineDocument() has disappeared — after a failed install the offline ' +
+        'document would stay missing for good, with nothing to repair it.',
+    );
+  } else {
     const calls = source.match(/ensureOfflineDocument\(\)/g) ?? [];
     if (calls.length < 2) {
       failures.push(
         'ensureOfflineDocument() is defined but never called — the offline document ' +
           'would stay missing forever after a failed install.',
       );
+    }
+    // Le drapeau one-shot doit se poser APRÈS l'await, sinon une navigation
+    // hors ligne consomme l'unique tentative de la vie du worker — précisément
+    // au moment où elle ne pouvait pas aboutir.
+    const repair = extractFunctionBody(source, 'ensureOfflineDocument');
+    if (repair) {
+      const flag = repair.indexOf('offlineDocumentChecked = true');
+      const firstAwait = repair.indexOf('await ');
+      if (flag !== -1 && firstAwait !== -1 && flag < firstAwait) {
+        failures.push(
+          'ensureOfflineDocument(): `offlineDocumentChecked` is set BEFORE the first ' +
+            'await — an offline navigation burns the only repair attempt of this SW ' +
+            'lifetime, and the member never gets the offline page back.',
+        );
+      }
     }
   }
 
@@ -226,7 +276,5 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log(
-    '[check-sw] OK — tous les invariants du Service Worker tiennent (5 historiques + 4 ajoutes en v6).',
-  );
+  console.log('[check-sw] OK — tous les invariants du Service Worker tiennent.');
 }

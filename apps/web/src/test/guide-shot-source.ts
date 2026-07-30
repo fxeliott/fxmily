@@ -28,8 +28,9 @@ import path from 'node:path';
  * CE QUE LE CHAMP EST RÉELLEMENT, aujourd'hui : une trace de PROVENANCE. Il
  * enregistre l'état des sources de la route à l'instant où sa capture a été
  * prise, ce qui permet à un humain — ou à une future porte — de dire « cette
- * vignette date d'avant telle refonte ». Rien de plus, et le garde de parité
- * n'exige que sa présence.
+ * vignette date d'avant telle refonte ». Rien de plus — et pour être exact
+ * jusqu'au bout : AUCUNE assertion ne lit ce champ, pas même pour vérifier qu'il
+ * est présent. Le manifeste est simplement typé `as GuideShotManifest`.
  *
  * POURQUOI PAS DE PORTE BLOQUANTE, décision mesurée et maintenue :
  * `dashboard/page.tsx` totalise 13 commits sur 30 jours, l'ensemble des routes

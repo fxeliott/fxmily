@@ -47,9 +47,14 @@ on:
   # fichiers qui définissent le guide lui-même — ceux dont un changement peut
   # ajouter, retirer ou casser une entrée.
   #
-  # ⚠️ Ce filtre ne couvre PAS un composant partagé qui casserait une surface.
-  # Cette moitié-là est gardée ailleurs, et dans un check REQUIS :
-  # `tests/e2e/reduced-motion-behaviour.spec.ts` tourne dans le projet chromium.
+  # ⚠️ CE FILTRE NE COUVRE PAS un composant partagé qui casserait une surface,
+  # et rien d'autre ne le couvre non plus sur PR. Une première rédaction de ce
+  # commentaire prétendait que `reduced-motion-behaviour.spec.ts` s'en chargeait
+  # « dans un check requis » : c'est surestimé. Ce spec ne visite QUE `/mindset`
+  # et n'observe qu'un `<line>` décoratif — c'est un canari qui prouve que
+  # `useAfterHydration` bascule encore, pas une couverture des 24 surfaces. Un
+  # token de `globals.css` ou une `ui/card` qui casse un écran du guide passera
+  # donc au vert sur la PR, et ne sera vu qu'au cron de 04:00 UTC.
   pull_request:
     branches: [main]
     paths:

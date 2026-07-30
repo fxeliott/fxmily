@@ -37,10 +37,23 @@ export default defineConfig({
   // covers the render-side cold-compile timeouts). The bumps only delay
   // FAILING assertions — passing ones resolve as soon as the element shows,
   // so the happy-path suite stays ~the same wall-clock. Local runs keep the
-  // snappy defaults. The deeper root fix (a production `next start` E2E
-  // server, no on-demand compile) is deferred: it conflicts with the
-  // `AUTH_URL must be HTTPS in production` env refine and would touch app
-  // env validation, out of scope for a test-infra-only change.
+  // snappy defaults.
+  //
+  // ⚠️ CE COMMENTAIRE A ANNONCÉ « fix différé » APRÈS QUE LE FIX A ÉTÉ LIVRÉ.
+  // Il disait : « le fix de fond (un serveur E2E `next start` de production)
+  // est différé : il entre en conflit avec le refine `AUTH_URL must be HTTPS in
+  // production` ». Ce serveur existe depuis `049fc7c5` —
+  // `.github/workflows/e2e-prod-build.yml` lance `next build && next start` et
+  // y fait tourner les gates 4/5/6 du service worker, le conflit `AUTH_URL`
+  // étant résolu en lui passant `https://localhost:3000`. Laisser le mot
+  // « différé » ici, c'est décrire comme impossible un chemin déjà emprunté —
+  // et le prochain à lire renoncerait à l'élargir.
+  //
+  // Ce qui RESTE vrai, et qui justifie ces timeouts : la suite par défaut, y
+  // compris les quatre shards requis, tourne toujours contre `pnpm dev`
+  // (`webServer` ci-dessus). Le build de production ne couvre aujourd'hui que
+  // les trois gates du service worker, là où la compilation à la demande
+  // masquait le comportement des assets hachés.
   timeout: process.env.CI ? 60_000 : 30_000,
   expect: { timeout: process.env.CI ? 10_000 : 5_000 },
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],

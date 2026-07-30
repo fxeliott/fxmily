@@ -176,6 +176,27 @@ jobs:
           GUIDE_WALK_REDUCED_MOTION: '1'
         run: pnpm --filter @fxmily/web exec playwright test --project=chromium guide-surfaces-walk.spec.ts
 
+      # RAPPORT DE PÉREMPTION DES VIGNETTES — le « pré-contrôle nocturne » qu'un
+      # test nommait déjà sans qu'il existe.
+      #
+      # `sourceHash` est écrit dans le manifeste par le générateur depuis le
+      # scope 2 du J8, et n'était relu par personne : une capture prise avant une
+      # refonte de sa route restait en place sans qu'aucun automatisme le dise.
+      #
+      # `continue-on-error` À DESSEIN, et la mesure le justifie : l'empreinte
+      # porte sur les OCTETS des fichiers de la route, donc une JSDoc corrigée la
+      # fait bouger autant qu'une refonte (mesuré le 2026-07-30 : 1 capture sur 24
+      # signalée, `/guide`, pour un commentaire). En porte dure, ce contrôle
+      # exigerait une régénération Playwright complète pour un changement de
+      # phrase. Il informe donc, il ne bloque pas — et c'est déjà tout l'écart
+      # avec l'état précédent, où rien ne regardait.
+      - name: Report stale guide thumbnails (informational)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GUIDE_SHOTS_STALENESS: '1'
+        run: pnpm --filter @fxmily/web exec vitest run src/app/guide/guide-shots-staleness.test.ts
+
       - name: Upload Playwright traces + screenshots (on failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

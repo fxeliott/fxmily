@@ -24,6 +24,21 @@ import { BOTTOM_NAV, NAV_GROUPS } from '@/components/nav/nav-items';
  * surface pour le membre — un miroir, jamais un juge ; aucun conseil d'analyse
  * de marché, aucune gamification culpabilisante.
  */
+/**
+ * Un sous-arbre de routes qu'une entrée du guide explique sans le contenir.
+ *
+ * `prefix` tait le garde de couverture pour tout ce qui descend de lui ; `why`
+ * dit pourquoi c'est légitime. Le garde exige la seconde autant que la première
+ * (`guide-catalog.test.ts`), pour la même raison qu'il l'exige d'une exemption :
+ * une décision qu'on lit, jamais un oubli qu'on ne voit pas.
+ */
+export interface GuideCoverage {
+  /** Préfixe de route couvert, sans slash final (`/pre-trade/done`). */
+  prefix: string;
+  /** Pourquoi cette entrée explique déjà ce sous-arbre. Jamais vide. */
+  why: string;
+}
+
 export interface GuideEntry {
   /** Route de la surface membre (identique au `href` de nav-items.ts). */
   href: string;
@@ -42,16 +57,24 @@ export interface GuideEntry {
   group: string;
   /**
    * Préfixes de routes que cette entrée explique DÉJÀ, quand le chemin réel ne
-   * descend pas de `href`.
+   * descend pas de `href` — chacun avec sa raison, comme une exemption.
    *
    * Le garde de couverture (`guide-catalog.test.ts`) parcourt l'arbre de routes
    * RÉEL et exige que chaque page membre soit expliquée par une entrée. La règle
    * de descendance couvre les cas évidents (`/journal/new` sous `/journal`), mais
    * certaines surfaces vivent ailleurs que sous leur parent pédagogique — le
    * questionnaire hebdo est en `/calendar/...` alors que la page est `/calendrier`.
-   * Les déclarer ici est un choix explicite et relu, pas un trou silencieux.
+   *
+   * ⚠️ `why` EST OBLIGATOIRE, ET C'EST UNE CORRECTION. Ce champ était un simple
+   * `readonly string[]` : déclarer un préfixe désarmait le garde sur tout un
+   * sous-arbre sans qu'aucune justification soit exigée, alors que
+   * `GUIDE_ROUTE_EXEMPTIONS` — qui fait exactement la même chose, taire une
+   * route — impose une raison depuis toujours et se fait vérifier. Deux façons
+   * de rendre une page invisible au garde, une seule tenue de s'expliquer :
+   * l'asymétrie tombait du côté le plus large des deux, puisqu'un préfixe couvre
+   * un sous-arbre entier quand une exemption ne couvre qu'une page.
    */
-  covers?: readonly string[];
+  covers?: readonly GuideCoverage[];
   /**
    * Icône de la surface — À NE RENSEIGNER QUE pour une entrée absente de la nav.
    *
@@ -163,9 +186,12 @@ export const GUIDE_CATALOG: GuideEntry[] = [
       'Ton tableau de bord : d’un coup d’œil, ton état du jour, tes gestes à faire et ta progression.',
     when: 'Chaque jour en ouvrant l’app : c’est ton point de départ, tout part de là.',
     group: 'Accueil',
-    // Le relevé de process (`/tracking/<instrument>`) n'est proposé que depuis le
-    // plan du jour de l'accueil — c'est donc l'accueil qui l'explique.
-    covers: ['/tracking'],
+    covers: [
+      {
+        prefix: '/tracking',
+        why: 'Le relevé de process (`/tracking/<instrument>`) n’est proposé que depuis le plan du jour de l’accueil : c’est donc l’accueil qui l’explique.',
+      },
+    ],
   },
 
   // Ma progression
@@ -222,9 +248,12 @@ export const GUIDE_CATALOG: GuideEntry[] = [
       'Une pause de trente secondes avant d’entrer : ta raison, ton émotion et ton plan, pour trader en conscience.',
     when: 'Juste avant d’entrer en position, à chaud : c’est là que ça change quelque chose.',
     group: 'Au quotidien',
-    // La page de confirmation de la pause vit sous `/pre-trade/done/<id>`, hors de
-    // la descendance de `/pre-trade/new`.
-    covers: ['/pre-trade/done'],
+    covers: [
+      {
+        prefix: '/pre-trade/done',
+        why: 'La page de confirmation de la pause vit sous `/pre-trade/done/<id>`, hors de la descendance de `/pre-trade/new`.',
+      },
+    ],
   },
   {
     href: '/track',
@@ -312,9 +341,12 @@ export const GUIDE_CATALOG: GuideEntry[] = [
       'Ton calendrier adaptatif de la semaine, organisé autour de tes disponibilités et de tes créneaux de pratique.',
     when: 'En début de semaine, pour poser tes créneaux avant que la semaine ne les pose pour toi.',
     group: 'Suivi & orga',
-    // Le questionnaire hebdo qui alimente le calendrier vit sous `/calendar/...`
-    // (chemin anglais historique), pas sous `/calendrier`.
-    covers: ['/calendar/questionnaire'],
+    covers: [
+      {
+        prefix: '/calendar/questionnaire',
+        why: 'Le questionnaire hebdo qui alimente le calendrier vit sous `/calendar/...` (chemin anglais historique), pas sous `/calendrier`.',
+      },
+    ],
   },
   {
     href: '/reunions',

@@ -248,4 +248,97 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
     expect(consoleErrors, `erreurs console : ${consoleErrors.join(' | ')}`).toEqual([]);
   });
+
+  /**
+   * 5ᵉ angle — LE CTA DYNAMIQUE DE FIN DE PAGE, DANS LE FUSEAU DU MEMBRE.
+   *
+   * Ce que le J8 (scope 4) a livré : `/guide` ne renvoie plus vers un
+   * `/checkin/morning` codé en dur, il calcule le créneau qui correspond au
+   * moment que vit le membre, DANS SON fuseau. `checkin-cta.test.ts` prouve la
+   * règle en unitaire ; `first-run-welcome.test.tsx` prouve le rendu du même
+   * objet sur l'ACCUEIL. Rien ne regardait la page qui a motivé le scope. Un
+   * retour au `href="/checkin/morning"` littéral dans `guide/page.tsx` serait
+   * passé au vert partout : c'est exactement le défaut d'origine, restauré sans
+   * un seul test rouge.
+   *
+   * L'ORACLE EST INDÉPENDANT, ET C'EST TOUT L'ENJEU.
+   * Appeler `checkinCta()` ici pour calculer l'attendu comparerait la fonction
+   * à elle-même — une tautologie, verte même si la règle était fausse. Le test
+   * n'importe donc rien du code de production : il sème un membre dans un
+   * fuseau à décalage FIXE (`Etc/GMT-9` = UTC+9, sans heure d'été), puis dérive
+   * l'heure locale par arithmétique nue sur `getUTCHours()`. Aucun `Intl`,
+   * aucun helper de l'app. Seule la règle produit — « avant 14 h locales =
+   * matin » — est réécrite ici, ce qui est le rôle d'un test.
+   *
+   * Le fuseau est choisi loin de Paris À DESSEIN : avec `Europe/Paris`, un
+   * helper qui ignorerait le fuseau du membre et lirait celui du serveur
+   * passerait. Le runner CI est en UTC, l'app en Europe/Paris : +9 se distingue
+   * des deux.
+   *
+   * Course d'une minute : si l'heure UTC bascule pendant le test, l'attendu
+   * change au milieu. On calcule donc l'attendu AVANT et APRÈS, et on accepte
+   * l'un ou l'autre — les deux sont identiques hors de cette seconde-là.
+   */
+  test('CTA: le lien de fin de page suit le créneau du fuseau du MEMBRE', async ({
+    page,
+    request,
+  }) => {
+    const OFFSET_HOURS = 9; // Etc/GMT-9 == UTC+9, sans heure d'été.
+    const tzMember = await seedMemberUser({
+      email: 'j8-guide-cta.member.e2e.test@fxmily.local',
+      password: 'J8-GuideCtaPwd-2026!',
+      firstName: 'J8',
+      lastName: 'GuideCta',
+      timezone: 'Etc/GMT-9',
+    });
+
+    /** Créneau attendu, dérivé sans `Intl` ni code de production. */
+    const expectedHref = (): '/checkin/morning' | '/checkin/evening' =>
+      (new Date().getUTCHours() + OFFSET_HOURS) % 24 < 14 ? '/checkin/morning' : '/checkin/evening';
+
+    const before = expectedHref();
+
+    await page.goto('/login');
+    await loginAs(page, request, tzMember.email, tzMember.password);
+    await page.goto('/guide');
+
+    // DEUX sites, pas un — et c'est la découverte de ce test. `/guide` peint le
+    // CTA dynamique à deux endroits : sur le pilier qui se déclare porteur
+    // (`dynamicCheckinCta`, page.tsx:258) et dans la carte finale « Et
+    // maintenant » (page.tsx:444). Une première rédaction attendait un seul
+    // lien et rougissait : la page en montrait deux. Le compte est donc épinglé
+    // à 2, et surtout les DEUX doivent porter le même créneau — un site resté
+    // codé en dur garderait ce compte tout en mentant la moitié du temps.
+    const cta = page
+      .getByRole('main')
+      .getByRole('link', { name: /Faire mon check-in du (matin|soir)/ });
+    await expect(
+      cta,
+      'le CTA dynamique vit sur le pilier ET dans la carte « Et maintenant »',
+    ).toHaveCount(2);
+
+    const hrefs = await cta.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('href') ?? ''));
+    const after = expectedHref();
+
+    expect(new Set(hrefs).size, `les deux CTA divergent : ${hrefs.join(' / ')}`).toBe(1);
+
+    const href = hrefs[0];
+    expect(
+      [before, after],
+      `Le CTA pointe vers ${href} ; pour un membre en UTC+${OFFSET_HOURS} il est ` +
+        `${(new Date().getUTCHours() + OFFSET_HOURS) % 24}h locales, donc ${after} est attendu. ` +
+        `Un lien figé sur /checkin/morning est le défaut que le scope 4 a supprimé.`,
+    ).toContain(href);
+
+    // Le libellé suit le créneau : un href juste sous un texte faux serait un
+    // demi-correctif (le membre lit le texte, pas l'URL).
+    const expectedLabel = href === '/checkin/morning' ? /check-in du matin/ : /check-in du soir/;
+    await expect(cta.first()).toHaveText(expectedLabel);
+    await expect(cta.last()).toHaveText(expectedLabel);
+
+    // Et le créneau OPPOSÉ n'est proposé nulle part dans la page : sinon un
+    // rendu qui peindrait les deux liens satisferait les assertions ci-dessus.
+    const opposite = href === '/checkin/morning' ? '/checkin/evening' : '/checkin/morning';
+    await expect(page.getByRole('main').locator(`a[href="${opposite}"]`)).toHaveCount(0);
+  });
 });

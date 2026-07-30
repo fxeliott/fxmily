@@ -100,8 +100,8 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
 }
 
 /**
- * Tour 12 (C) — anneau de métrique générique (0..max) qui SE DESSINE à l'entrée
- * du viewport, avec un count-up de la valeur au centre. Réutilise l'anatomie de
+ * Tour 12 (C) — anneau de métrique générique (0..max) qui se dessine juste après
+ * l'hydratation (et NON plus à l'entrée du viewport, cf. plus bas). Réutilise l'anatomie de
  * `DailyCompletionRing` (SVG natif, hex WebView-safe, rotate -90) mais sans la
  * sémantique « gestes du jour » : sert le score de constance et toute jauge 0-100.
  *
@@ -109,8 +109,15 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
  * sans JS, mouvement réduit — est la VALEUR FINALE ; le dessin s'arme juste après
  * l'hydratation, le temps d'une image. Il n'est plus gaté par `useInView` : le
  * dessin doit rembobiner l'anneau pour démarrer, et un rembobinage déclenché au
- * scroll se voyait (anneau juste, puis vidé d'un coup, puis redessiné). La valeur
- * numérique est portée par `AnimatedNumber` (déjà SSR-correct + once-on-view).
+ * scroll se voyait (anneau juste, puis vidé d'un coup, puis redessiné).
+ *
+ * ⚠️ ET LE NOMBRE SUIT L'ANNEAU — `startOnView={false}`. Une revue en contexte
+ * frais a relevé que déplacer le seul ARC à l'hydratation laissait la moitié du
+ * défaut vivante : `AnimatedNumber` reste gaté au scroll (`once`, `amount: 0.4`)
+ * et son compteur repart de zéro. Le membre scrollait donc jusqu'à un anneau
+ * déjà plein dont le CHIFFRE se remettait à 0 pour recompter sous ses yeux.
+ * Couper le compteur plutôt que le rembobiner : la valeur est juste dès le
+ * premier rendu, l'anneau porte le mouvement, et plus rien ne ment.
  */
 export function MetricRing({
   value,
@@ -187,6 +194,9 @@ export function MetricRing({
       <span className="absolute inset-0 flex items-center justify-center">
         <AnimatedNumber
           value={Math.round(value)}
+          // Voir l'en-tête : l'arc s'anime à l'hydratation, donc un compteur
+          // encore gaté au scroll rembobinerait le chiffre bien après.
+          startOnView={false}
           durationMs={1200}
           className="f-mono text-[17px] leading-none font-bold tracking-[-0.02em] text-[var(--t-1)] tabular-nums"
         />

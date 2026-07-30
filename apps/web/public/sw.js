@@ -291,7 +291,10 @@ async function cacheFirstAsset(request) {
 }
 
 /**
- * Re-cache the offline document if it went missing. At most once per SW start.
+ * Re-cache the offline document if it went missing. Au plus une fois par vie du
+ * worker UNE FOIS RÉUSSIE — et autant de navigations qu'il faudra tant que ça
+ * échoue (c'est tout l'objet du correctif ci-dessous : la version précédente
+ * disait « at most once per SW start », et c'était le bug).
  *
  * `install` is the ONLY writer of OFFLINE_URL, and it re-runs only when the
  * BYTES of sw.js change (`reg.update()` aborts on a byte-identical script). So a

@@ -19,10 +19,16 @@ export interface GuideShotRecord {
   /**
    * Empreinte des sources propres de la route au moment de la capture.
    *
-   * Information, pas assertion : c'est le pré-contrôle bon marché du job de
-   * régénération (`.github/workflows/guide-shots.yml`), qui évite de relancer
-   * une capture complète quand aucun écran n'a bougé. `null` quand la route n'a
-   * pas de dossier propre dans `src/app`.
+   * ⚠️ TRACE DE PROVENANCE, LUE PAR PERSONNE. Ce commentaire désignait « le
+   * pré-contrôle bon marché du job de régénération
+   * (`.github/workflows/guide-shots.yml`) » : ce fichier n'existe pas, et rien
+   * dans le dépôt ne relit ce champ — `grep -rn sourceHash apps/web/src apps/web/tests`
+   * ne rend que son écriture (`guide-surfaces-walk.spec.ts`) et sa définition ici.
+   * Aucune péremption de capture n'est donc détectée nulle part.
+   *
+   * Ce qu'il sert vraiment : dire de quelle version des sources datait une
+   * vignette, pour qu'un humain — ou une future porte — puisse trancher.
+   * `null` quand la route n'a pas de dossier propre dans `src/app`.
    */
   sourceHash: string | null;
   /** Largeur en pixels de l'image écrite. */

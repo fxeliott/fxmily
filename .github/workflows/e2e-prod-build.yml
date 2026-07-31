@@ -77,6 +77,8 @@ on:
       - 'apps/web/src/lib/checkin/**'
       - 'apps/web/tests/e2e/guide-catalog-render.spec.ts'
       - 'apps/web/tests/e2e/reduced-motion-behaviour.spec.ts'
+      - 'apps/web/tests/e2e/e2e-auth-helper.spec.ts'
+      - 'apps/web/src/test/e2e-auth.ts'
       - 'apps/web/src/lib/env.ts'
       - '.github/workflows/e2e-prod-build.yml'
   pull_request:
@@ -92,6 +94,8 @@ on:
       - 'apps/web/src/lib/checkin/**'
       - 'apps/web/tests/e2e/guide-catalog-render.spec.ts'
       - 'apps/web/tests/e2e/reduced-motion-behaviour.spec.ts'
+      - 'apps/web/tests/e2e/e2e-auth-helper.spec.ts'
+      - 'apps/web/src/test/e2e-auth.ts'
       - 'apps/web/src/lib/env.ts'
       - '.github/workflows/e2e-prod-build.yml'
   workflow_dispatch: {}
@@ -224,11 +228,27 @@ jobs:
           echo "::error::le serveur de production n'a pas répondu sur /offline en 60 s"
           exit 1
 
+      # ⚠️ `--fail-on-flaky-tests` — ET C'EST LA LEÇON DU 2026-07-31.
+      #
+      # `playwright.config.ts:30` pose `retries: 2` en CI. Un test qui échoue
+      # puis réussit au second essai est classé « flaky » : le job sort en
+      # SUCCÈS, le résumé n'en dit rien, et seul quelqu'un qui ouvre les
+      # artefacts le voit. C'est exactement comme ça que la contamination du
+      # harnais d'authentification a failli passer — le CTA a rougi une fois
+      # ici, verdi au retry, et le job était vert.
+      #
+      # Le drapeau ne vit QUE dans ce job, volontairement : les quatre shards
+      # requis traînent des flakes connus (mode strict sur le calendrier et
+      # l'admin) qu'il faudrait traiter un par un avant de les rendre
+      # bloquants. Ici la surface est petite et neuve — donc « vert au
+      # deuxième essai » n'y a aucune excuse. L'étendre au reste est une
+      # décision à prendre après avoir fermé ces flakes, pas avant.
       - name: Gates service worker contre le build de production
         run: >-
           pnpm --filter @fxmily/web exec playwright test
           --project=chromium j8-pwa-offline.spec.ts
           --grep "Gate 4|Gate 5|Gate 6"
+          --fail-on-flaky-tests
 
       # LE PARCOURS MEMBRE, SUR L'ARTEFACT QU'ON DÉPLOIE.
       #
@@ -245,6 +265,13 @@ jobs:
       # compilation et vit dans `guide-surfaces.yml`. Ce qu'on ajoute ici est le
       # noyau — rendu du guide, CTA dynamique dans trois fuseaux, comportement
       # sous mouvement réduit — pas la couverture large.
+      #
+      # `e2e-auth-helper.spec.ts` s'y ajoute le 2026-07-31 : il prouve, contre
+      # le VRAI serveur, les deux faits dont dépendent les gardes de `loginAs`
+      # — qu'Auth.js refuse un login par une 302 vers `?error=` (jamais un
+      # 4xx), et que `APIResponse.url()` rend bien l'URL finale après
+      # redirection. Le test unitaire du helper modélise ces deux faits dans un
+      # faux serveur : il ne peut pas dire non si l'hypothèse est fausse.
       - name: Parcours membre contre le build de production
         if: ${{ !cancelled() }}
         env:
@@ -252,8 +279,10 @@ jobs:
         run: >-
           pnpm --filter @fxmily/web exec playwright test
           --project=chromium
+          e2e-auth-helper.spec.ts
           guide-catalog-render.spec.ts
           reduced-motion-behaviour.spec.ts
+          --fail-on-flaky-tests
 
       - name: Upload traces + captures (en cas d'échec)
         if: failure()

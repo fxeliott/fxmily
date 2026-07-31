@@ -47,7 +47,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from './fixtures';
+import { type BrowserContext, chromium, expect, test } from './fixtures';
 
 import { GUIDE_CATALOG, guideEntryIcon } from '@/app/guide/guide-catalog';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -302,8 +302,21 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
     { tz: 'Etc/GMT+7', offset: -7, slug: 'minus7' },
   ] as const;
 
+  /**
+   * Les contextes ouverts à la main sont fermés au teardown, PAS en fin de
+   * boucle. La nuance compte : une assertion qui lève saute tout ce qui suit,
+   * donc un `close()` en fin de corps laisserait ouvert exactement le contexte
+   * du fuseau FAUTIF — celui dont on a besoin, puisque Playwright vide traces
+   * et vidéos à la fermeture. Le tableau est vidé par `splice`, donc un test
+   * qui n'en ouvre aucun ne paie rien.
+   */
+  const openContexts: BrowserContext[] = [];
+  test.afterEach(async () => {
+    await Promise.all(openContexts.splice(0).map((c) => c.close().catch(() => undefined)));
+  });
+
   test('CTA: le lien suit le créneau du fuseau du MEMBRE, à toute heure', async ({
-    page,
+    browser,
     request,
   }) => {
     /** Créneau attendu, dérivé sans `Intl` ni code de production. */
@@ -325,7 +338,33 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
 
       const before = expectedHref(zone.offset);
 
-      await page.context().clearCookies();
+      // ⚠️ UN CONTEXTE NEUF PAR FUSEAU — ET C'EST LA CI QUI L'A EXIGÉ.
+      //
+      // La version précédente réutilisait la même page en se contentant de
+      // `clearCookies()`. Premier run de ce test contre un BUILD DE PRODUCTION
+      // en CI : le fuseau +1, attendu au soir, a reçu `/checkin/morning` —
+      // c'est-à-dire la réponse du fuseau +9 traité juste avant, lui bien au
+      // matin. Vert au retry, donc invisible sans lire les artefacts.
+      //
+      // Honnêteté sur la cause : elle n'est PAS prouvée. L'hypothèse qui colle
+      // est le Router Cache client de Next, qui survit à `clearCookies()` et
+      // resert un payload RSC déjà obtenu — un cache dont le comportement
+      // diffère justement entre `next dev` et un build de production. Je n'ai
+      // pas réussi à le reproduire en local (3 runs verts d'affilée), donc je
+      // ne l'affirme pas.
+      //
+      // Ce qui est fait ici ne devine pas la cause : il supprime la CLASSE. Un
+      // contexte neuf par fuseau, c'est zéro cookie, zéro cache mémoire, zéro
+      // état partagé entre deux membres qui doivent justement voir des choses
+      // différentes. Un test dont l'isolation dépend de la vitesse du runner
+      // n'est pas un test.
+      const context = await browser.newContext({
+        // `browser.newContext()` n'hérite PAS du `use.baseURL` du config.
+        baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+      });
+      openContexts.push(context);
+      const page = await context.newPage();
+
       await page.goto('/login');
       await loginAs(page, request, member.email, member.password);
       await page.goto('/guide');

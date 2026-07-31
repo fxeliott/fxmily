@@ -108,6 +108,12 @@ async function requestWithRetry<T>(label: string, fn: () => Promise<T>, attempts
       return await fn();
     } catch (err) {
       lastErr = err;
+      // Un contexte fermé ne se rouvrira pas : c'est Playwright qui a démonté
+      // le test (dépassement de budget, le plus souvent). Réessayer ajoute une
+      // seconde d'attente ET, pire, coiffe la vraie cause — « Test timeout of
+      // 60000ms exceeded » — d'un message d'échec réseau qui envoie chercher
+      // au mauvais endroit. Vu en CI le 2026-07-31.
+      if (/has been closed/.test(String(err))) break;
       if (attempt < attempts) {
         await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
       }
@@ -160,6 +166,21 @@ export async function loginAs(
   // One synthetic client IP for this whole login attempt — keeps the
   // per-IP login rate-limit bucket fresh (see `nextSyntheticCallerIp`).
   const callerIp = nextSyntheticCallerIp();
+
+  // Le pot portait-il DÉJÀ une session avant cet appel ?
+  //
+  // Toute la contamination tient à cette question. Si le pot est vide, aucune
+  // session étrangère ne peut en sortir : un login réussi y dépose la sienne,
+  // un login refusé n'y dépose rien et l'absence de cookie se voit tout de
+  // suite. Le contrôle d'identité — qui coûte un aller-retour — n'a donc rien
+  // à apprendre dans ce cas, et il n'est fait que lorsqu'il peut servir.
+  //
+  // Ce n'est pas une économie de confort : `smoke-tour-j6` a explosé son
+  // budget de 60 s en CI le 2026-07-31, et un aller-retour de plus sur un test
+  // déjà au bord n'a pas sa place quand il ne prouve rien.
+  const jarHadSession = (await request.storageState()).cookies.some((c) =>
+    isSessionCookieName(c.name),
+  );
 
   // Step 1 — fetch CSRF token (sets the csrf cookie in the request context).
   const csrfRes = await requestWithRetry('GET /api/auth/csrf', () =>
@@ -216,40 +237,46 @@ export async function loginAs(
   // « la valeur a-t-elle changé ? » ne voit rien non plus. Les deux étaient
   // des filets à trous, et c'est le runtime qui l'a dit, pas une relecture.
   //
-  // Ce contrôle passe AVANT celui de l'URL, et l'ordre est délibéré : l'URL
-  // finale appartient à l'APPLICATION (ce sont ses redirections qui la
-  // façonnent), pas à Auth.js. Une redirection légitime vers, disons,
-  // `/onboarding?error=profil_incomplet` ferait crier `REFUSED` sur un login
-  // parfaitement réussi. L'identité, elle, ne se laisse pas réécrire par une
-  // redirection ; elle tranche donc en premier, et le motif `error=` ne sert
-  // plus qu'à enrichir le message quand le login a VRAIMENT échoué.
-  const whoamiRes = await requestWithRetry('GET /api/auth/session', async () => {
-    const res = await request.get('/api/auth/session', {
-      headers: { 'x-forwarded-for': callerIp },
+  // Quand ce contrôle a lieu, il passe AVANT celui de l'URL, et l'ordre est
+  // délibéré : l'URL finale appartient à l'APPLICATION (ce sont ses
+  // redirections qui la façonnent), pas à Auth.js. Une redirection légitime
+  // vers, disons, `/onboarding?error=profil_incomplet` ferait crier `REFUSED`
+  // sur un login parfaitement réussi. L'identité, elle, ne se laisse pas
+  // réécrire par une redirection ; elle tranche donc en premier, et le motif
+  // `error=` ne sert plus qu'à enrichir le message.
+  if (jarHadSession) {
+    const whoami = await requestWithRetry('GET /api/auth/session', async () => {
+      const res = await request.get('/api/auth/session', {
+        headers: { 'x-forwarded-for': callerIp },
+      });
+      if (res.status() !== 200) {
+        // Dans le retry, pas après : un 502 passager ou une page d'erreur HTML
+        // rendrait `.json()` illisible (« Unexpected token '<' »), sans label
+        // ni seconde chance. C'est exactement la classe d'échec que ce fichier
+        // existe pour éliminer.
+        throw new Error(`/api/auth/session returned ${res.status()}`);
+      }
+      return (await res.json()) as { user?: { email?: string | null } } | null;
     });
-    if (res.status() !== 200) {
-      // Dans le retry, pas après : un 502 passager ou une page d'erreur HTML
-      // rendrait `.json()` illisible (« Unexpected token '<' »), sans label ni
-      // seconde chance. C'est exactement la classe d'échec que ce fichier
-      // existe pour éliminer.
-      throw new Error(`/api/auth/session returned ${res.status()}`);
-    }
-    return (await res.json()) as { user?: { email?: string | null } } | null;
-  });
 
-  const signedInAs = whoamiRes?.user?.email ?? null;
-  if (signedInAs?.toLowerCase() !== email.toLowerCase()) {
-    // Si Auth.js a nommé la cause dans l'URL (cas « personne n'était connecté »),
-    // on la reprend : « CredentialsSignin » est un diagnostic, « ce n'est pas
-    // la bonne personne » n'en est pas un.
-    const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? null;
-    throw new Error(
-      `credentials login for ${email} did NOT sign that member in: /api/auth/session reports ` +
-        `${signedInAs ?? '(nobody)'}` +
-        (code ? ` — Auth.js refused with ${code} (final URL: ${finalUrl})` : '') +
-        `. Refusing to hand back a session that belongs to someone else — ` +
-        `the calling test would silently assert against the wrong member.`,
-    );
+    const signedInAs = whoami?.user?.email ?? null;
+    if (signedInAs?.toLowerCase() !== email.toLowerCase()) {
+      const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? null;
+      throw new Error(
+        `credentials login for ${email} did NOT sign that member in: /api/auth/session reports ` +
+          `${signedInAs ?? '(nobody)'}` +
+          (code ? ` — Auth.js refused with ${code} (final URL: ${finalUrl})` : '') +
+          `. Refusing to hand back a session that belongs to someone else — ` +
+          `the calling test would silently assert against the wrong member.`,
+      );
+    }
+  } else if (/[?&]error=/.test(finalUrl)) {
+    // Pot vide : aucune session étrangère ne peut sortir d'ici, et le rebond
+    // « /login renvoie un connecté vers /dashboard » ne peut pas avoir lieu
+    // puisque personne n'est connecté. L'URL finale porte donc bien le refus,
+    // et c'est elle qui tranche.
+    const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? 'inconnu';
+    throw new Error(`credentials login REFUSED for ${email}: ${code} (final URL: ${finalUrl}).`);
   }
 
   // Step 4 — find the session cookie in the request context cookie jar and

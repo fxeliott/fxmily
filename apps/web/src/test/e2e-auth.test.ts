@@ -174,6 +174,7 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
     /** Qui le serveur croit que nous sommes — la vérité d'`/api/auth/session`. */
     let sessionOwner: string | null = null;
     let minted = 0;
+    const compteurs = { whoami: 0 };
 
     const setSessionCookie = (value: string) => {
       const existing = jar.find((c) => c.name === 'authjs.session-token');
@@ -198,6 +199,7 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
         // la moitié haute de ce fichier n'existe que pour empêcher ça.
         expect(opts?.headers?.['x-forwarded-for']).toMatch(/^10\.\d+\.\d+\.\d+$/);
         if (url.includes('/api/auth/session')) {
+          compteurs.whoami += 1;
           if (pannes.whoamiStatus) {
             return {
               status: () => pannes.whoamiStatus as number,
@@ -286,7 +288,14 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
       }),
     } as unknown as Page;
 
-    return { request, page, injected };
+    return {
+      request,
+      page,
+      injected,
+      get whoamiCalls() {
+        return compteurs.whoami;
+      },
+    };
   }
 
   it('modélise fidèlement le succès : le cookie fraîchement émis part au navigateur', async () => {
@@ -351,9 +360,11 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
   it('un /api/auth/session en erreur échoue avec un message lisible, pas un plantage JSON', async () => {
     // Un 502 passager, ou l'overlay HTML de `next dev`, rendait `.json()`
     // illisible : « Unexpected token '<' », sans label et sans retry. Ce test
-    // épingle le message et la reprise.
+    // épingle le message et la reprise. Il faut un premier login réussi pour
+    // que le pot porte une session — sans quoi le whoami n'est pas demandé.
     const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' }, { whoamiStatus: 502 });
 
+    await loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp');
     await expect(loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp')).rejects.toThrow(
       /GET \/api\/auth\/session failed after 3 attempts.*returned 502/s,
     );
@@ -368,16 +379,32 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
     expect(h.injected).toEqual([]);
   });
 
-  it('premier login refusé (pot vide) : le message REPREND le code d’Auth.js', async () => {
-    // Ici PERSONNE n'est connecté : l'URL finale porte `error=`. C'est
-    // l'identité qui refuse (« (nobody) »), mais le message doit citer le code
-    // d'Auth.js — sinon on ne saurait pas DISTINGUER un mot de passe faux d'un
-    // compte suspendu ou d'un serveur qui ne pose plus de cookie.
+  it('le whoami n’est PAS demandé quand le pot est vide — il ne prouverait rien et coûte un aller-retour', async () => {
+    // La conditionnalité n'est pas un raccourci de performance sans raison :
+    // sur un pot vide, aucune session étrangère ne peut sortir de l'appel. Ce
+    // test épingle la propriété, faute de quoi quelqu'un « simplifiera » en
+    // rendant le whoami systématique et re-fera exploser le budget d'un test
+    // déjà au bord (`smoke-tour-j6`, 2026-07-31).
+    const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' });
+
+    await loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp');
+    expect(h.whoamiCalls, 'premier login : le pot était vide').toBe(0);
+
+    await loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp');
+    expect(h.whoamiCalls, 'second login : une session était en place, il FAUT vérifier').toBe(1);
+  });
+
+  it('premier login refusé (pot vide) : c’est l’URL qui tranche, et le message nomme le code d’Auth.js', async () => {
+    // Pot vide : aucun rebond `/login → /dashboard` n'est possible puisque
+    // personne n'est connecté, donc l'URL finale porte bien le refus. Le
+    // message doit citer le code — sinon on ne DISTINGUE pas un mot de passe
+    // faux d'un compte suspendu ou d'un serveur qui ne pose plus de cookie.
     const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' });
 
     await expect(loginAs(h.page, h.request, 'a@fxmily.local', 'mauvais-mdp')).rejects.toThrow(
-      /did NOT sign that member in.*\(nobody\).*Auth\.js refused with CredentialsSignin/s,
+      /REFUSED for a@fxmily\.local: CredentialsSignin/,
     );
     expect(h.injected).toEqual([]);
+    expect(h.whoamiCalls, 'inutile de demander l’identité quand le pot est vide').toBe(0);
   });
 });

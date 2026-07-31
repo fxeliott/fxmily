@@ -369,10 +369,32 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
       await expect(cta.first()).toHaveText(expectedLabel);
       await expect(cta.last()).toHaveText(expectedLabel);
 
-      // Et le créneau OPPOSÉ n'est proposé nulle part dans la page : sinon un
-      // rendu qui peindrait les deux liens satisferait les assertions ci-dessus.
-      const opposite = href === '/checkin/morning' ? '/checkin/evening' : '/checkin/morning';
-      await expect(page.getByRole('main').locator(`a[href="${opposite}"]`)).toHaveCount(0);
+      // ⚠️ ICI VIVAIT UNE ASSERTION MAL CADRÉE, ET ELLE A FINI PAR MENTIR.
+      //
+      // Elle exigeait que le créneau OPPOSÉ n'apparaisse NULLE PART dans
+      // `<main>`. Verte au moment où je l'ai écrite, rouge quelques heures plus
+      // tard — et pour une bonne raison, découverte en la mesurant : la page du
+      // guide affiche aussi le bandeau de GUIDAGE QUOTIDIEN (« Maintenant :
+      // Check-in du matin »), qui répond à une tout autre question. Le CTA dit
+      // « quel créneau correspond au moment que tu vis » ; le guidage dit
+      // « quelle est ta prochaine action non faite ». Pour un membre à 16 h
+      // locales qui n'a pas fait son check-in du matin, les deux réponses
+      // DIVERGENT légitimement, et le lien du matin est donc bien là.
+      //
+      // Ce que l'assertion voulait attraper — « un rendu qui peindrait les deux
+      // liens » — est déjà couvert plus haut, et mieux : les liens de CTA sont
+      // exactement 2, ils portent le même href, et cet href est celui attendu.
+      // Un site resté codé en dur sur l'autre créneau y rougit. Retirer une
+      // assertion redondante dont le périmètre était faux n'affaiblit rien ;
+      // la garder aurait rendu ce test rouge une partie de la journée, pour un
+      // comportement correct — c'est-à-dire l'aurait rendu ignorable.
+      //
+      // 🟠 CE QUE ÇA RÉVÈLE, ET QUI N'EST PAS UNE QUESTION DE TEST : sur le même
+      // écran, le membre lit « Faire mon check-in du soir » et « Maintenant :
+      // Check-in du matin ». Les deux sont défendables séparément, ensemble ils
+      // se contredisent aux yeux du membre. Quelle source doit gouverner le CTA
+      // du guide — l'heure, ou le plan du jour ? C'est un arbitrage produit,
+      // remonté à Eliot plutôt que tranché dans un test.
 
       observed.push(href);
     }

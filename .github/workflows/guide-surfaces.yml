@@ -196,10 +196,20 @@ jobs:
       # lettres « POURQUOI IL NE TOURNE PAS SUR LES PR » ; l'étape, elle, ne
       # portait que `!cancelled()`, donc elle tournait sur toute PR touchant
       # `apps/web/src/app/guide/**` (le filtre de `pull_request` ci-dessus).
-      # Pire que contradictoire : ces fichiers-là sont EXACTEMENT ceux qui
-      # composent l'empreinte de la route `/guide`, si bien que le seul type de
-      # PR qui armait le rapport était celui qui garantissait son échec — avalé
-      # en silence par `continue-on-error`. Le rapport appartient à la nuit.
+      # Pire que contradictoire : le premier chemin déclencheur ci-dessus
+      # (`apps/web/src/app/guide/**`) recouvre le dossier propre de la route
+      # `/guide`, c'est-à-dire l'empreinte que ce rapport compare. Une PR qui
+      # touchait le guide armait donc le rapport ET garantissait son échec —
+      # avalé en silence par `continue-on-error`.
+      #
+      # (Une première rédaction écrivait « ces fichiers-là sont EXACTEMENT ceux
+      # qui composent l'empreinte » : faux dans les deux sens. Trois des quatre
+      # chemins déclencheurs n'entrent pas dans l'empreinte, et l'empreinte
+      # couvre des fichiers du dossier `/guide` que le filtre n'énumère pas.
+      # Une justification trop large est aussi fragile qu'une justification
+      # absente : elle tombe au premier qui la vérifie.)
+      #
+      # Le rapport appartient à la nuit.
       - name: Report stale guide thumbnails (informational)
         if: ${{ !cancelled() && github.event_name != 'pull_request' }}
         continue-on-error: true

@@ -25,20 +25,34 @@ import path from 'node:path';
  * relecteur suivant — moi compris — à côté du trou en le lui décrivant comme
  * couvert. D'où cette rectification, avant tout autre travail sur le sujet.
  *
- * CE QUE LE CHAMP EST RÉELLEMENT, aujourd'hui : une trace de PROVENANCE. Il
- * enregistre l'état des sources de la route à l'instant où sa capture a été
- * prise, ce qui permet à un humain — ou à une future porte — de dire « cette
- * vignette date d'avant telle refonte ». Rien de plus — et pour être exact
- * jusqu'au bout : AUCUNE assertion ne lit ce champ, pas même pour vérifier qu'il
- * est présent. Le manifeste est simplement typé `as GuideShotManifest`.
+ * ⚠️ ET CETTE RECTIFICATION-LÀ A VIEILLI EN UNE JOURNÉE. Tout ce qui précède
+ * décrit l'état du MATIN du 2026-07-30 ; il est conservé parce que l'erreur
+ * initiale mérite d'être lisible, mais il ne décrit plus le dépôt. Le paragraphe
+ * qui suivait affirmait encore, quatre fois, que personne ne lit `sourceHash`
+ * (« n'est LU par personne », « AUCUNE assertion ne lit ce champ », « la
+ * péremption n'est rattrapée par aucun automatisme »). C'EST FAUX DEPUIS LE SOIR
+ * MÊME — et c'est une revue qui a dû me le dire, dans le fichier dont le seul
+ * objet est de ne plus mentir sur ce sujet.
  *
- * POURQUOI PAS DE PORTE BLOQUANTE, décision mesurée et maintenue :
+ * CE QUE LE CHAMP EST, AUJOURD'HUI :
+ *  - `guide-shots-staleness.test.ts` le RELIT et le recalcule chaque nuit
+ *    (`guide-surfaces.yml`, `GUIDE_SHOTS_STALENESS=1`), et signale les vignettes
+ *    prises avant une refonte de leur route ;
+ *  - `guide-shots.test.ts` garde sa FORME à chaque PR (16 hex, ou `null` si et
+ *    seulement si la route n'a pas de dossier propre), pour que le champ ne
+ *    puisse pas se vider en silence et rendre le rapport vert par vacuité.
+ *
+ * Le mot d'ordre reste le même, et il vaut pour ce paragraphe autant que pour le
+ * précédent : quiconque « nettoie » ce champ casse ces deux gardes.
+ *
+ * POURQUOI TOUJOURS PAS DE PORTE BLOQUANTE, décision mesurée et maintenue :
  * `dashboard/page.tsx` totalise 13 commits sur 30 jours, l'ensemble des routes
  * plus de 130. Une assertion de péremption serait rouge une PR sur deux et
  * exigerait à chaque fois une régénération Playwright complète pour un commit
  * qui n'a parfois changé qu'un commentaire. Un garde qu'on apprend à contourner
- * ne garde rien. La conséquence est assumée ET ÉCRITE : la péremption d'une
- * vignette n'est, à ce jour, rattrapée par aucun automatisme.
+ * ne garde rien. Le rapport nocturne INFORME donc, il ne bloque pas — l'écart
+ * avec l'état d'avant n'est pas « bloquant vs non bloquant », c'est « détecté vs
+ * jamais détecté ».
  *
  * Limite supplémentaire du hash lui-même : il ne couvre que les fichiers du
  * dossier de la route. Une refonte d'un composant partagé (`components/ui/…`,
@@ -140,11 +154,18 @@ export function routeSourceHash(href: string): string | null {
         /\.(tsx|ts|css)$/.test(entry.name) &&
         // ⚠️ LES FICHIERS DE TEST SORTENT DE L'EMPREINTE. Un test co-localisé ne
         // peut pas déplacer un pixel de l'écran ; l'y compter ne produit que du
-        // faux positif. Mesuré le 2026-07-30 : ~9 des 24 routes du catalogue
-        // hébergent au moins un test dans leur dossier propre (`/checkin` en a
-        // deux, `src/app/guide/` en a trois), donc une PR ne touchant qu'un
-        // `*.test.ts` déclarait la vignette périmée et réclamait une
-        // régénération Playwright + base de données pour rien.
+        // faux positif. Une PR ne touchant qu'un `*.test.ts` déclarait la
+        // vignette périmée et réclamait une régénération Playwright + base de
+        // données pour rien.
+        //
+        // Mesuré le 2026-07-31 : **6 des 24 routes** du catalogue hébergent au
+        // moins un test dans leur dossier propre, pour **9 fichiers** de test au
+        // total. La première rédaction annonçait « ~9 des 24 routes » : j'avais
+        // repris le chiffre d'un relecteur sans le mesurer, et confondu le
+        // nombre de FICHIERS avec le nombre de ROUTES — 50 % de surestimation,
+        // sur la seule justification chiffrée de cet élargissement. Le dépôt
+        // porte déjà le canon « une mesure empruntée n'est pas une preuve » ;
+        // il vaut aussi quand le chiffre arrange l'argument.
         //
         // Le mémo qui justifie le caractère non bloquant du rapport chiffrait le
         // bruit à « 1 capture sur 24, pour un commentaire » — il ignorait cette

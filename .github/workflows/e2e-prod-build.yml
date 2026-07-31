@@ -1,4 +1,4 @@
-name: E2E service worker (build de production)
+name: E2E build de production (service worker + parcours membre)
 
 # POURQUOI CE WORKFLOW EXISTE — un trou nommé par le jalon, jamais couvert
 # ------------------------------------------------------------------------
@@ -22,25 +22,46 @@ name: E2E service worker (build de production)
 #
 # CE QU'IL LANCE, ET CE QU'IL NE LANCE PAS
 # ----------------------------------------
-# Uniquement les trois gates « démarrage à froid » : elles vivent sur `/offline`
-# et sur l'API `caches`, sans session ni donnée membre. Les gates 1 et 3 (bandeau
-# d'installation iOS, honnêteté de /offline) restent dans `e2e-mobile.yml` sur
-# WebKit, où elles ont leur sens — les rejouer ici n'ajouterait rien et
-# obligerait à authentifier un membre contre un serveur volontairement mal
-# configuré pour l'auth (voir ci-dessous).
+# Deux étapes. D'abord les trois gates « démarrage à froid » : elles vivent sur
+# `/offline` et sur l'API `caches`, sans session ni donnée membre. Puis le noyau
+# du parcours MEMBRE (rendu du guide, CTA dynamique, mouvement réduit), qui ouvre
+# une vraie session — voir l'encadré du 2026-07-31 plus bas.
 #
-# LE COMPROMIS ASSUMÉ SUR `AUTH_URL`
-# ----------------------------------
-# `next start` impose `NODE_ENV=production`, et `apps/web/src/lib/env.ts:66`
-# refuse alors un `AUTH_URL` non-HTTPS — un durcissement JUSTE qu'on ne contourne
-# pas. On déclare donc `https://localhost:3000` pour satisfaire le schéma, tandis
-# que le serveur écoute en clair sur `http://localhost:3000`. Les trois gates
-# retenues n'ouvrent aucune session : l'écart est inoffensif POUR ELLES, et c'est
-# exactement pourquoi elles sont les seules ici. Si un jour on veut y ajouter un
-# parcours authentifié, il faudra un vrai TLS local, pas élargir ce compromis.
-# Même logique pour les tokens de lot ci-dessous : en production le schéma les
-# EXIGE (sans eux les routes /api/admin/* répondent 503 en silence), donc on les
-# fournit en valeurs manifestement factices plutôt que d'affaiblir le schéma.
+# Ce qui reste AILLEURS, et pourquoi : les gates 1 et 3 (bandeau d'installation
+# iOS, honnêteté de /offline) vivent dans `e2e-mobile.yml` sur WebKit, seul
+# moteur où elles ont un sens ; le balayage des 24 surfaces vit dans
+# `guide-surfaces.yml`, parce qu'il coûte plusieurs minutes de compilation et
+# qu'il relève de la couverture large, pas du noyau.
+#
+# ⚠️ ET DEPUIS LE 2026-07-31, LE PARCOURS MEMBRE TOURNE ICI AUSSI.
+# ------------------------------------------------------------------
+# L'en-tête disait, jusqu'à cette date : « Le compromis assumé sur AUTH_URL —
+# on déclare `https://localhost:3000` pour satisfaire le schéma tandis que le
+# serveur écoute en clair ; les trois gates retenues n'ouvrent aucune session,
+# et c'est exactement pourquoi elles sont les seules ici. Si un jour on veut y
+# ajouter un parcours authentifié, il faudra un vrai TLS local, pas élargir ce
+# compromis. »
+#
+# Le constat qui a forcé la suite : la SEULE suite qui voyait des assets hachés
+# de production ne pouvait ouvrir aucune session, donc n'avait jamais affiché un
+# seul écran membre. Le jalon J8 exigeait de tester « en build prod locale » ;
+# on ne le faisait que pour la moitié la plus facile.
+#
+# Un relais TLS local a été écrit, puis JETÉ : Chromium refusait le certificat
+# auto-signé (ERR_SSL_PROTOCOL_ERROR, et EPROTO côté contexte API) là où un
+# client Node l'acceptait — de la machinerie qui aurait été fragile pour cacher
+# une incohérence plutôt que la corriger. La vraie cause n'était pas l'absence
+# de TLS : c'était qu'`AUTH_URL` MENTAIT sur ce que le serveur sert. `env.ts`
+# autorise donc désormais `http` sur la BOUCLE LOCALE uniquement
+# (`isLoopbackUrl`, comparaison de HOSTNAME — `http://localhost.attaquant.fr`
+# reste refusé, et c'est testé). `AUTH_URL` dit alors la vérité, les cookies de
+# session sont cohérents avec elle, et le parcours membre s'exécute sur
+# l'artefact qu'on déploie vraiment.
+#
+# Les tokens de lot ci-dessous suivent la même logique qu'avant : en production
+# le schéma les EXIGE (sans eux les routes /api/admin/* répondent 503 en
+# silence), donc on les fournit en valeurs manifestement factices plutôt que
+# d'affaiblir le schéma.
 
 on:
   push:
@@ -49,6 +70,14 @@ on:
       - 'apps/web/public/sw.js'
       - 'apps/web/src/app/offline/**'
       - 'apps/web/tests/e2e/j8-pwa-offline.spec.ts'
+      # Ajoutés le 2026-07-31 avec l'étape « parcours membre » : sans eux, une
+      # retouche du guide ou du CTA ne serait JAMAIS confrontée à un build de
+      # production, et le job garderait un nom qui promet plus qu'il ne couvre.
+      - 'apps/web/src/app/guide/**'
+      - 'apps/web/src/lib/checkin/**'
+      - 'apps/web/tests/e2e/guide-catalog-render.spec.ts'
+      - 'apps/web/tests/e2e/reduced-motion-behaviour.spec.ts'
+      - 'apps/web/src/lib/env.ts'
       - '.github/workflows/e2e-prod-build.yml'
   pull_request:
     branches: [main]
@@ -56,6 +85,14 @@ on:
       - 'apps/web/public/sw.js'
       - 'apps/web/src/app/offline/**'
       - 'apps/web/tests/e2e/j8-pwa-offline.spec.ts'
+      # Ajoutés le 2026-07-31 avec l'étape « parcours membre » : sans eux, une
+      # retouche du guide ou du CTA ne serait JAMAIS confrontée à un build de
+      # production, et le job garderait un nom qui promet plus qu'il ne couvre.
+      - 'apps/web/src/app/guide/**'
+      - 'apps/web/src/lib/checkin/**'
+      - 'apps/web/tests/e2e/guide-catalog-render.spec.ts'
+      - 'apps/web/tests/e2e/reduced-motion-behaviour.spec.ts'
+      - 'apps/web/src/lib/env.ts'
       - '.github/workflows/e2e-prod-build.yml'
   workflow_dispatch: {}
 
@@ -68,7 +105,7 @@ permissions:
 
 jobs:
   sw-prod:
-    name: Le service worker tient sur un build de production
+    name: Le service worker ET le parcours membre tiennent sur un build de production
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -92,9 +129,11 @@ jobs:
       HUSKY: 0
       CI: 'true'
       DATABASE_URL: postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public
-      # HTTPS : imposé par le refine de production (cf. en-tête). Le serveur, lui,
-      # écoute en clair — aucune des gates retenues n'ouvre de session.
-      AUTH_URL: https://localhost:3000
+      # `http` et non plus `https` : le serveur écoute EN CLAIR sur ce port, et
+      # `isLoopbackUrl` (env.ts) autorise désormais la boucle locale. La valeur
+      # décrit donc ce qui est réellement servi — condition sine qua non pour
+      # qu'Auth.js pose des cookies que le navigateur renvoie.
+      AUTH_URL: http://localhost:3000
       AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
       AUTH_TRUST_HOST: 'true'
       # Requis par le schéma dès que NODE_ENV=production. Valeurs ostensiblement
@@ -190,6 +229,31 @@ jobs:
           pnpm --filter @fxmily/web exec playwright test
           --project=chromium j8-pwa-offline.spec.ts
           --grep "Gate 4|Gate 5|Gate 6"
+
+      # LE PARCOURS MEMBRE, SUR L'ARTEFACT QU'ON DÉPLOIE.
+      #
+      # Ces trois specs ouvrent une vraie session et rendent de vrais écrans. Ils
+      # tournaient déjà dans les shards requis — mais contre `pnpm dev`, donc sans
+      # jamais rencontrer un chunk haché, un CSS immuable, ni le rendu de
+      # production de React. C'est très exactement l'écart que le jalon désignait.
+      #
+      # `!cancelled()` et non `success()` : un échec des gates service worker ne
+      # doit pas masquer le résultat de celles-ci, sans quoi on corrigerait à
+      # l'aveugle (même raison que dans `guide-surfaces.yml`).
+      #
+      # Le balayage des 24 surfaces N'EST PAS ici : il coûte plusieurs minutes de
+      # compilation et vit dans `guide-surfaces.yml`. Ce qu'on ajoute ici est le
+      # noyau — rendu du guide, CTA dynamique dans trois fuseaux, comportement
+      # sous mouvement réduit — pas la couverture large.
+      - name: Parcours membre contre le build de production
+        if: ${{ !cancelled() }}
+        env:
+          GUIDE_WALK_REDUCED_MOTION: '0'
+        run: >-
+          pnpm --filter @fxmily/web exec playwright test
+          --project=chromium
+          guide-catalog-render.spec.ts
+          reduced-motion-behaviour.spec.ts
 
       - name: Upload traces + captures (en cas d'échec)
         if: failure()

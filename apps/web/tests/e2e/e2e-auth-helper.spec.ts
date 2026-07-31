@@ -1,8 +1,9 @@
 /**
  * LE HARNAIS D'AUTHENTIFICATION EST GARDÉ COMME DU CODE DE PRODUCTION.
  *
- * `loginAs` est appelé **147 fois dans 62 specs**, et **44 tests** enchaînent
- * de 2 à 8 logins dans un seul bloc — souvent en basculant admin ↔ membre.
+ * `loginAs` est appelé **151 fois dans 63 des 76 specs** (mesuré le
+ * 2026-07-31, ce fichier compris), et **44 tests** enchaînent de 2 à 8 logins
+ * dans un seul bloc — souvent en basculant admin ↔ membre.
  * S'il se trompe de personne, il ne casse pas : il rend des verdicts faux,
  * dans les deux sens. C'est le pire défaut possible dans une suite de tests,
  * parce qu'il se déguise en succès.

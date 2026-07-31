@@ -20,7 +20,8 @@ import { loginAs, nextSyntheticCallerIp } from './e2e-auth';
  * `loginIpLimiter` (burst 10, refill 1 token / 60 s) keyed by
  * `callerIdTrusted()`. Under `next dev` in CI there is no Caddy and no
  * `x-forwarded-for` / `x-real-ip`, so `callerIdTrusted()` returns the
- * literal key `'unknown'` for EVERY request. The whole 46-spec suite then
+ * literal key `'unknown'` for EVERY request. The whole suite (76 specs,
+ * 151 `loginAs` calls — re-measured 2026-07-31) then
  * shares one bucket: after ~10 cumulative logins it is drained, refill is
  * far too slow (1/min) to recover between specs, and every later login
  * gets `authorize() === null` → `CredentialsSignin` → no session cookie.
@@ -85,15 +86,17 @@ describe('e2e loginAs rate-limit interaction (deterministic root-cause repro)', 
     expect(lim.consume(SHARED_KEY, now + 3_000).allowed).toBe(false);
   });
 
-  // Why this matters: this is the executable proof of the fix. Simulate a
-  // suite far larger than the real one (60 logins ≫ the ~15 loginAs call
-  // sites + retries) — with one synthetic IP per login, NONE are ever
-  // rejected, because each lands in its own fresh burst-10 bucket.
-  it('FIXED per-call IP: 60 sequential logins from distinct synthetic IPs never trip', () => {
+  // Why this matters: this is the executable proof of the fix. The figure is
+  // pinned to the REAL suite, not to a round number: 151 `loginAs` calls
+  // (re-measured 2026-07-31) × 3 attempts with Playwright's CI retries = 453,
+  // so 500 dominates it. The previous version simulated 60 and called that
+  // "far larger than the real one" — it had been true when the suite had 15
+  // call sites, and had quietly become false.
+  it('FIXED per-call IP: 500 sequential logins from distinct synthetic IPs never trip', () => {
     const lim = freshLoginIpLimiter();
     const now = 2_000_000; // frozen clock — prove it works with zero refill help
 
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 500; i++) {
       const ip = nextSyntheticCallerIp();
       expect(lim.consume(ip, now).allowed).toBe(true);
     }
@@ -152,7 +155,10 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
   /** URL finale d'un refus quand PERSONNE n'est connecté (mesurée). */
   const FAILURE_URL = `${ORIGIN}/login?error=CredentialsSignin&code=credentials`;
 
-  function makeHarness(accounts: Record<string, string>) {
+  function makeHarness(
+    accounts: Record<string, string>,
+    pannes: { whoamiStatus?: number; extraSessionCookie?: boolean } = {},
+  ) {
     /** Le pot à cookies du fixture `request`, partagé entre les appels. */
     const jar: {
       name: string;
@@ -185,10 +191,31 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
     };
 
     const request = {
-      get: async (url: string) => {
+      get: async (url: string, opts?: { headers?: Record<string, string> }) => {
+        // Les GET sont contraints comme le POST. `callerIdTrusted()` tourne sur
+        // CHAQUE requête : une régression qui laisserait tomber l'IP synthétique
+        // sur le CSRF ou sur le whoami ré-épuiserait le seau partagé, et toute
+        // la moitié haute de ce fichier n'existe que pour empêcher ça.
+        expect(opts?.headers?.['x-forwarded-for']).toMatch(/^10\.\d+\.\d+\.\d+$/);
         if (url.includes('/api/auth/session')) {
+          if (pannes.whoamiStatus) {
+            return {
+              status: () => pannes.whoamiStatus as number,
+              // Un serveur en erreur ne rend pas du JSON : si le helper
+              // appelait `.json()` sans regarder le statut, il planterait ici
+              // exactement comme en vrai.
+              json: async () => {
+                throw new SyntaxError('Unexpected token \'<\', "<!DOCTYPE "... is not valid JSON');
+              },
+            };
+          }
           return {
             status: () => 200,
+            // Le serveur rend l'e-mail TEL QU'IL EST STOCKÉ, pas tel qu'il a
+            // été demandé : `sessionOwner` est la forme normalisée. C'est ce
+            // qui donne du mordant au test de casse — sans ça, la maquette
+            // renverrait l'entrée du helper et le test ne prouverait que
+            // « les deux côtés appellent toLowerCase ».
             json: async () => (sessionOwner ? { user: { email: sessionOwner } } : {}),
           };
         }
@@ -221,6 +248,17 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
           minted += 1;
           sessionOwner = normalised;
           setSessionCookie(`JWE-${normalised}-${minted}`);
+          if (pannes.extraSessionCookie && !jar.some((c) => c.name.startsWith('__Secure-'))) {
+            jar.push({
+              name: '__Secure-authjs.session-token',
+              value: `JWE-autre-origine-${minted}`,
+              domain: 'localhost',
+              path: '/',
+              httpOnly: true,
+              secure: true,
+              sameSite: 'Lax',
+            });
+          }
           return { status: () => 200, text: async () => '', url: () => `${ORIGIN}/dashboard` };
         }
 
@@ -302,23 +340,43 @@ describe('loginAs — un login refusé ne doit JAMAIS rendre la session du login
   });
 
   it('la casse de l’e-mail ne fabrique pas un faux refus', async () => {
-    // Le serveur normalise volontiers les e-mails ; comparer sans replier la
-    // casse ferait rejeter un login parfaitement valide.
+    // On demande `A@Fxmily.Local` ; le serveur répond `a@fxmily.local`. Les
+    // deux formes DIFFÈRENT — c'est ce qui empêche ce test d'être un miroir :
+    // une comparaison stricte le ferait rougir.
     const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' });
     const r = await loginAs(h.page, h.request, 'A@Fxmily.Local', 'bon-mdp');
     expect(r.sessionToken).toBe('JWE-a@fxmily.local-1');
   });
 
-  it('premier login refusé (pot vide) : le message nomme le refus d’Auth.js, pas une identité manquante', async () => {
-    // Ici PERSONNE n'est connecté : l'URL finale porte `error=`, et c'est le
-    // garde le plus précoce qui parle. Ce test est ce qui empêche ce garde
-    // d'être supprimé « puisque l'identité suffit » — il échoue plus tôt et
-    // nomme le code d'Auth.js, ce qu'un « ce n'est pas la bonne personne »
-    // ne dirait pas.
+  it('un /api/auth/session en erreur échoue avec un message lisible, pas un plantage JSON', async () => {
+    // Un 502 passager, ou l'overlay HTML de `next dev`, rendait `.json()`
+    // illisible : « Unexpected token '<' », sans label et sans retry. Ce test
+    // épingle le message et la reprise.
+    const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' }, { whoamiStatus: 502 });
+
+    await expect(loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp')).rejects.toThrow(
+      /GET \/api\/auth\/session failed after 3 attempts.*returned 502/s,
+    );
+  });
+
+  it('deux cookies de session dans le pot : on refuse de deviner lequel injecter', async () => {
+    const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' }, { extraSessionCookie: true });
+
+    await expect(loginAs(h.page, h.request, 'a@fxmily.local', 'bon-mdp')).rejects.toThrow(
+      /ambiguous session state/,
+    );
+    expect(h.injected).toEqual([]);
+  });
+
+  it('premier login refusé (pot vide) : le message REPREND le code d’Auth.js', async () => {
+    // Ici PERSONNE n'est connecté : l'URL finale porte `error=`. C'est
+    // l'identité qui refuse (« (nobody) »), mais le message doit citer le code
+    // d'Auth.js — sinon on ne saurait pas DISTINGUER un mot de passe faux d'un
+    // compte suspendu ou d'un serveur qui ne pose plus de cookie.
     const h = makeHarness({ 'a@fxmily.local': 'bon-mdp' });
 
     await expect(loginAs(h.page, h.request, 'a@fxmily.local', 'mauvais-mdp')).rejects.toThrow(
-      /REFUSED for a@fxmily\.local: CredentialsSignin/,
+      /did NOT sign that member in.*\(nobody\).*Auth\.js refused with CredentialsSignin/s,
     );
     expect(h.injected).toEqual([]);
   });

@@ -27,15 +27,14 @@ const SESSION_COOKIE_NAMES = [
 ];
 
 /**
- * UN SEUL prédicat, utilisé partout où l'on cherche le cookie de session.
+ * Le prédicat « ce cookie est-il un cookie de session ? », nommé une fois.
  *
- * Il en existait deux, écrits différemment (`includes` ici, `some(...)` là).
- * Le risque n'était pas cosmétique : la prochaine main qui ajoute le support
- * des cookies chunkés (`authjs.session-token.0` / `.1`, émis par `@auth/core`
- * au-delà de ~4 ko) le ferait à l'endroit évident — la lecture d'après — et
- * pas à la lecture d'avant, qui rendrait alors `null`. Le garde anti-recyclage
- * se **désarmerait de lui-même**, en silence. Un seul point de vérité rend ce
- * scénario impossible.
+ * ⚠️ Il ne reconnaît PAS les cookies chunkés (`authjs.session-token.0` / `.1`,
+ * émis par `@auth/core` au-delà de ~4 ko). Aujourd'hui ce n'est pas un trou
+ * silencieux : un JWE chunké ferait échouer bruyamment sur « no session cookie
+ * found ». Si le jour vient d'ajouter ce support, il doit l'être ICI — c'est
+ * la seule raison pour laquelle ce prédicat est une fonction plutôt qu'un
+ * `includes` en ligne.
  */
 function isSessionCookieName(name: string): boolean {
   return SESSION_COOKIE_NAMES.includes(name);
@@ -199,30 +198,9 @@ export async function loginAs(
   // Sondé contre un build de production local : identifiants faux, pot vide ⇒
   // `302 → /login?error=CredentialsSignin&code=credentials`, que Playwright
   // suit jusqu'à un 200. Le contrôle `>= 400` ci-dessus ne voit donc RIEN.
-  //
-  // Ce garde-ci n'est PAS le filet principal — il ne couvre que le cas où
-  // aucune session n'est déjà en place (voir l'étape 3, qui couvre l'autre).
-  // Il est gardé parce qu'il échoue plus tôt et nomme le code d'erreur
-  // d'Auth.js, ce qui rend le diagnostic immédiat au lieu de renvoyer à un
-  // « ce n'est pas la bonne personne » plus abstrait.
+  // L'URL finale est retenue ici pour ENRICHIR le message d'échec plus bas ;
+  // elle ne décide de rien par elle-même (voir l'étape 3).
   const finalUrl = callbackRes.url();
-  if (/[?&]error=/.test(finalUrl)) {
-    const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? 'inconnu';
-    throw new Error(
-      `credentials login REFUSED for ${email}: ${code} (final URL: ${finalUrl}). ` +
-        `Le helper s'arrête ici volontairement : poursuivre injecterait la session du login précédent.`,
-    );
-  }
-
-  // Step 4 — find the session cookie in the request context cookie jar and
-  // forward it to the browser context Playwright will navigate with.
-  const cookies = await request.storageState();
-  const sessionCookie = cookies.cookies.find((c) => isSessionCookieName(c.name));
-  if (!sessionCookie) {
-    throw new Error(
-      `no session cookie found after credentials callback (got: ${cookies.cookies.map((c) => c.name).join(', ')})`,
-    );
-  }
 
   // ⚠️ LE SEUL CONTRÔLE QUI TIENNE : DEMANDER AU SERVEUR QUI IL CROIT QUE
   // NOUS SOMMES. Le reste — statut, URL, valeur du cookie — a été mesuré
@@ -231,26 +209,73 @@ export async function loginAs(
   // Ce qui se passe RÉELLEMENT quand le pot porte déjà une session valide et
   // qu'on tente un second login avec de mauvais identifiants (mesuré contre un
   // build de production, `tests/e2e/e2e-auth-helper.spec.ts` en garde la
-  // trace) : Auth.js ne tente même pas l'authentification. Il redirige vers le
-  // `callbackUrl` — donc **`/dashboard`, sans `error=`** — et fait tourner le
-  // JWT au passage, donc **la valeur du cookie CHANGE**. Un contrôle sur
-  // l'URL ne voit rien ; un contrôle sur « la valeur a-t-elle changé ? » ne
-  // voit rien non plus. Les deux étaient des filets à trous, et c'est le
-  // runtime qui l'a dit, pas une relecture.
+  // trace) : Auth.js signale bien le refus, mais `/login` renvoie un membre
+  // déjà connecté vers `/dashboard` — l'URL FINALE ne porte donc **aucune**
+  // erreur — et la requête suivie fait tourner le JWT, donc **la valeur du
+  // cookie CHANGE**. Un contrôle sur l'URL ne voit rien ; un contrôle sur
+  // « la valeur a-t-elle changé ? » ne voit rien non plus. Les deux étaient
+  // des filets à trous, et c'est le runtime qui l'a dit, pas une relecture.
   //
-  // `/api/auth/session` répond, lui, sans ambiguïté : c'était toujours le
-  // membre PRÉCÉDENT. La question juste n'est donc pas « une session a-t-elle
-  // été émise ? » mais « la session est-elle celle de la personne demandée ? ».
-  const whoamiRes = await requestWithRetry('GET /api/auth/session', () =>
-    request.get('/api/auth/session', { headers: { 'x-forwarded-for': callerIp } }),
-  );
-  const whoami = (await whoamiRes.json()) as { user?: { email?: string | null } } | null;
-  const signedInAs = whoami?.user?.email ?? null;
+  // Ce contrôle passe AVANT celui de l'URL, et l'ordre est délibéré : l'URL
+  // finale appartient à l'APPLICATION (ce sont ses redirections qui la
+  // façonnent), pas à Auth.js. Une redirection légitime vers, disons,
+  // `/onboarding?error=profil_incomplet` ferait crier `REFUSED` sur un login
+  // parfaitement réussi. L'identité, elle, ne se laisse pas réécrire par une
+  // redirection ; elle tranche donc en premier, et le motif `error=` ne sert
+  // plus qu'à enrichir le message quand le login a VRAIMENT échoué.
+  const whoamiRes = await requestWithRetry('GET /api/auth/session', async () => {
+    const res = await request.get('/api/auth/session', {
+      headers: { 'x-forwarded-for': callerIp },
+    });
+    if (res.status() !== 200) {
+      // Dans le retry, pas après : un 502 passager ou une page d'erreur HTML
+      // rendrait `.json()` illisible (« Unexpected token '<' »), sans label ni
+      // seconde chance. C'est exactement la classe d'échec que ce fichier
+      // existe pour éliminer.
+      throw new Error(`/api/auth/session returned ${res.status()}`);
+    }
+    return (await res.json()) as { user?: { email?: string | null } } | null;
+  });
+
+  const signedInAs = whoamiRes?.user?.email ?? null;
   if (signedInAs?.toLowerCase() !== email.toLowerCase()) {
+    // Si Auth.js a nommé la cause dans l'URL (cas « personne n'était connecté »),
+    // on la reprend : « CredentialsSignin » est un diagnostic, « ce n'est pas
+    // la bonne personne » n'en est pas un.
+    const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? null;
     throw new Error(
       `credentials login for ${email} did NOT sign that member in: /api/auth/session reports ` +
-        `${signedInAs ?? '(nobody)'}. Refusing to hand back a session that belongs to someone else — ` +
+        `${signedInAs ?? '(nobody)'}` +
+        (code ? ` — Auth.js refused with ${code} (final URL: ${finalUrl})` : '') +
+        `. Refusing to hand back a session that belongs to someone else — ` +
         `the calling test would silently assert against the wrong member.`,
+    );
+  }
+
+  // Step 4 — find the session cookie in the request context cookie jar and
+  // forward it to the browser context Playwright will navigate with.
+  //
+  // APRÈS le contrôle d'identité, et pas avant : c'est sur l'état du pot au
+  // moment du `whoami` que le serveur s'est prononcé. Prélever le cookie plus
+  // tôt reviendrait à prouver l'identité d'une photo et à en injecter une
+  // autre.
+  const cookies = await request.storageState();
+  const sessionCookies = cookies.cookies.filter((c) => isSessionCookieName(c.name));
+  const sessionCookie = sessionCookies[0];
+  if (!sessionCookie) {
+    throw new Error(
+      `no session cookie found after credentials callback (got: ${cookies.cookies.map((c) => c.name).join(', ')})`,
+    );
+  }
+  if (sessionCookies.length > 1) {
+    // Deux cookies de session dans le pot (par exemple `authjs.session-token`
+    // ET `__Secure-authjs.session-token`, ou deux domaines) : le serveur a
+    // tranché sur l'ENSEMBLE, alors qu'on n'en injecte qu'un, choisi par ordre
+    // d'insertion. Le silence ici serait un pari.
+    throw new Error(
+      `ambiguous session state: the jar holds ${sessionCookies.length} session cookies ` +
+        `(${sessionCookies.map((c) => `${c.name}@${c.domain}`).join(', ')}). ` +
+        `Refusing to guess which one /api/auth/session just answered for.`,
     );
   }
 

@@ -228,6 +228,23 @@ test.describe('Mouvement réduit — le correctif d’hydratation n’a pas tué
      * L'alternative — un seul essai plus un retry Playwright — est la même
      * chose, en moins honnête : elle cache la tolérance dans la configuration
      * au lieu de l'écrire ici.
+     *
+     * ⚠️ ET LA BOUCLE A RÉFUTÉ MA PROPRE EXPLICATION. Relancé avec 3 essais sur
+     * l'agent CI, contre un build de production : **9 navigations sur 9** sans
+     * une seule valeur intermédiaire. Ce n'est donc PAS un saut d'images dû à
+     * la charge — sur ce runner, l'entrée ne s'observe jamais. Elle s'observe
+     * pourtant en local contre le même type de build (10/10, `--retries=0`) et
+     * dans les quatre shards requis. L'écart n'est pas « dev vs production » :
+     * c'est « ce runner vs cette machine », et je n'ai pas su le reproduire.
+     *
+     * Conséquence assumée, écrite dans `e2e-prod-build.yml` : ce test est
+     * EXCLU du job « build de production » tant que la question est ouverte, et
+     * il reste armé partout ailleurs. Deux lectures subsistent — l'entrée ne
+     * joue vraiment pas sans GPU (alors c'est le composant qu'il faut revoir,
+     * et la mesure du 2026-07-30 aura été faite dans les conditions les plus
+     * favorables), ou l'observation ne survit pas à ce runner. Tant que ce
+     * n'est pas tranché, personne ne devrait desserrer ce test pour le rendre
+     * vert.
      */
     const ESSAIS = 3;
     let intermediaires: Array<{ name: string; value: string | null }> = [];

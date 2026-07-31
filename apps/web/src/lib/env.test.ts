@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { envSchemaWithRefines } from './env';
+import { envSchemaWithRefines, isLoopbackUrl } from './env';
 
 /**
  * J9 hardening E2 — cross-var consistency tests on VAPID env vars.
@@ -21,6 +21,49 @@ const BASE_VALID_ENV = {
 const VALID_VAPID_PUB = 'BNc' + 'A'.repeat(84);
 // 43-char base64url VAPID private key (canonical 32-byte scalar).
 const VALID_VAPID_PRIV = 'tA9' + 'B'.repeat(40);
+
+/**
+ * `isLoopbackUrl` — LE SEUL ASSOUPLISSEMENT DE « AUTH_URL EN HTTPS EN PRODUCTION ».
+ *
+ * Il existe pour qu'un build de production servi en local puisse être testé avec
+ * un `AUTH_URL` qui dit la VÉRITÉ sur ce qu'il sert (donc avec des cookies de
+ * session cohérents, donc avec un parcours membre réel). Toute la sécurité de ce
+ * carve-out tient dans un point : il compare le HOSTNAME résolu par `URL`, pas
+ * une sous-chaîne. Les cas ci-dessous sont ceux qui feraient tomber une
+ * implémentation naïve à base de `includes('localhost')` — ils sont donc plus
+ * importants que les cas nominaux.
+ */
+describe('isLoopbackUrl — carve-out HTTP réservé à la boucle locale', () => {
+  it('accepte les trois formes de boucle locale en http', () => {
+    expect(isLoopbackUrl('http://localhost:3000')).toBe(true);
+    expect(isLoopbackUrl('http://127.0.0.1:3100')).toBe(true);
+    expect(isLoopbackUrl('http://[::1]:3000')).toBe(true);
+    expect(isLoopbackUrl('http://localhost')).toBe(true);
+  });
+
+  it('refuse tout hôte qui CONTIENT « localhost » sans en être', () => {
+    // Ces quatre-là passeraient un `includes('localhost')`.
+    expect(isLoopbackUrl('http://localhost.attaquant.fr')).toBe(false);
+    expect(isLoopbackUrl('http://evil.com/?redirect=localhost')).toBe(false);
+    expect(isLoopbackUrl('http://not-localhost.example')).toBe(false);
+    expect(isLoopbackUrl('http://localhost@evil.com')).toBe(false);
+  });
+
+  it('refuse un hôte distant, même en http', () => {
+    expect(isLoopbackUrl('http://app.fxmilyapp.com')).toBe(false);
+    expect(isLoopbackUrl('http://10.0.0.5:3000')).toBe(false);
+  });
+
+  it('ne rend true que pour http — https passe par la règle principale, pas par ce carve-out', () => {
+    expect(isLoopbackUrl('https://localhost:3000')).toBe(false);
+  });
+
+  it('refuse ce qui n’est pas une URL plutôt que de lever', () => {
+    expect(isLoopbackUrl('localhost:3000')).toBe(false);
+    expect(isLoopbackUrl('')).toBe(false);
+    expect(isLoopbackUrl('pas une url du tout')).toBe(false);
+  });
+});
 
 describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
   it('accepts the env when all VAPID vars are absent (V1 default)', () => {

@@ -16,6 +16,41 @@ import { DEFAULT_ANTHROPIC_MODEL, KNOWN_CLAUDE_MODEL_SLUGS } from './ai/models';
 
 const isProd = process.env.NODE_ENV === 'production';
 
+/**
+ * L'URL désigne-t-elle la BOUCLE LOCALE de la machine ?
+ *
+ * ⚠️ SEUL POINT D'ASSOUPLISSEMENT DE LA RÈGLE « HTTPS EN PRODUCTION », ET IL A
+ * UNE RAISON PRÉCISE, PAS UN CONFORT.
+ *
+ * `next start` impose `NODE_ENV=production`. Jusqu'ici, tester quoi que ce soit
+ * contre un vrai build de production exigeait donc de déclarer
+ * `AUTH_URL=https://localhost:3000` pendant que le serveur écoutait EN CLAIR —
+ * un mensonge que `e2e-prod-build.yml` assumait par écrit et qui interdisait
+ * tout parcours AUTHENTIFIÉ : Auth.js dérive la sécurité de ses cookies de ce
+ * protocole, et un cookie `Secure` ne repart jamais sur `http://`. Conséquence
+ * concrète : la seule suite qui voyait des assets hachés de production ne
+ * pouvait pas ouvrir une session, donc n'a jamais vu un seul écran membre.
+ *
+ * Plutôt que d'élargir ce mensonge, on rend la configuration VRAIE : sur la
+ * boucle locale, `http` est autorisé, `AUTH_URL` décrit alors exactement ce que
+ * le serveur sert, et les cookies sont cohérents avec lui.
+ *
+ * CE QUE ÇA N'OUVRE PAS : un déploiement ne s'atteint jamais par la boucle
+ * locale. La vérification porte sur le HOSTNAME résolu par `URL`, pas sur une
+ * sous-chaîne — `http://localhost.attaquant.fr` et
+ * `http://evil.com/?x=localhost` restent refusés, et c'est testé.
+ */
+export function isLoopbackUrl(value: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(value);
+    if (protocol !== 'http:') return false;
+    // `new URL` conserve les crochets d'une adresse IPv6 littérale.
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
@@ -62,8 +97,8 @@ const envSchema = z.object({
     .string()
     .url()
     .refine(
-      (v) => !isProd || v.startsWith('https://'),
-      'AUTH_URL doit être en HTTPS en production',
+      (v) => !isProd || v.startsWith('https://') || isLoopbackUrl(v),
+      'AUTH_URL doit être en HTTPS en production (sauf boucle locale : localhost / 127.0.0.1 / [::1])',
     ),
 
   // Jalon 1+ — Resend

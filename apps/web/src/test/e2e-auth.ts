@@ -27,6 +27,20 @@ const SESSION_COOKIE_NAMES = [
 ];
 
 /**
+ * Le prédicat « ce cookie est-il un cookie de session ? », nommé une fois.
+ *
+ * ⚠️ Il ne reconnaît PAS les cookies chunkés (`authjs.session-token.0` / `.1`,
+ * émis par `@auth/core` au-delà de ~4 ko). Aujourd'hui ce n'est pas un trou
+ * silencieux : un JWE chunké ferait échouer bruyamment sur « no session cookie
+ * found ». Si le jour vient d'ajouter ce support, il doit l'être ICI — c'est
+ * la seule raison pour laquelle ce prédicat est une fonction plutôt qu'un
+ * `includes` en ligne.
+ */
+function isSessionCookieName(name: string): boolean {
+  return SESSION_COOKIE_NAMES.includes(name);
+}
+
+/**
  * Each `loginAs` call must present a DISTINCT client IP.
  *
  * The production Credentials `authorize()` consumes `loginIpLimiter`
@@ -50,11 +64,27 @@ const SESSION_COOKIE_NAMES = [
  */
 let syntheticCallerSeq = 0;
 
+/**
+ * Un octet propre au PROCESSUS de test, et ce n'est pas de la cosmétique.
+ *
+ * Le compteur ci-dessus repart de zéro à chaque exécution ; le limiteur, lui,
+ * vit dans le serveur. Contre un serveur de longue durée (le cas en local :
+ * un `next start` gardé ouvert entre deux séries), le 1er login du 11ᵉ run
+ * réutilise `10.0.0.1` pour la 11ᵉ fois et se fait refuser — un échec qui
+ * ressemble à un bug du produit et n'en est pas. Mesuré le 2026-07-31 : c'est
+ * ainsi que le spec du harnais a rougi sur un login pourtant légitime.
+ *
+ * En CI le serveur est neuf à chaque job, donc le problème ne s'y voyait pas —
+ * raison de plus pour le fermer, puisqu'il ne frappe QUE le poste de travail.
+ */
+const PROCESS_OCTET = process.pid & 0xff;
+
 export function nextSyntheticCallerIp(): string {
   syntheticCallerSeq += 1;
   const n = syntheticCallerSeq;
-  // 10.<a>.<b>.<c> — 24 bits, far more than any suite will ever need.
-  return `10.${(n >> 16) & 0xff}.${(n >> 8) & 0xff}.${n & 0xff}`;
+  // 10.<processus>.<b>.<c> — 16 bits par processus, très au-delà du nombre de
+  // logins qu'une suite effectue (~150 avec les retries).
+  return `10.${PROCESS_OCTET}.${(n >> 8) & 0xff}.${n & 0xff}`;
 }
 
 /**
@@ -78,6 +108,12 @@ async function requestWithRetry<T>(label: string, fn: () => Promise<T>, attempts
       return await fn();
     } catch (err) {
       lastErr = err;
+      // Un contexte fermé ne se rouvrira pas : c'est Playwright qui a démonté
+      // le test (dépassement de budget, le plus souvent). Réessayer ajoute une
+      // seconde d'attente ET, pire, coiffe la vraie cause — « Test timeout of
+      // 60000ms exceeded » — d'un message d'échec réseau qui envoie chercher
+      // au mauvais endroit. Vu en CI le 2026-07-31.
+      if (/has been closed/.test(String(err))) break;
       if (attempt < attempts) {
         await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
       }
@@ -90,9 +126,23 @@ async function requestWithRetry<T>(label: string, fn: () => Promise<T>, attempts
  * Log in via the real Auth.js v5 Credentials flow:
  *   1. GET /api/auth/csrf → cookie `authjs.csrf-token` + JSON `{ csrfToken }`.
  *   2. POST /api/auth/callback/credentials?json=true with form fields
- *      { csrfToken, email, password, callbackUrl } → 200 + JSON `{ url }`.
- *   3. Pull the session cookie out of the API request context cookie jar
+ *      { csrfToken, email, password, callbackUrl } → **302** vers `callbackUrl`
+ *      en cas de succès, vers `/login?error=…` en cas de refus. (Le `?json=true`
+ *      ne suffit PAS à obtenir un corps JSON sur cette version — mesuré contre
+ *      un build de production, pas déduit de la doc. Playwright suit la
+ *      redirection, d'où un `status()` final de 200 dans les DEUX cas.)
+ *   3. Demander à `/api/auth/session` QUI le serveur croit que nous sommes, et
+ *      refuser si ce n'est pas le membre demandé.
+ *   4. Pull the session cookie out of the API request context cookie jar
  *      and inject it into the Playwright `page` browser context.
+ *
+ * L'étape 3 existe parce que le pot à cookies est PARTAGÉ par tous les
+ * `loginAs` d'un même test (44 tests en enchaînent de 2 à 8, souvent en
+ * basculant admin ↔ membre). Sans elle, un login refusé renvoyait « succès »
+ * avec la session du membre précédent, et le test appelant interrogeait
+ * silencieusement la mauvaise personne. Voir `e2e-auth.test.ts` pour la
+ * reproduction exécutable et `tests/e2e/e2e-auth-helper.spec.ts` pour la
+ * mesure contre un vrai serveur.
  */
 export async function loginAs(
   page: Page,
@@ -116,6 +166,21 @@ export async function loginAs(
   // One synthetic client IP for this whole login attempt — keeps the
   // per-IP login rate-limit bucket fresh (see `nextSyntheticCallerIp`).
   const callerIp = nextSyntheticCallerIp();
+
+  // Le pot portait-il DÉJÀ une session avant cet appel ?
+  //
+  // Toute la contamination tient à cette question. Si le pot est vide, aucune
+  // session étrangère ne peut en sortir : un login réussi y dépose la sienne,
+  // un login refusé n'y dépose rien et l'absence de cookie se voit tout de
+  // suite. Le contrôle d'identité — qui coûte un aller-retour — n'a donc rien
+  // à apprendre dans ce cas, et il n'est fait que lorsqu'il peut servir.
+  //
+  // Ce n'est pas une économie de confort : `smoke-tour-j6` a explosé son
+  // budget de 60 s en CI le 2026-07-31, et un aller-retour de plus sur un test
+  // déjà au bord n'a pas sa place quand il ne prouve rien.
+  const jarHadSession = (await request.storageState()).cookies.some((c) =>
+    isSessionCookieName(c.name),
+  );
 
   // Step 1 — fetch CSRF token (sets the csrf cookie in the request context).
   const csrfRes = await requestWithRetry('GET /api/auth/csrf', () =>
@@ -149,15 +214,95 @@ export async function loginAs(
     );
   }
 
-  // Step 3 — find the session cookie in the request context cookie jar and
+  // ⚠️ UN LOGIN REFUSÉ NE RÉPOND PAS >= 400 — MESURÉ, PAS SUPPOSÉ.
+  //
+  // Sondé contre un build de production local : identifiants faux, pot vide ⇒
+  // `302 → /login?error=CredentialsSignin&code=credentials`, que Playwright
+  // suit jusqu'à un 200. Le contrôle `>= 400` ci-dessus ne voit donc RIEN.
+  // L'URL finale est retenue ici pour ENRICHIR le message d'échec plus bas ;
+  // elle ne décide de rien par elle-même (voir l'étape 3).
+  const finalUrl = callbackRes.url();
+
+  // ⚠️ LE SEUL CONTRÔLE QUI TIENNE : DEMANDER AU SERVEUR QUI IL CROIT QUE
+  // NOUS SOMMES. Le reste — statut, URL, valeur du cookie — a été mesuré
+  // insuffisant, un par un.
+  //
+  // Ce qui se passe RÉELLEMENT quand le pot porte déjà une session valide et
+  // qu'on tente un second login avec de mauvais identifiants (mesuré contre un
+  // build de production, `tests/e2e/e2e-auth-helper.spec.ts` en garde la
+  // trace) : Auth.js signale bien le refus, mais `/login` renvoie un membre
+  // déjà connecté vers `/dashboard` — l'URL FINALE ne porte donc **aucune**
+  // erreur — et la requête suivie fait tourner le JWT, donc **la valeur du
+  // cookie CHANGE**. Un contrôle sur l'URL ne voit rien ; un contrôle sur
+  // « la valeur a-t-elle changé ? » ne voit rien non plus. Les deux étaient
+  // des filets à trous, et c'est le runtime qui l'a dit, pas une relecture.
+  //
+  // Quand ce contrôle a lieu, il passe AVANT celui de l'URL, et l'ordre est
+  // délibéré : l'URL finale appartient à l'APPLICATION (ce sont ses
+  // redirections qui la façonnent), pas à Auth.js. Une redirection légitime
+  // vers, disons, `/onboarding?error=profil_incomplet` ferait crier `REFUSED`
+  // sur un login parfaitement réussi. L'identité, elle, ne se laisse pas
+  // réécrire par une redirection ; elle tranche donc en premier, et le motif
+  // `error=` ne sert plus qu'à enrichir le message.
+  if (jarHadSession) {
+    const whoami = await requestWithRetry('GET /api/auth/session', async () => {
+      const res = await request.get('/api/auth/session', {
+        headers: { 'x-forwarded-for': callerIp },
+      });
+      if (res.status() !== 200) {
+        // Dans le retry, pas après : un 502 passager ou une page d'erreur HTML
+        // rendrait `.json()` illisible (« Unexpected token '<' »), sans label
+        // ni seconde chance. C'est exactement la classe d'échec que ce fichier
+        // existe pour éliminer.
+        throw new Error(`/api/auth/session returned ${res.status()}`);
+      }
+      return (await res.json()) as { user?: { email?: string | null } } | null;
+    });
+
+    const signedInAs = whoami?.user?.email ?? null;
+    if (signedInAs?.toLowerCase() !== email.toLowerCase()) {
+      const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? null;
+      throw new Error(
+        `credentials login for ${email} did NOT sign that member in: /api/auth/session reports ` +
+          `${signedInAs ?? '(nobody)'}` +
+          (code ? ` — Auth.js refused with ${code} (final URL: ${finalUrl})` : '') +
+          `. Refusing to hand back a session that belongs to someone else — ` +
+          `the calling test would silently assert against the wrong member.`,
+      );
+    }
+  } else if (/[?&]error=/.test(finalUrl)) {
+    // Pot vide : aucune session étrangère ne peut sortir d'ici, et le rebond
+    // « /login renvoie un connecté vers /dashboard » ne peut pas avoir lieu
+    // puisque personne n'est connecté. L'URL finale porte donc bien le refus,
+    // et c'est elle qui tranche.
+    const code = /[?&]error=([^&]+)/.exec(finalUrl)?.[1] ?? 'inconnu';
+    throw new Error(`credentials login REFUSED for ${email}: ${code} (final URL: ${finalUrl}).`);
+  }
+
+  // Step 4 — find the session cookie in the request context cookie jar and
   // forward it to the browser context Playwright will navigate with.
+  //
+  // APRÈS le contrôle d'identité, et pas avant : c'est sur l'état du pot au
+  // moment du `whoami` que le serveur s'est prononcé. Prélever le cookie plus
+  // tôt reviendrait à prouver l'identité d'une photo et à en injecter une
+  // autre.
   const cookies = await request.storageState();
-  const sessionCookie = cookies.cookies.find((c) =>
-    SESSION_COOKIE_NAMES.some((name) => c.name === name),
-  );
+  const sessionCookies = cookies.cookies.filter((c) => isSessionCookieName(c.name));
+  const sessionCookie = sessionCookies[0];
   if (!sessionCookie) {
     throw new Error(
       `no session cookie found after credentials callback (got: ${cookies.cookies.map((c) => c.name).join(', ')})`,
+    );
+  }
+  if (sessionCookies.length > 1) {
+    // Deux cookies de session dans le pot (par exemple `authjs.session-token`
+    // ET `__Secure-authjs.session-token`, ou deux domaines) : le serveur a
+    // tranché sur l'ENSEMBLE, alors qu'on n'en injecte qu'un, choisi par ordre
+    // d'insertion. Le silence ici serait un pari.
+    throw new Error(
+      `ambiguous session state: the jar holds ${sessionCookies.length} session cookies ` +
+        `(${sessionCookies.map((c) => `${c.name}@${c.domain}`).join(', ')}). ` +
+        `Refusing to guess which one /api/auth/session just answered for.`,
     );
   }
 

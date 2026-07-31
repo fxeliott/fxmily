@@ -47,7 +47,7 @@
 
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from './fixtures';
+import { type BrowserContext, chromium, expect, test } from './fixtures';
 
 import { GUIDE_CATALOG, guideEntryIcon } from '@/app/guide/guide-catalog';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -302,8 +302,21 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
     { tz: 'Etc/GMT+7', offset: -7, slug: 'minus7' },
   ] as const;
 
+  /**
+   * Les contextes ouverts à la main sont fermés au teardown, PAS en fin de
+   * boucle. La nuance compte : une assertion qui lève saute tout ce qui suit,
+   * donc un `close()` en fin de corps laisserait ouvert exactement le contexte
+   * du fuseau FAUTIF — celui dont on a besoin, puisque Playwright vide traces
+   * et vidéos à la fermeture. Le tableau est vidé par `splice`, donc un test
+   * qui n'en ouvre aucun ne paie rien.
+   */
+  const openContexts: BrowserContext[] = [];
+  test.afterEach(async () => {
+    await Promise.all(openContexts.splice(0).map((c) => c.close().catch(() => undefined)));
+  });
+
   test('CTA: le lien suit le créneau du fuseau du MEMBRE, à toute heure', async ({
-    page,
+    browser,
     request,
   }) => {
     /** Créneau attendu, dérivé sans `Intl` ni code de production. */
@@ -325,7 +338,33 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
 
       const before = expectedHref(zone.offset);
 
-      await page.context().clearCookies();
+      // ⚠️ UN CONTEXTE NEUF PAR FUSEAU — ET C'EST LA CI QUI L'A EXIGÉ.
+      //
+      // La version précédente réutilisait la même page en se contentant de
+      // `clearCookies()`. Premier run de ce test contre un BUILD DE PRODUCTION
+      // en CI : le fuseau +1, attendu au soir, a reçu `/checkin/morning` —
+      // c'est-à-dire la réponse du fuseau +9 traité juste avant, lui bien au
+      // matin. Vert au retry, donc invisible sans lire les artefacts.
+      //
+      // Honnêteté sur la cause : elle n'est PAS prouvée. L'hypothèse qui colle
+      // est le Router Cache client de Next, qui survit à `clearCookies()` et
+      // resert un payload RSC déjà obtenu — un cache dont le comportement
+      // diffère justement entre `next dev` et un build de production. Je n'ai
+      // pas réussi à le reproduire en local (3 runs verts d'affilée), donc je
+      // ne l'affirme pas.
+      //
+      // Ce qui est fait ici ne devine pas la cause : il supprime la CLASSE. Un
+      // contexte neuf par fuseau, c'est zéro cookie, zéro cache mémoire, zéro
+      // état partagé entre deux membres qui doivent justement voir des choses
+      // différentes. Un test dont l'isolation dépend de la vitesse du runner
+      // n'est pas un test.
+      const context = await browser.newContext({
+        // `browser.newContext()` n'hérite PAS du `use.baseURL` du config.
+        baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+      });
+      openContexts.push(context);
+      const page = await context.newPage();
+
       await page.goto('/login');
       await loginAs(page, request, member.email, member.password);
       await page.goto('/guide');
@@ -369,10 +408,32 @@ test.describe('J8 scope 2 — /guide : le rendu couvre tout GUIDE_CATALOG', () =
       await expect(cta.first()).toHaveText(expectedLabel);
       await expect(cta.last()).toHaveText(expectedLabel);
 
-      // Et le créneau OPPOSÉ n'est proposé nulle part dans la page : sinon un
-      // rendu qui peindrait les deux liens satisferait les assertions ci-dessus.
-      const opposite = href === '/checkin/morning' ? '/checkin/evening' : '/checkin/morning';
-      await expect(page.getByRole('main').locator(`a[href="${opposite}"]`)).toHaveCount(0);
+      // ⚠️ ICI VIVAIT UNE ASSERTION MAL CADRÉE, ET ELLE A FINI PAR MENTIR.
+      //
+      // Elle exigeait que le créneau OPPOSÉ n'apparaisse NULLE PART dans
+      // `<main>`. Verte au moment où je l'ai écrite, rouge quelques heures plus
+      // tard — et pour une bonne raison, découverte en la mesurant : la page du
+      // guide affiche aussi le bandeau de GUIDAGE QUOTIDIEN (« Maintenant :
+      // Check-in du matin »), qui répond à une tout autre question. Le CTA dit
+      // « quel créneau correspond au moment que tu vis » ; le guidage dit
+      // « quelle est ta prochaine action non faite ». Pour un membre à 16 h
+      // locales qui n'a pas fait son check-in du matin, les deux réponses
+      // DIVERGENT légitimement, et le lien du matin est donc bien là.
+      //
+      // Ce que l'assertion voulait attraper — « un rendu qui peindrait les deux
+      // liens » — est déjà couvert plus haut, et mieux : les liens de CTA sont
+      // exactement 2, ils portent le même href, et cet href est celui attendu.
+      // Un site resté codé en dur sur l'autre créneau y rougit. Retirer une
+      // assertion redondante dont le périmètre était faux n'affaiblit rien ;
+      // la garder aurait rendu ce test rouge une partie de la journée, pour un
+      // comportement correct — c'est-à-dire l'aurait rendu ignorable.
+      //
+      // 🟠 CE QUE ÇA RÉVÈLE, ET QUI N'EST PAS UNE QUESTION DE TEST : sur le même
+      // écran, le membre lit « Faire mon check-in du soir » et « Maintenant :
+      // Check-in du matin ». Les deux sont défendables séparément, ensemble ils
+      // se contredisent aux yeux du membre. Quelle source doit gouverner le CTA
+      // du guide — l'heure, ou le plan du jour ? C'est un arbitrage produit,
+      // remonté à Eliot plutôt que tranché dans un test.
 
       observed.push(href);
     }

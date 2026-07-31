@@ -203,6 +203,15 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
    */
   it('chaque entrée porte un sourceHash de 16 hex, ou null si la route n’a pas de dossier', () => {
     for (const [href, record] of Object.entries(manifest)) {
+      // ⚠️ LES DEUX DIRECTIONS, ET LA PREMIÈRE VERSION N'EN CÂBLAIT QU'UNE.
+      // Elle vérifiait « manifeste null ⇒ la route n'a pas de dossier » et
+      // s'arrêtait là — or la branche null est MORTE aujourd'hui (0 entrée sur
+      // 24), donc la seule direction implémentée ne s'exécutait jamais. Le cas
+      // qui arrivera pour de vrai est l'autre : une route qui PERD son dossier
+      // propre (déplacement dans un route group, ou — vecteur ouvert par
+      // l'exclusion des fichiers de test — dossier ne contenant plus qu'eux)
+      // garde un hash figé dans le manifeste, et le rapport de péremption
+      // compare alors une valeur périmée à `null` pour toujours.
       if (record.sourceHash === null) {
         expect(
           routeSourceHash(href),
@@ -216,6 +225,12 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
         `${href} : sourceHash hors forme — le rapport de péremption ` +
           `(guide-shots-staleness.test.ts) n'aurait plus rien à comparer`,
       ).toMatch(/^[0-9a-f]{16}$/);
+      expect(
+        routeSourceHash(href),
+        `${href} : le manifeste porte un hash alors que la route n'a plus de dossier propre ` +
+          `calculable — la valeur enregistrée est figée, et le rapport de péremption la ` +
+          `comparerait éternellement à null sans jamais pouvoir redevenir vert`,
+      ).not.toBeNull();
     }
   });
 
@@ -276,8 +291,22 @@ describe('guide shots — parité manifeste ↔ catalogue', () => {
     ).toBe(true);
     expect(
       /^\s*if:[^\n]*github\.event_name\s*!=\s*'pull_request'/m.test(step ?? ''),
-      'le rapport doit rester hors des PR : les fichiers qui déclenchent ce workflow sont ' +
-        "ceux-là mêmes qui composent l'empreinte de /guide, il serait rouge par construction",
+      'le rapport doit rester hors des PR : plusieurs des chemins qui déclenchent ce workflow ' +
+        "entrent dans l'empreinte de /guide, il serait rouge par construction",
+    ).toBe(true);
+
+    // ⚠️ ET UN DÉCLENCHEUR DOIT ENCORE POUVOIR LE LANCER — ce garde-ci l'avait
+    // oublié, et une revue l'a prouvé en supprimant `schedule:` : les 8 tests
+    // restaient VERTS alors que le rapport ne pouvait plus tourner nulle part
+    // automatiquement (l'étape s'exclut elle-même des PR, il ne restait que le
+    // déclenchement manuel). Vérifier qu'une étape est bien câblée ne prouve
+    // rien si plus rien ne l'appelle : c'est la version workflow de
+    // « présence ≠ comportement ».
+    expect(
+      /^\s{2}schedule:\s*\n\s+- cron:/m.test(workflow),
+      "guide-surfaces.yml n'a plus de `schedule:` — l'étape de péremption s'excluant des PR, " +
+        'plus aucun déclencheur automatique ne peut la lancer et une vignette périmée ne serait ' +
+        'jamais signalée',
     ).toBe(true);
   });
 });

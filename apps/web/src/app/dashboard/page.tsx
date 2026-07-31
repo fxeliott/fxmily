@@ -563,9 +563,18 @@ export default async function DashboardPage() {
                   <div className="flex shrink-0 items-center gap-3">
                     {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
                       the member has been confronted at least once (no fake 100).
-                      Tour 12 (C) — rendu en anneau SVG qui SE DESSINE à l'entrée du
-                      viewport (MetricRing), le nombre count-up au centre : la donnée
-                      devient vivante au lieu d'un chiffre plat. */}
+                      Tour 12 (C) — rendu en anneau SVG (MetricRing).
+
+                      ⚠️ CE COMMENTAIRE DÉCRIVAIT UN COMPORTEMENT SUPPRIMÉ. Il disait
+                      « SE DESSINE à l'entrée du viewport […] le nombre count-up au
+                      centre » : les deux moitiés sont fausses depuis les correctifs
+                      du 2026-07-30. L'anneau s'arme à l'HYDRATATION (un rembobinage
+                      déclenché au scroll se voyait : anneau juste, puis vidé d'un
+                      coup), et le compteur central est coupé (`startOnView={false}`)
+                      pour ne pas repartir de zéro dans un anneau déjà plein. C'est
+                      le SEUL commentaire du dépôt décrivant cette animation depuis
+                      un site d'appel — il envoyait donc le prochain lecteur droit
+                      sur l'ancienne version. */}
                     {constancy ? (
                       <div className="flex flex-col items-center gap-1">
                         <MetricRing

@@ -234,24 +234,66 @@ export function checkServiceWorker(source) {
 }
 
 /**
- * L'opération à `index` est-elle enveloppée dans un `try` encore OUVERT ?
+ * L'opération à `index` est-elle DANS un `try` ouvert dont le `catch` AVALE
+ * réellement la rejection ?
  *
- * Heuristique volontairement conservatrice, et c'est le point : on compare le
- * dernier `try {` au dernier `catch` qui le précèdent. Si un `catch` est plus
- * récent que le `try`, c'est que ce bloc est déjà refermé — donc l'opération
- * n'est PAS protégée par lui. C'est précisément ce qui neutralise un leurre
- * (`try { … } catch {}` posé juste avant l'appel pour tromper une regex de
- * proximité).
+ * Deux questions, et la première version n'en posait qu'une. Elle comparait le
+ * dernier `try {` au dernier `catch` qui le précèdent — de quoi neutraliser un
+ * leurre `try { … } catch {}` posé juste avant l'appel, mais RIEN de plus. Une
+ * revue en contexte frais l'a mise en défaut par mutation, et elle avait raison
+ * sur les trois points :
  *
- * Conservatrice dans le bon sens : elle peut crier à tort si le vrai `try`
- * englobe un petit try/catch imbriqué. Un garde qui réclame une relecture
- * quand il doute vaut mieux qu'un garde qui se laisse berner.
+ *   1. `} catch (e) { throw e; }` — le bug v5 réintroduit à l'identique — passait
+ *      au vert, puisque la forme textuelle restait un try/catch ;
+ *   2. `try { … } finally { … }` en leurre passait aussi, `lastIndexOf('catch')`
+ *      ne voyant rien ;
+ *   3. le corps du `catch` vit APRÈS `index` et n'était jamais lu — la fonction
+ *      n'attestait donc jamais que la rejection était absorbée.
+ *
+ * Le commentaire, lui, promettait qu'un garde « qui se laisse berner » valait
+ * moins qu'un garde conservateur, et que l'asymétrie était « impossible à
+ * réintroduire ». Il promettait la sémantique et ne livrait que la syntaxe.
+ *
+ * Ce qui est vérifié maintenant : (a) un `try {` est ouvert avant l'opération et
+ * n'a été refermé ni par un `catch` ni par un `finally` ; (b) le premier bloc
+ * `catch` qui suit l'opération ne relance pas — ni `throw`, ni `return
+ * Promise.reject`. Reste une heuristique de texte sur un fichier écrit à la
+ * main, pas un analyseur syntaxique — mais elle mesure enfin ce qu'elle annonce.
  */
 function isGuardedByTry(body, index) {
   const before = body.slice(0, index);
   const lastTry = before.lastIndexOf('try {');
-  const lastCatch = before.lastIndexOf('catch');
-  return lastTry !== -1 && lastTry > lastCatch;
+  if (lastTry === -1) return false;
+  // `finally` compte autant que `catch` : un bloc refermé par `finally` ne
+  // capture rien, et servait de leurre à la version précédente.
+  const lastCloser = Math.max(before.lastIndexOf('catch'), before.lastIndexOf('finally'));
+  if (lastTry <= lastCloser) return false;
+
+  // Le catch qui suit doit AVALER. On borne la lecture au bloc lui-même par
+  // équilibrage d'accolades — un `throw` situé plus loin dans la fonction ne
+  // doit pas disqualifier une protection correcte.
+  const after = body.slice(index);
+  const catchAt = after.indexOf('catch');
+  if (catchAt === -1) return false;
+  const open = after.indexOf('{', catchAt);
+  if (open === -1) return false;
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < after.length; i += 1) {
+    if (after[i] === '{') depth += 1;
+    else if (after[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close === -1) return false;
+  const catchBody = after.slice(open, close + 1);
+  if (/\bthrow\b/.test(catchBody)) return false;
+  if (/Promise\s*\.\s*reject/.test(catchBody)) return false;
+  return true;
 }
 
 /**

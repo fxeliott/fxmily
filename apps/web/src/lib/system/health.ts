@@ -89,6 +89,17 @@ interface HeartbeatExpectation<A extends string = string> {
    * incident: surfaced loud (red) instead of hidden behind a calm amber.
    */
   criticalLabels?: readonly string[];
+  /**
+   * Windowed schedules only — how many CONSECUTIVE missed ticks flip amber to
+   * red. Defaults to 2, which suits a cron whose ticks are independent.
+   *
+   * The AI worker's are not: the batch lock is machine-global, so ANY long
+   * pipeline silences every other one for its whole duration. With 30-minute
+   * ticks, the default would paint `seances` red after ~1h35 — while the
+   * wrapper legitimately allows a batch to hold the lock for 2h. Same reasoning
+   * as the 4h tolerances below; it simply has to be expressed in ticks here.
+   */
+  windowedRedAfterMissed?: number;
 }
 
 type CronAction =
@@ -462,6 +473,27 @@ function criticalLabelLive(ageMs: number | null, periodMs: number): boolean {
   return ageMs !== null && ageMs <= 3 * periodMs;
 }
 
+/**
+ * Does `label` belong to one of the critical FAMILIES?
+ *
+ * Watchdog labels are `family` or `family:detail[:detail]` — `task_missing:onboarding`,
+ * `batch_failed:weekly:1`, `cron_file_crlf:60`. The previous test was an exact
+ * `includes()`, so it could never match ANY of them: every label carrying a
+ * detail was silently unescalatable, and the whole mechanism was dead code for
+ * everything J9 added. The worst case it let through is the one age can never
+ * catch — a batch that runs, pulls its envelope (refreshing the heartbeat, so
+ * the board stays green) and then generates nothing.
+ *
+ * Matching on the family prefix INCLUDING the colon is what keeps this safe:
+ *   - `claude_auth:logged_out` still cannot match `claude_auth:observation_pending`
+ *     (different, non-critical fact — the expected state during the switchover) ;
+ *   - `batch_failed` cannot match `batch_failed_observation:…`, the expected twin
+ *     the watchdog emits while no account is logged in yet.
+ */
+function isCriticalLabel(label: string, critical: readonly string[]): boolean {
+  return critical.some((family) => label === family || label.startsWith(`${family}:`));
+}
+
 async function buildHeartbeatReport<A extends string>(
   expectations: readonly HeartbeatExpectation<A>[],
   now: Date,
@@ -573,8 +605,14 @@ async function buildHeartbeatReport<A extends string>(
           : 'never_ran';
     } else if (expectation.windowedScheduleParis) {
       // Window-bounded cron: classify on missed expected ticks, not raw age.
-      const missed = countMissedTicks(expectation.windowedScheduleParis, lastRanAt, now);
-      status = missed === 0 ? 'green' : missed <= 2 ? 'amber' : 'red';
+      const redAfterMissed = expectation.windowedRedAfterMissed ?? 2;
+      const missed = countMissedTicks(
+        expectation.windowedScheduleParis,
+        lastRanAt,
+        now,
+        redAfterMissed,
+      );
+      status = missed === 0 ? 'green' : missed <= redAfterMissed ? 'amber' : 'red';
     } else if (ageMs <= expectation.periodMs * (expectation.greenMultiplier ?? 1.5)) {
       status = 'green';
     } else if (ageMs <= toleranceMs) {
@@ -602,7 +640,7 @@ async function buildHeartbeatReport<A extends string>(
     if (
       expectation.criticalLabels &&
       criticalLabelLive(ageMs, expectation.periodMs) &&
-      errorLabels.some((label) => expectation.criticalLabels!.includes(label))
+      errorLabels.some((label) => isCriticalLabel(label, expectation.criticalLabels!))
     ) {
       status = 'red';
     }
@@ -679,6 +717,14 @@ function countMissedTicks(
   schedule: { minutes: readonly number[]; hours: readonly number[] },
   lastRanAt: Date,
   now: Date,
+  /**
+   * The caller's red threshold. It is NOT decoration: the loop below stops
+   * counting as soon as the answer can no longer change the verdict, and that
+   * early exit used to be hardcoded at 3 — i.e. it silently assumed the
+   * threshold was always 2. Any schedule asking for a wider one would have had
+   * its count capped at 4 and could never have gone red at all.
+   */
+  redAfterMissed: number,
 ): number {
   const JITTER_MS = 5 * MIN;
   const horizon = now.getTime() - JITTER_MS;
@@ -712,7 +758,7 @@ function countMissedTicks(
         dayStartMs = Math.min(dayStartMs, tick);
         if (tick > lastRanAt.getTime() && tick <= horizon) {
           missed += 1;
-          if (missed > 3) return missed; // already red — stop counting
+          if (missed > redAfterMissed) return missed; // already red — stop counting
         }
       }
     }
@@ -884,6 +930,40 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
  */
 const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
 
+/**
+ * Label FAMILIES that mean "generation is down" on a host that owns generation.
+ *
+ * The PC board escalates one label, and that was right for a machine allowed to
+ * be switched off. This one is not, so a fault here is an incident, not a
+ * degradation. Ordered by how badly they hurt:
+ *
+ *   - `batch_failed`      the batch RAN and failed. The only fault age cannot
+ *                         see, because pulling the envelope already refreshed
+ *                         the heartbeat. Its observation-time twin
+ *                         (`batch_failed_observation:…`) is deliberately absent:
+ *                         before the login, failing is the expected state.
+ *   - `cron_file_missing` / `cron_file_crlf` / `task_missing`
+ *                         no scheduler, or a schedule cron silently ignores.
+ *                         CRLF is not hypothetical: it cost ~20h of outage on
+ *                         2026-05-11 and left no trace anywhere.
+ *   - `claude_bin_missing` / `config_missing`  the runtime cannot even start.
+ *   - `lock_stale`        one wedged lock starves all seven pipelines.
+ *
+ * Deliberately NOT here: `claude_quota:capped` (benign, self-resolving via the
+ * cooldown — and if it lasts, the pull heartbeats go stale and red on age),
+ * `token_short` and `cron_file_perms` (hygiene, not outage).
+ */
+const SERVER_CRITICAL_LABELS = [
+  'claude_auth:logged_out',
+  'batch_failed',
+  'cron_file_missing',
+  'cron_file_crlf',
+  'task_missing',
+  'claude_bin_missing',
+  'config_missing',
+  'lock_stale',
+] as const;
+
 const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] =
   WORKER_EXPECTATIONS.map((e) => {
     // Tighten — but NOT below the longest legitimate silence.
@@ -918,6 +998,11 @@ const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAc
     return {
       ...e,
       ...(multiplier === undefined ? {} : { toleranceMultiplier: multiplier }),
+      // The watchdog heartbeat is the entry that carries the machine-wide
+      // labels, so it is the entry that has to escalate them.
+      ...(e.action === 'worker.watchdog.heartbeat'
+        ? { criticalLabels: SERVER_CRITICAL_LABELS }
+        : {}),
       expectedSince: WORKER_SERVER_INSTALLED_AT,
     };
   }).concat([
@@ -935,6 +1020,14 @@ const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAc
         minutes: [25, 55],
         hours: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
       },
+      // 8 × 30 min = 4h, the SAME budget the tolerances above give every other
+      // server pipeline, expressed in ticks. The default of 2 would have gone
+      // red after ~1h35 — while `weekly` legitimately holds the machine-global
+      // lock for up to 2h (FXMILY_WORKER_TIMEOUT), with a 2h30 stale reclaim.
+      // The 4h reasoning was applied to the inherited entries and NOT to this
+      // one, the only entry J9 actually added. Same fault, opposite direction:
+      // a board red every Sunday teaches the operator to ignore it.
+      windowedRedAfterMissed: 8,
       expectedSince: WORKER_SERVER_INSTALLED_AT,
     },
   ]);

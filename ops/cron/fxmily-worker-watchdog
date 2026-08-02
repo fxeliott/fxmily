@@ -143,7 +143,15 @@ fi
 # FXMILY_WORKER_DRY_RUN=1 the same fact is reported under a non-critical label:
 # still visible, still counted in `errors` (→ amber), never a phantom incident.
 OBSERVATION=false
-[[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]] && OBSERVATION=true
+# `:-1`, NOT `:-0` — and this default has to match the wrapper's, exactly.
+# `fxmily-worker:122` gates the run on `${FXMILY_WORKER_DRY_RUN:-1}`, so on a
+# host where the key is absent (rebuilt, restored, installer never run in
+# `install` mode) the batches DO run in observation. Reading `:-0` here made the
+# watchdog believe the opposite and emit `claude_auth:logged_out` — a CRITICAL
+# label — for a host that was behaving correctly: red board, 503, cron-watch
+# failing, on nothing. The wrapper already carries this warning for its own
+# MODE_TAG (`fxmily-worker:183`); the watchdog was making that very mistake.
+[[ "${FXMILY_WORKER_DRY_RUN:-1}" == "1" ]] && OBSERVATION=true
 
 if ! command -v claude >/dev/null 2>&1; then
   add_label 'claude_bin_missing'
@@ -174,7 +182,22 @@ for p in "${PIPELINES[@]}"; do
     QUOTA_SEEN=true
   fi
   if [[ "$ok" != "true" && "$code" != "0" && "$code" != "75" ]]; then
-    add_label "batch_failed:${p}:${code}"
+    # Observation-aware, for the SAME reason as the auth label above. This one
+    # is the single most important signal the board has: the batch RAN, pulled
+    # its envelope (so `<pipeline>.batch.pulled` is fresh and the age-based
+    # heartbeat stays GREEN) and then failed to generate. Age can never catch
+    # that — only this label can. So on a host that owns generation it is a red
+    # incident.
+    #
+    # But during the observation window nobody is logged in to `claude` yet, so
+    # the four generators fail by construction on every single tick. Escalating
+    # then would paint the board red permanently through a planned migration,
+    # which is how a board stops being read. Same fact, non-critical name.
+    if [[ "$OBSERVATION" == "true" ]]; then
+      add_label "batch_failed_observation:${p}:${code}"
+    else
+      add_label "batch_failed:${p}:${code}"
+    fi
   fi
 done
 

@@ -57,7 +57,7 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 | **Formulaires** | React Hook Form + Zod | Combo standard React, performant, accessible |
 | **Notifications push** | Web Push API + VAPID + service worker | Standard W3C, fonctionne iOS 16.4+ et Android, gratuit |
 | **PWA** | Service Worker manuel (`public/sw.js`) + `manifest` | next-pwa écarté (incompat Next 16/Turbopack) ; SW écrit à la main = contrôle total cache + Web Push |
-| **IA backend (rapports hebdo)** | Claude en **LOCAL** : `claude --print` (abonnement Max, modèle **Opus 4.8**, ~0 € marginal) via `ops/scripts/lib/claude-batch-core.sh`. Chemin SDK `@anthropic-ai/sdk` **dormant** (mock par défaut, V1 ships sans `ANTHROPIC_API_KEY`). Allowlist modèles = SSOT `lib/ai/models.ts` | Coût marginal nul (abo Max), human-in-the-loop (génération jamais cronnée, anti-ban) |
+| **IA backend (rapports hebdo)** | Claude en **LOCAL** : `claude --print` (abonnement Max, modèle **Opus 4.8**, ~0 € marginal) via `ops/scripts/lib/claude-batch-core.sh`. Chemin SDK `@anthropic-ai/sdk` **dormant** (mock par défaut, V1 ships sans `ANTHROPIC_API_KEY`). Allowlist modèles = SSOT `lib/ai/models.ts` | Coût marginal nul (abo Max). **Depuis J9 la génération EST ordonnancée**, sur l'hôte applicatif et non sur un PC (ADR-007) : l'anti-ban ne repose plus sur un déclenchement humain mais sur le verrou machine-global (un seul `claude --print` à la fois), le jitter, et le binaire officiel |
 | **Tests unitaires & intégration** | Vitest + React Testing Library | Standard 2026, ultra rapide |
 | **Tests E2E** | Playwright | Référence pour parcours utilisateur multi-écrans |
 | **Monitoring erreurs** | Sentry plan gratuit | 5000 erreurs/mois gratuits, alerting email |

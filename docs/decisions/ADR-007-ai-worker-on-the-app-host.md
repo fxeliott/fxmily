@@ -1,6 +1,6 @@
 # ADR-007 — Le worker IA quitte le PC pour l'hôte de l'app (J9)
 
-- **Status** : Proposed (2026-08-02) — à passer Accepted après la bascule réelle (7/7 en `PASS/generated` depuis le serveur + tâches PC désactivées + un cycle hebdo complet sans incident).
+- **Status** : Proposed (2026-08-02) — à passer Accepted après la bascule réelle : `verify-worker-vps.sh` **7/7**, dont au moins un `PASS/generated` parmi les quatre générateurs (`weekly`, `monthly`, `calendar`, `profile`) ; `onboarding` / `verification` / `seances` sortent avant tout appel modèle en `--dry-run` et plafonnent donc à `PASS/pull-only` (cf. RUNBOOK § « Compare »). Plus : tâches PC désactivées + un cycle hebdo complet sans incident.
 - **Date** : 2026-08-02
 - **Scope** : jalon J9 « Workers IA → VPS ». Porte l'ordonnancement et l'exécution des 7 pipelines `claude --print`. Ne touche NI aux prompts (J5), NI au chemin SDK payant (hors périmètre, interdit ❶).
 - **Related** : ADR-004 / ADR-005 (canon batch-local Claude Max partagé) · `ops/worker/RUNBOOK.md` · `ops/worker/README.md` (le worker Windows que ceci remplace).
@@ -29,8 +29,9 @@ telles quelles ; il n'en réécrit aucune.**
 
 ### La contradiction du SPEC qu'il faut trancher, pas contourner
 
-`SPEC.md:60` dit, verbatim : « human-in-the-loop (**génération jamais cronnée**,
-anti-ban) ». Mais `SPEC.md:1205` décrit un « Auto (cron mensuel) », et le jalon J2
+`SPEC.md:60` disait, verbatim — avant l'alignement opéré au close-out de ce jalon,
+et n'écrit plus cela aujourd'hui : « human-in-the-loop (**génération jamais
+cronnée**, anti-ban) ». Mais `SPEC.md:1205` décrit un « Auto (cron mensuel) », et le jalon J2
 a déjà mis les 6 pipelines sous Planificateur de tâches Windows — donc cronnés,
 depuis 2026-07-02, sur la machine d'Eliot.
 

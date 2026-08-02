@@ -272,7 +272,16 @@ if [[ "$MODE" != check ]]; then
 fi
 for b in "$BIN_WORKER" "$BIN_WATCHDOG"; do
   if [[ -x "$b" ]]; then
-    bash -n "$b" && ok "$b (0$(stat -c '%a' "$b"), bash -n clean)"
+    # `bash -n … && ok` alone SWALLOWED the failure: a syntactically broken
+    # wrapper printed nothing and left FAILED=0, so `--check` reported "all
+    # checks passed" on a host whose cron entry point could not even parse.
+    # The CR/syntax loop above already does this correctly (`|| fail`, line ~193)
+    # — this branch was the odd one out.
+    if bash -n "$b" 2>/dev/null; then
+      ok "$b (0$(stat -c '%a' "$b"), bash -n clean)"
+    else
+      fail "bash -n failed: $b (the wrapper cron calls does not parse)"
+    fi
   else fail "$b missing"; fi
 done
 

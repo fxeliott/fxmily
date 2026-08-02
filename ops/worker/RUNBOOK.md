@@ -129,10 +129,14 @@ sudo -u fxmily cat ~/worker/ops/worker/logs/weekly.status.json
 # What happened, in order
 sudo tail -50 /var/log/fxmily/worker.log
 
-# Live auth + a full 7-pipeline dry-run. Never persists — but it DOES take the
-# worker lock for its whole duration (that is deliberate: one `claude --print`
-# at a time). Scheduled ticks that land meanwhile exit benignly. Expect it to
-# run for a while: 7 pipelines × members × 60-120s jitter.
+# Live auth + a full 7-pipeline dry-run. Never persists. It goes THROUGH
+# run-batch.sh, so each pipeline takes the machine-global lock while it runs —
+# one `claude --print` at a time, as intended. But it takes that lock SEVEN
+# times, not once: between two pipelines the lock is free, and a scheduled tick
+# landing in that gap will take it and make the next pipeline exit benignly.
+# That shows up as `FAIL/skipped` rather than a false pass. If it happens, just
+# re-run; run it outside :01/:21/:41 and :25/:55 if you want a clean sweep.
+# Expect it to run for a while: 7 pipelines × members × 60-120s jitter.
 sudo -u fxmily -H bash ~/worker/ops/worker/verify-worker-vps.sh
 ```
 
@@ -190,9 +194,22 @@ sudo grep 'FAIL' /var/log/fxmily/worker.log                      # anything red?
 sudo -u fxmily bash ~/worker/ops/worker/verify-worker-vps.sh     # 7/7 ?
 ```
 
-The bar to clear: **7/7 pass** with at least the pipelines that had work showing
-`PASS/generated`. A `PASS/empty` only proves the token and the endpoint — it does
-not prove the model call.
+The bar to clear: **7/7 pass**, read with the verdict each pipeline is capable of
+producing:
+
+| Verdict          | Means                                          | Which pipelines                            |
+| ---------------- | ---------------------------------------------- | ------------------------------------------ |
+| `PASS/generated` | token + endpoint + **a real model call**       | `weekly`, `monthly`, `calendar`, `profile` |
+| `PASS/pull-only` | token + endpoint, model call **not reachable** | `onboarding`, `verification`, `seances`    |
+| `PASS/empty`     | token + endpoint, nothing to do this cycle     | any generator with an empty cohort         |
+
+`onboarding`, `verification` and `seances` return **before** any model call in
+`--dry-run`, by construction — so `PASS/pull-only` is the strongest honest verdict
+they can give, and demanding `PASS/generated` from them would be waiting for
+something that cannot happen. Their model path is proven at the first persisting
+tick, not here.
+
+So: 7/7, and at least one `PASS/generated` among the four generators that had work.
 
 ### 3 · Hand over
 
@@ -208,6 +225,23 @@ sudo sed -i 's/^FXMILY_WORKER_DRY_RUN=1/FXMILY_WORKER_DRY_RUN=0/' /etc/fxmily/cr
 # tighten the alerting to an always-on host + fold the worker into /api/cron/health
 #   add WORKER_HOST=server to /etc/fxmily/web.env, then:
 sudo docker compose -f /opt/fxmily/docker-compose.prod.yml restart web
+
+# THEN VERIFY — do not walk away here. `WORKER_HOST` is a Zod enum accepting
+# exactly `pc` | `server`. A typo (`Server`, the French `serveur`, a trailing
+# space) fails validation at boot and the container does NOT come back up: the
+# very last gesture of the switchover is the one that can take the app down,
+# at night, with nobody watching.
+sleep 5
+curl -fsS https://app.fxmilyapp.com/api/health   # expect 200 + {"status":"ok"}
+```
+
+If that curl does not answer, do not retry blindly:
+
+```bash
+sudo docker compose -f /opt/fxmily/docker-compose.prod.yml logs --tail=50 web
+# An invalid WORKER_HOST prints a Zod error naming the variable. Fix the value
+# in /etc/fxmily/web.env and restart again. Deleting the line is also a valid
+# rollback: absent ⇒ default `pc` ⇒ previous alerting, app boots.
 ```
 
 Keep the Windows tasks **disabled but registered** for one week. Re-arming them
@@ -232,12 +266,40 @@ Prove it once, deliberately:
 ```bash
 # 1. remove ONE pipeline from the schedule
 sudo sed -i '/fxmily-worker onboarding/d' /etc/cron.d/fxmily-worker
-# 2. wait past its tolerance (onboarding: 20 min × 12 = 4h on the server profile)
-# 3. the watchdog reports task_missing:onboarding, /api/cron/health turns 503,
-#    the next hourly cron-watch run goes red
+# 2. wait for the NEXT watchdog tick (:07 or :37 — so 30 min at worst)
+# 3. it reports task_missing:onboarding. That label is critical on the server
+#    profile, so the board turns red on the label alone, and /api/cron/health
+#    returns 503 → the next hourly cron-watch run goes red.
 # 4. put it back
 sudo bash ~/worker/ops/worker/install-worker-vps.sh
 ```
+
+Two independent paths lead to that red, and it is worth knowing which is which:
+
+- **by label** — the watchdog names the fault (`task_missing`, `cron_file_crlf`,
+  `batch_failed`, …). Fast (≤ 30 min) and diagnostic: the board says _what_ broke.
+- **by age** — the pipeline's own `<name>.batch.pulled` heartbeat goes stale past
+  its tolerance (4h for `onboarding`). Slower, and it only says _something_ broke.
+
+The label path exists because age alone is blind to the worst failure mode: a
+batch that runs, pulls its envelope — refreshing the heartbeat, keeping it
+green — and then generates nothing. Age can never see that. `batch_failed` can.
+
+**One known limit, for the observation window only.** Both watchdogs — the PC's
+and the server's — report into the same `worker.watchdog.heartbeat` slot, and
+the board reads the most recent row. They tick at the same :07/:37, so during
+the doublon window a real `claude_auth:logged_out` coming from the PC can be
+overwritten by the server's `claude_auth:observation_pending`, which is only
+amber. Two consequences worth knowing while you are in that window:
+
+- do not rely on the board alone to notice the PC losing its Claude session —
+  check it directly (`claude auth status` on the PC) before the handover ;
+- `watchdogVersion` on the audit row tells you which machine wrote the last one
+  (`j9-1.0-obs` = the server).
+
+This resolves itself the moment the PC tasks are disabled: one watchdog, one
+writer. It is a property of running two workers on purpose, not a defect to fix
+before the switchover.
 
 ---
 

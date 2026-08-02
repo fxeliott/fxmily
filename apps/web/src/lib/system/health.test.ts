@@ -1409,6 +1409,144 @@ describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () 
   });
 
   /**
+   * Why this matters : this is the ONE failure age can never see.
+   *
+   * A batch that runs, pulls its envelope and then generates nothing has ALREADY
+   * refreshed `<pipeline>.batch.pulled` — the heartbeat is green, and staying
+   * green is precisely the lie. Only the watchdog's label carries the fact.
+   *
+   * It used to be unescalatable: the labels are `family:detail` and the critical
+   * test was an exact `includes()`, so `batch_failed:weekly:1` matched nothing.
+   * Mutate `isCriticalLabel` back to an exact match and this test goes red.
+   */
+  it('turns the board red on a batch that RAN and failed — the fault age cannot see', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      // Fresh: the batch DID run and DID pull. Green by age — the whole trap.
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['batch_failed:weekly:1'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    expect(watchdog?.status).toBe('red');
+    // The pull heartbeat itself is untouched and still green — proving the red
+    // came from the label and could NOT have come from age.
+    expect(report.entries.find((e) => e.action === 'weekly_report.batch.pulled')?.status).toBe(
+      'green',
+    );
+    expect(report.overall).toBe('red');
+  });
+
+  /**
+   * Why this matters : the mirror image. During observation nobody is logged in
+   * to `claude` yet, so the four generators fail on EVERY tick by construction.
+   * Escalating then would paint the board red for the entire planned migration,
+   * which is how a board stops being read. The watchdog emits the twin label
+   * `batch_failed_observation:…`, and the `:` in the family prefix is what keeps
+   * it out — `batch_failed` must not match it.
+   */
+  it('does NOT escalate a batch failure during the observation window', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: {
+          errors: 2,
+          errorLabels: ['batch_failed_observation:weekly:1', 'claude_auth:observation_pending'],
+        },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    // Visible (amber, because errors > 0) but never a phantom incident.
+    expect(watchdog?.status).toBe('amber');
+  });
+
+  /**
+   * Why this matters : a schedule that silently disappeared is an outage on a
+   * host that never sleeps, and the RUNBOOK hands the operator this exact label
+   * as its proof-the-alerting-works drill. Before the family match, that drill
+   * only worked by accident — 4h later, via age.
+   */
+  it('escalates a missing cron entry by label, not by waiting four hours', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['task_missing:onboarding'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    expect(report.entries.find((e) => e.action === 'worker.watchdog.heartbeat')?.status).toBe(
+      'red',
+    );
+  });
+
+  /**
+   * Why this matters : séances is the only entry J9 ADDED, and the 4h reasoning
+   * that shaped every inherited tolerance was never applied to it. Its ticks are
+   * 30 min apart and the default flips red after 2 missed ones — ~1h35 — while
+   * `weekly` legitimately holds the machine-global lock for up to 2h. That is a
+   * board red every Sunday on a healthy host, the exact failure the inherited
+   * tolerances were widened to avoid. Drop `windowedRedAfterMissed` and this
+   * test goes red.
+   */
+  it('keeps séances amber while a long batch legitimately holds the lock, red past 4h', async () => {
+    // 18:00 Paris — inside the [25,55] × 8-23h window.
+    const now = new Date('2026-08-05T16:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const seances = (silenceMs: number) => [
+      { action: 'seance.batch.pulled', _max: { createdAt: new Date(now.getTime() - silenceMs) } },
+    ];
+
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    // 2h05 of silence — inside what the 2h wrapper timeout can legitimately cause.
+    auditGroupByMock.mockResolvedValueOnce(seances(2 * HOUR + 5 * MIN));
+    const during = await serverReport(now);
+    expect(during.entries.find((e) => e.action === 'seance.batch.pulled')?.status).toBe('amber');
+
+    // 4h30 — past every legitimate excuse, including the 2h30 stale-lock reclaim.
+    auditGroupByMock.mockResolvedValueOnce(seances(4 * HOUR + 30 * MIN));
+    const after = await serverReport(now);
+    expect(after.entries.find((e) => e.action === 'seance.batch.pulled')?.status).toBe('red');
+  });
+
+  /**
    * Why this matters : every tolerance in the PC set absorbs ONE excuse — "the
    * PC was off". On the always-on host that excuse is gone, and re-using the
    * 24h window would keep a dead onboarding pipeline green for half a day.
@@ -2031,6 +2169,13 @@ describe('buildHostActionsReport', () => {
     expect(item.key).toBe('label:claude_auth:observation_pending');
     expect(item.severity).toBe('pending');
     expect(item.reference).toBe('ops/worker/RUNBOOK.md');
+    // THE assertion this test was missing. The label is emitted by the SERVER
+    // watchdog, but `WORKER_HOST` is still `pc` for the whole observation window
+    // BY CONSTRUCTION — so a host-aware command would print `claude login` and
+    // send the operator to log in on the PC, where they already are, while the
+    // server stays mute. Without this line the constant could be swapped back to
+    // the host-aware one and all 80 tests still passed (verified by mutation).
+    expect(item.command).toBe('sudo -u fxmily -H claude auth login --claudeai');
   });
 
   it('uses lastRanAt as the "since" for a red (ran then went stale) heartbeat', () => {

@@ -115,12 +115,41 @@ for b in "${ORDER[@]}"; do
   ELAPSED=$(($(date +%s) - START))
   SECTION="$(awk -v n="################ $b ################" '$0==n{f=1;next} /^################/{f=0} f' "$LOG")"
 
+  # Did the batch actually RUN, or did run-batch.sh skip it benignly?
+  #
+  # This is the hole that going through run-batch.sh (for the machine-global
+  # lock, which is right) opened up: `run-batch.sh` exits **0** when no Claude
+  # account is logged in, or while a quota cooldown is active — deliberately, so
+  # cron does not treat an expected pause as a recurring failure. But this script
+  # is the switchover gate. Reading only `$?`, it printed `PASS` for seven
+  # pipelines on a host where nothing had run at all, and ADR-007's "7/7" could
+  # be ticked on a completely mute machine.
+  #
+  # run-batch.sh already writes the truth to `<batch>.status.json` (`skipped`).
+  # Trust it ONLY if this very run produced it — otherwise a leftover file from a
+  # previous, healthy run would replay a success that did not happen now.
+  STATUS_FILE="${FXMILY_WORKER_LOG_DIR:-$REPO_ROOT/ops/worker/logs}/${b}.status.json"
+  SKIPPED=''
+  if [[ ! -r "$STATUS_FILE" ]]; then
+    SKIPPED='no-status'
+  elif [[ -z "$(find "$STATUS_FILE" -newermt "@$((START - 1))" 2>/dev/null)" ]]; then
+    SKIPPED='stale-status'
+  else
+    SKIPPED="$(jq -r '.skipped // ""' "$STATUS_FILE" 2>/dev/null || echo 'unreadable-status')"
+  fi
+
   if grep -q '⛔ HALT' <<<"$SECTION"; then
     ERRS="$(grep -c '✗ claude exited' <<<"$SECTION" || true)"
     printf 'FAIL/no-auth   (%ss, %s generation error(s), pull OK)\n' "$ELAPSED" "$ERRS"
     FAIL=$((FAIL + 1))
   elif [[ "$RC" -ne 0 ]]; then
     printf 'FAIL           (%ss, rc=%s)\n' "$ELAPSED" "$RC"
+    FAIL=$((FAIL + 1))
+  elif [[ -n "$SKIPPED" ]]; then
+    # exit 0, but nothing ran. A gate that counts this as a pass is worse than
+    # no gate: it certifies a mute host. `no_claude_auth` is the expected value
+    # before the login — which is precisely the state this script must refuse.
+    printf 'FAIL/skipped   (%ss, batch did not run: %s)\n' "$ELAPSED" "$SKIPPED"
     FAIL=$((FAIL + 1))
   elif [[ -n "${PULL_ONLY[$b]:-}" ]]; then
     printf 'PASS/pull-only (%ss, token + endpoint + envelope OK; generation NOT exercised in dry-run)\n' "$ELAPSED"

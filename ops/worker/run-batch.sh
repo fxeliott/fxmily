@@ -2,11 +2,11 @@
 #
 # ops/worker/run-batch.sh — Fxmily local AI worker (J2).
 #
-# WHY THIS EXISTS. The 6 Claude batch orchestrators
-# (onboarding / weekly / monthly / calendar / verification / profile) generate
-# every AI artifact the app shows a member (onboarding MemberProfile,
+# WHY THIS EXISTS. The 7 batch orchestrators
+# (onboarding / weekly / monthly / calendar / verification / profile / seances)
+# generate every AI artifact the app shows a member (onboarding MemberProfile,
 # weekly/monthly digests, adaptive calendar, MT5 vision verification, J-E
-# monthly deep re-profiling). Until J2 they were
+# monthly deep re-profiling) and reconcile the séances hub. Until J2 they were
 # "human-in-the-loop : run manually by Eliot" (see
 # ops/scripts/lib/claude-batch-core.sh:25). That manual step was the ROOT CAUSE
 # of the "IA silence 24H après profil rempli" bug : finalizeInterview only flips
@@ -33,7 +33,7 @@
 # always safe.
 #
 # Usage :
-#   run-batch.sh <onboarding|weekly|monthly|calendar|verification|profile> [-- <extra script args>]
+#   run-batch.sh <onboarding|weekly|monthly|calendar|verification|profile|seances> [-- <extra script args>]
 #
 # Env (loaded from ops/worker/worker.env if present; already-set vars win) :
 #   FXMILY_ADMIN_TOKEN   — 32+ char admin batch token (matches prod ADMIN_BATCH_TOKEN)
@@ -66,14 +66,14 @@ if [[ "${1:-}" == "--" ]]; then
 fi
 
 case "$BATCH" in
-  onboarding|weekly|monthly|calendar|verification|profile) ;;
+  onboarding|weekly|monthly|calendar|verification|profile|seances) ;;
   ""|-h|--help)
-    echo "Usage: $0 <onboarding|weekly|monthly|calendar|verification|profile> [-- <extra args>]" >&2
+    echo "Usage: $0 <onboarding|weekly|monthly|calendar|verification|profile|seances> [-- <extra args>]" >&2
     [[ "$BATCH" == "-h" || "$BATCH" == "--help" ]] && exit 0
     exit 2
     ;;
   *)
-    echo "[worker] ERROR: unknown batch '$BATCH' (expected onboarding|weekly|monthly|calendar|verification|profile)." >&2
+    echo "[worker] ERROR: unknown batch '$BATCH' (expected onboarding|weekly|monthly|calendar|verification|profile|seances)." >&2
     exit 2
     ;;
 esac

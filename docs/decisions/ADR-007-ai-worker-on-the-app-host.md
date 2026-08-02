@@ -112,11 +112,12 @@ root de l'app n'a jamais à accepter un nouveau nom de commande.
 
 **Décision : deux surfaces, deux publics, aucune duplication.**
 
-| Surface                                    | Contenu                                                     | Pour qui                          |
-| ------------------------------------------ | ----------------------------------------------------------- | --------------------------------- |
-| `~/worker/ops/worker/logs/<batch>.{log,status.json}` | sortie brute + verdict machine du dernier run       | diagnostic en SSH, watchdog       |
-| `/var/log/fxmily/worker.log`               | une ligne par tick : batch, verdict, mode, durée             | lecture chronologique, logrotate  |
-| **Postgres `audit_logs`** (`*.batch.pulled`, `worker.watchdog.heartbeat`) | le heartbeat que lit `/admin/system` | Eliot, sans SSH   |
+| Surface                                                                   | Contenu                                                   | Pour qui                         |
+| ------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------- |
+| `~/worker/ops/worker/logs/<batch>.{log,status.json}`                      | sortie brute + verdict machine du dernier run             | diagnostic en SSH, watchdog      |
+| `/var/log/fxmily/worker.log`                                              | une ligne par tick : batch, verdict, mode, durée          | lecture chronologique, logrotate |
+| `/var/log/fxmily/<batch>.wrapper.log`                                     | la sortie complète du batch, hors du chemin chronologique | diagnostic après une ligne FAIL  |
+| **Postgres `audit_logs`** (`*.batch.pulled`, `worker.watchdog.heartbeat`) | le heartbeat que lit `/admin/system`                      | Eliot, sans SSH                  |
 
 `/admin/system` **ne lit aucun fichier**. Il lit les lignes d'audit que le
 serveur écrit lui-même à chaque `pull` — ce qui est la bonne source : elle
@@ -208,11 +209,11 @@ tick est un skip propre et documenté — jamais un échec silencieux.
 
 ## Risques et parades
 
-| Risque                                                | Parade                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Risque                                                     | Parade                                                                                                                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Deux maîtres (PC réactivé pendant que le serveur persiste) | Un seul maître à la fois, écrit dans le runbook ; rien ne se corrompt (pulls filtrants, persists idempotents) mais deux quotas brûlent pour un résultat |
-| Session Claude expirée sans que ça se voie              | Pré-vol à chaque batch + `claude_auth:logged_out` escaladé en rouge sur `/admin/system` avec la commande exacte |
-| CRLF dans `/etc/cron.d` (panne muette de ~20 h en 2026-05) | `.gitattributes` + strip à l'installation + comptage d'octets CR par l'installeur ET par le watchdog |
-| Cap de quota qui martèle un compte limité               | Halte immédiate à la détection + stamp de cooldown + skip bénin des ticks suivants (porté tel quel du PC) |
-| Le worker sature l'hôte de l'app                        | `nice`/`ionice` + plafond 2 h + verrou global ; escalade = VPS dédié, décision d'Eliot |
-| Fausse alarme pendant la fenêtre d'observation          | Le watchdog serveur rapporte `claude_auth:observation_pending` (informatif) et non `claude_auth:logged_out` (rouge) tant que `FXMILY_WORKER_DRY_RUN=1` |
+| Session Claude expirée sans que ça se voie                 | Pré-vol à chaque batch + `claude_auth:logged_out` escaladé en rouge sur `/admin/system` avec la commande exacte                                         |
+| CRLF dans `/etc/cron.d` (panne muette de ~20 h en 2026-05) | `.gitattributes` + strip à l'installation + comptage d'octets CR par l'installeur ET par le watchdog                                                    |
+| Cap de quota qui martèle un compte limité                  | Halte immédiate à la détection + stamp de cooldown + skip bénin des ticks suivants (porté tel quel du PC)                                               |
+| Le worker sature l'hôte de l'app                           | `nice`/`ionice` + plafond 2 h + verrou global ; escalade = VPS dédié, décision d'Eliot                                                                  |
+| Fausse alarme pendant la fenêtre d'observation             | Le watchdog serveur rapporte `claude_auth:observation_pending` (informatif) et non `claude_auth:logged_out` (rouge) tant que `FXMILY_WORKER_DRY_RUN=1`  |

@@ -873,20 +873,45 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
  *
  * `expectedSince` is the switchover instant: before it, a missing row reads
  * `pending` (calm, "first run to come") instead of `never_ran`.
+ *
+ * Why a hard-coded date is safe here even if the flip happens weeks later: the
+ * heartbeat query groups by ACTION, not by machine (`buildHeartbeatReport`
+ * above). The PC has been writing `*.batch.pulled` rows for months, and the
+ * server writes the same slugs during the observation window — so on flip day
+ * every entry already has a recent `lastRanAt` and `expectedSince` is never
+ * consulted. It only matters for a brand-new slug, which is exactly the case it
+ * was added for (`seance.batch.pulled`, which no PC pipeline ever emitted).
  */
 const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
 
 const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] =
   WORKER_EXPECTATIONS.map((e) => {
-    // Tighten: green stays anchored on the real cadence, red now means "this
-    // pipeline missed several consecutive ticks on a host that was up".
-    const tighter: Record<string, number> = {
-      'onboarding.batch.pulled': 6, // 20 min × 6 = 2h
-      'verification.batch.pulled': 6, // 2h (real cadence is 5 min)
+    // Tighten — but NOT below the longest legitimate silence.
+    //
+    // The worker lock is MACHINE-GLOBAL on purpose (one `claude --print` at a
+    // time, anti-ban). So while `weekly` runs its members one by one, every
+    // other pipeline exits BEFORE its pull and writes no row at all. That gap
+    // is the batch's own duration, and the wrapper lets a batch run up to
+    // `FXMILY_WORKER_TIMEOUT` (2h) before killing it. Setting the tolerance at
+    // 2h would therefore paint `onboarding` red every Sunday on a perfectly
+    // healthy host — and worse, the board would print "the pipeline is dead,
+    // reinstall the worker", a confident diagnosis about the wrong thing.
+    // 4h sits above the wrapper timeout AND above the 2h30 stale-lock reclaim,
+    // so red still means red, and it remains 6× tighter than the PC's 24h.
+    //
+    // `Partial<Record<WorkerPipelineAction, …>>` and not `Record<string, …>`:
+    // a typo'd key would silently fall back to the PC tolerance — 24h, the
+    // "the PC was off" window — on a machine that never sleeps. Typed this
+    // way, the typo is a compile error.
+    const tighter: Partial<Record<WorkerPipelineAction, number>> = {
+      'onboarding.batch.pulled': 12, // 20 min × 12 = 4h
+      'verification.batch.pulled': 12, // 4h (real cadence is 5 min)
       'calendar.batch.pulled': 2, // 2 days
       'weekly_report.batch.pulled': 2, // unchanged — a weekly cannot be tighter
       'monthly_debrief.batch.pulled': 2, // unchanged
       'member_profile_monthly.batch.pulled': 2, // unchanged
+      // The watchdog takes no lock (it inspects, it does not generate), so a
+      // long batch never silences it — 2h stays honest here.
       'worker.watchdog.heartbeat': 4, // 30 min × 4 = 2h
     };
     const multiplier = tighter[e.action] ?? e.toleranceMultiplier;
@@ -897,15 +922,19 @@ const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAc
     };
   }).concat([
     {
-      // J9 scope 5 — the séances pipeline joined the worker contract and is now
-      // ticked every 30 min between 08h and 23h Paris. `periodMs` is the ALERT
-      // baseline, not the cadence: 1h green window absorbs a night gap without
-      // pretending the pipeline is dead, ×12 → red past 12h of silence in a
-      // window where it should have ticked ~24 times.
+      // J9 scope 5 — séances joined the worker contract and ticks at :25 and
+      // :55 between 08h and 23h Paris. Classified on MISSED TICKS, not raw age:
+      // the pipeline is deliberately idle overnight, so an age-based rule would
+      // read amber from ~01h to 08h EVERY night. A board that is amber every
+      // morning is a board nobody reads — which is how a real incident slips
+      // through. Same mechanism as the check-in reminder cron.
       action: 'seance.batch.pulled',
       label: 'Worker · séances (réconciliation)',
-      periodMs: 60 * MIN,
-      toleranceMultiplier: 12,
+      periodMs: 30 * MIN,
+      windowedScheduleParis: {
+        minutes: [25, 55],
+        hours: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      },
       expectedSince: WORKER_SERVER_INSTALLED_AT,
     },
   ]);
@@ -991,9 +1020,8 @@ export interface HostActionItem {
 const WORKER_INSTALL_COMMAND = isWorkerOnServer()
   ? 'sudo bash ops/worker/install-worker-vps.sh'
   : 'pwsh -File ops/worker/install-worker.ps1';
-const WORKER_LOGIN_COMMAND = isWorkerOnServer()
-  ? 'sudo -u fxmily -H claude auth login --claudeai'
-  : 'claude login';
+const SERVER_LOGIN_COMMAND = 'sudo -u fxmily -H claude auth login --claudeai';
+const WORKER_LOGIN_COMMAND = isWorkerOnServer() ? SERVER_LOGIN_COMMAND : 'claude login';
 const WORKER_REFERENCE = isWorkerOnServer() ? 'ops/worker/RUNBOOK.md' : 'ops/worker/README.md';
 
 /** Per-action remediation metadata for the host-actionable heartbeats. */
@@ -1061,8 +1089,15 @@ const LABEL_HOST_ACTIONS: Record<
   'claude_auth:observation_pending': {
     label: 'Worker · serveur pas encore connecté (bascule en cours)',
     detail:
-      "Le worker serveur tourne en observation (dry-run) et aucun compte Claude n'y est encore connecté. Le PC reste maître et génère normalement — rien n'est en attente côté membre. Connecte le compte dédié quand tu veux passer la main au serveur.",
-    command: WORKER_LOGIN_COMMAND,
+      "Le worker serveur tourne en observation (dry-run) et aucun compte Claude n'y est encore connecté. Le PC reste maître et génère normalement : rien n'est en attente côté membre. Connecte le compte dédié quand tu veux passer la main au serveur.",
+    // NOT `WORKER_LOGIN_COMMAND`. That constant follows `WORKER_HOST`, which is
+    // still `pc` during the observation window BY CONSTRUCTION — the flip to
+    // `server` is the LAST step of the switchover, not the first. So the
+    // host-aware constant would print `claude login` here and send the operator
+    // to log in on the PC, which is already logged in, while the server stays
+    // mute. This label is emitted by the SERVER watchdog only; its command is
+    // a server command, always.
+    command: SERVER_LOGIN_COMMAND,
     reference: 'ops/worker/RUNBOOK.md',
     severity: 'pending',
   },

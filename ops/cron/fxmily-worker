@@ -34,10 +34,32 @@
 
 set -uo pipefail # NOT -e : we always want the log line + the ping to happen.
 
+# --- Logging FIRST ------------------------------------------------------------
+# Everything that can refuse to run is below, and cron is configured MAILTO=""
+# (a daily mail per tick would be noise nobody reads). So a refusal that only
+# wrote to stderr would vanish completely: no log line, no mail, no ping — the
+# pipeline would simply stop existing, and the only trace would be the slow
+# age-drift of its heartbeat, hours later. The log has to be usable BEFORE the
+# first thing that can fail, not after.
+if [[ -r /etc/fxmily/cron.env ]]; then
+  # shellcheck disable=SC1091
+  source /etc/fxmily/cron.env
+fi
+WORKER_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
+mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+
+# Refuse loudly: one line in the timeline, one line on stderr, then out.
+die() {
+  echo "[$(ts)] [fxmily-worker] REFUSED: $1" >>"$WORKER_LOG" 2>/dev/null
+  echo "[fxmily-worker] $1" >&2
+  exit 2
+}
+
 BATCH="${1:-}"
 if [[ -z "$BATCH" ]]; then
-  echo "usage: fxmily-worker <onboarding|weekly|monthly|calendar|verification|profile|seances> [-- args]" >&2
-  exit 2
+  die "usage: fxmily-worker <onboarding|weekly|monthly|calendar|verification|profile|seances> [-- args]"
 fi
 shift
 
@@ -54,10 +76,7 @@ fi
 # run-batch.sh validates again on its side (defense in depth).
 case "$BATCH" in
   onboarding | weekly | monthly | calendar | verification | profile | seances) ;;
-  *)
-    echo "[fxmily-worker] batch '$BATCH' is not in the allowlist" >&2
-    exit 2
-    ;;
+  *) die "batch '$BATCH' is not in the allowlist" ;;
 esac
 
 # --- Environment cron does not give you -------------------------------------
@@ -75,20 +94,8 @@ export PATH="$HOME/.npm-global/bin:$HOME/bin:/usr/local/bin:/usr/bin:/bin"
 WORKER_REPO="${FXMILY_WORKER_REPO:-$HOME/worker}"
 RUN_BATCH="$WORKER_REPO/ops/worker/run-batch.sh"
 if [[ ! -f "$RUN_BATCH" ]]; then
-  echo "[fxmily-worker] run-batch.sh not found at $RUN_BATCH (FXMILY_WORKER_REPO?)" >&2
-  exit 2
+  die "run-batch.sh not found at $RUN_BATCH (checkout moved or FXMILY_WORKER_REPO wrong?)"
 fi
-
-# Optional operator config (log path + Healthchecks.io URLs). Best-effort.
-if [[ -r /etc/fxmily/cron.env ]]; then
-  # shellcheck disable=SC1091
-  source /etc/fxmily/cron.env
-fi
-
-WORKER_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
-mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
-
-ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 
 # --- OBSERVATION MODE (J9 scope 4 — the controlled switchover) ---------------
 # `FXMILY_WORKER_DRY_RUN=1` in /etc/fxmily/cron.env forces every scheduled tick
@@ -98,12 +105,21 @@ ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 # compared before anything member-facing changes.
 #
 # The switch is deliberately ONE line in ONE file, not a crontab edit:
-#   observation → production :  FXMILY_WORKER_DRY_RUN=0   (or delete the line)
+#   observation → production :  FXMILY_WORKER_DRY_RUN=0   (explicit, required)
 #   production  → observation :  FXMILY_WORKER_DRY_RUN=1   (instant rollback)
 # No file is re-installed, no schedule is touched, and the change takes effect
 # on the very next tick. A rollback you can perform in five seconds under
 # pressure is the only kind that actually gets performed.
-if [[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]]; then
+#
+# The DEFAULT IS OBSERVATION, and that asymmetry is the whole point. If the key
+# is missing from /etc/fxmily/cron.env — the file is provisioned once by hand,
+# so a fresh host, a restore, or a rebuilt VM will not have it — a `:-0` default
+# would make the very first tick after installation write to production while
+# the PC is still master. Two masters, two quotas, member-facing writes from a
+# machine nobody has validated yet: the exact accident the observation window
+# exists to prevent, triggered by an ABSENT line. Going to production has to be
+# something someone typed on purpose.
+if [[ "${FXMILY_WORKER_DRY_RUN:-1}" == "1" ]]; then
   case " ${EXTRA_ARGS[*]-} " in
     *" --dry-run "*) ;;
     *) EXTRA_ARGS+=(--dry-run) ;;
@@ -132,7 +148,7 @@ hc_ping "/start"
 
 # --- Run ---------------------------------------------------------------------
 # `nice`/`ionice` : the AI batches share this box with fxmily-web + Postgres
-# (ADR-006 — one host, no second VPS, interdit ❶). A `claude --print` run is
+# (ADR-007 — one host, no second VPS, interdit ❶). A `claude --print` run is
 # mostly network-wait, but the CLI still spawns a Node process per member; being
 # polite costs nothing and removes any doubt that member-facing latency could
 # ever regress because a batch is running.
@@ -151,19 +167,31 @@ if command -v timeout >/dev/null 2>&1 && [[ "$BATCH_TIMEOUT" != "0" ]]; then
   TIMEOUT_CMD=(timeout --kill-after=60s "$BATCH_TIMEOUT")
 fi
 
+# Where the batch's own output goes. NOT into $WORKER_LOG: run-batch.sh already
+# `tee`s a full per-batch transcript (banners, per-member progress, the whole
+# `claude` output), and folding that into the central log would drown the one
+# thing that log exists for — the one-line-per-tick timeline the RUNBOOK tells
+# the operator to `tail`. A timeline you have to grep is not a timeline.
+BATCH_STDOUT="$(dirname "$WORKER_LOG")/$BATCH.wrapper.log"
+
 "${TIMEOUT_CMD[@]}" "${NICE[@]}" bash "$RUN_BATCH" "$BATCH" \
-  ${EXTRA_ARGS[0]+-- "${EXTRA_ARGS[@]}"} >>"$WORKER_LOG" 2>&1
+  ${EXTRA_ARGS[0]+-- "${EXTRA_ARGS[@]}"} >>"$BATCH_STDOUT" 2>&1
 EXIT_CODE=$?
 
 END_TS="$(ts)"
 
-MODE_TAG=$([[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]] && echo "observation" || echo "persist")
+# Same default as the gate above (observation). Reading `:-0` here while the
+# gate reads `:-1` would tag an observation run as `persist` in the log — the
+# operator would believe the switchover happened when it had not.
+MODE_TAG=$([[ "${FXMILY_WORKER_DRY_RUN:-1}" == "1" ]] && echo "observation" || echo "persist")
 
 if [[ "$EXIT_CODE" -eq 0 ]]; then
   echo "[$END_TS] [fxmily-worker] $BATCH OK mode=$MODE_TAG ($START_TS → $END_TS)" >>"$WORKER_LOG"
   hc_ping ""
 else
-  echo "[$END_TS] [fxmily-worker] $BATCH FAIL exit=$EXIT_CODE mode=$MODE_TAG ($START_TS → $END_TS)" >>"$WORKER_LOG"
+  # Point at the transcript. A failure line with no way to reach the output is
+  # a failure line the operator has to go hunting for.
+  echo "[$END_TS] [fxmily-worker] $BATCH FAIL exit=$EXIT_CODE mode=$MODE_TAG ($START_TS → $END_TS) — see $BATCH_STDOUT" >>"$WORKER_LOG"
   hc_ping "/fail"
 fi
 

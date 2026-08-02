@@ -1411,31 +1411,62 @@ describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () 
   /**
    * Why this matters : every tolerance in the PC set absorbs ONE excuse — "the
    * PC was off". On the always-on host that excuse is gone, and re-using the
-   * 24h window would keep a dead onboarding pipeline green for half a day. Same
-   * fixture, same clock, two profiles: 3h of silence is a calm evening on the
-   * PC and a real incident on the server. If someone widens the server
-   * tolerances back, this test fails.
+   * 24h window would keep a dead onboarding pipeline green for half a day.
+   * Same fixture, same clock, two profiles: 6h of silence is still a calm
+   * night on the PC and a real incident on the server.
    */
-  it('turns a 3h-old onboarding pull red on the server while the PC profile stays amber', async () => {
+  it('turns a 6h-old onboarding pull red on the server while the PC profile stays amber', async () => {
     const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
     const stale = [
       {
         action: 'onboarding.batch.pulled',
-        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+        _max: { createdAt: new Date(now.getTime() - 6 * HOUR) },
       },
     ];
 
-    // PC profile (module already loaded with WORKER_HOST unset → 'pc').
+    // PC profile (module already loaded with WORKER_HOST unset → 'pc'): 24h.
     auditGroupByMock.mockResolvedValueOnce(stale);
     const pc = await getWorkerHealthReport(now);
     expect(pc.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe('amber');
 
-    // Server profile: 20 min × 6 = 2h tolerance → 3h is past it.
+    // Server profile: 20 min × 12 = 4h tolerance → 6h is past it.
     const { getWorkerHealthReport: serverReport } = await importServerHealth();
     auditGroupByMock.mockResolvedValueOnce(stale);
     const server = await serverReport(now);
     expect(server.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe('red');
     expect(server.overall).toBe('red');
+  });
+
+  /**
+   * The other half of the same decision, and the reason the server tolerance is
+   * 4h and not the 2h that "tighten it as far as it goes" would suggest.
+   *
+   * The worker lock is machine-global: while `weekly` walks its members one by
+   * one, every other pipeline exits BEFORE its pull and writes no audit row at
+   * all. That silence is normal, it is the anti-ban design working, and it can
+   * legitimately last until the wrapper's 2h timeout. A 2h tolerance would
+   * therefore turn a healthy Sunday into a red board — and the board does not
+   * just go red, it prints "the pipeline is dead, reinstall the worker", a
+   * confident diagnosis about a machine that is doing exactly what it should.
+   *
+   * So: 2h30 of silence (past the wrapper timeout, past nothing else) must read
+   * amber. If someone tightens this back to 2h, this test fails and says why.
+   */
+  it('does NOT go red while a long batch legitimately holds the global lock', async () => {
+    const now = new Date('2026-08-09T07:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        // Last pull just before `weekly` (Sunday 05h40) took the lock.
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 150 * MIN) },
+      },
+    ]);
+    const report = await serverReport(now);
+    const onboarding = report.entries.find((e) => e.action === 'onboarding.batch.pulled');
+
+    expect(onboarding?.status).toBe('amber');
+    expect(report.overall).not.toBe('red');
   });
 
   /**

@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
     --uninstall) MODE=uninstall ;;
     --refresh-env) REFRESH_ENV=true ;;
     -h | --help)
-      sed -n '2,32p' "$0"
+      sed -n '2,29p' "$0"
       exit 0
       ;;
     *)
@@ -105,7 +105,7 @@ echo
 # =============================================================================
 # 1. Host prerequisites
 # =============================================================================
-echo "[1/7] Host prerequisites"
+echo "[1/8] Host prerequisites"
 for b in node npm git jq curl timeout; do
   if command -v "$b" >/dev/null 2>&1; then ok "$b $(command -v "$b")"; else fail "$b MISSING"; fi
 done
@@ -123,7 +123,7 @@ fi
 # =============================================================================
 # Deliberately NOT a root-wide `npm i -g`: the CLI self-updates, and a
 # root-owned install that an unprivileged cron job cannot update is a slow trap.
-echo "[2/7] Claude Code CLI"
+echo "[2/8] Claude Code CLI"
 CLAUDE_BIN="$USER_HOME/.npm-global/bin/claude"
 if [[ "$MODE" != check && ! -x "$CLAUDE_BIN" ]]; then
   sudo -u "$WORKER_USER" -H bash -lc 'mkdir -p ~/.npm-global && npm config set prefix ~/.npm-global && npm install -g @anthropic-ai/claude-code' >/dev/null
@@ -139,7 +139,7 @@ fi
 # =============================================================================
 # 3. Dedicated checkout (J9 contract: SEPARATE from anything else)
 # =============================================================================
-echo "[3/7] Dedicated worker checkout"
+echo "[3/8] Dedicated worker checkout"
 if [[ ! -d "$WORKER_REPO/.git" ]]; then
   if [[ "$MODE" == check ]]; then
     fail "no checkout at $WORKER_REPO"
@@ -150,22 +150,61 @@ if [[ ! -d "$WORKER_REPO/.git" ]]; then
 else
   ok "checkout present ($(sudo -u "$WORKER_USER" -H git -C "$WORKER_REPO" log --oneline -1))"
 fi
+# The checkout must actually CONTAIN the seven batch scripts. It is cloned from
+# `main`, and `seances-batch-local.sh` only exists once J9 is merged — so an
+# installer run before the merge would happily install a crontab whose `seances`
+# line fails every 30 minutes from 08h to 23h. Name the expected files, and
+# refuse rather than install a schedule the checkout cannot honour.
+EXPECTED_BATCH_SCRIPTS=(
+  onboarding-batch-local.sh
+  verification-batch-local.sh
+  seances-batch-local.sh
+  calendar-batch-local.sh
+  weekly-batch-local.sh
+  monthly-batch-local.sh
+  member-profile-monthly-local.sh
+)
+MISSING_SCRIPTS=()
+for s in "${EXPECTED_BATCH_SCRIPTS[@]}"; do
+  [[ -f "$WORKER_REPO/ops/scripts/$s" ]] || MISSING_SCRIPTS+=("$s")
+done
+if [[ "${#MISSING_SCRIPTS[@]}" -gt 0 ]]; then
+  fail "checkout is missing ${#MISSING_SCRIPTS[@]} batch script(s): ${MISSING_SCRIPTS[*]} — is $WORKER_REPO on the right branch?"
+else
+  ok "7/7 batch scripts present in the checkout"
+fi
+
 # CRLF is fatal to a cron-launched bash script (V1.6 bug #2 cost ~20h of silent
 # downtime on this very host). `.gitattributes` pins LF, but PROVE it here
 # rather than trust it — a checkout is the exact place where the promise breaks.
+#
+# COUNT what was inspected. Without `nullglob`, an unexpanded glob (missing or
+# empty directory) leaves the pattern as a literal, `continue` skips it, and the
+# loop ends having read NOTHING — then happily prints "0 CR byte across every
+# worker/batch script". A gate that turns green on an empty set is worse than no
+# gate: it is a false proof, and it is exactly the kind of green that let the
+# 2026-05-11 outage through.
 CR_TOTAL=0
+SCANNED=0
 for f in "$WORKER_REPO"/ops/worker/run-batch.sh "$WORKER_REPO"/ops/scripts/*.sh "$WORKER_REPO"/ops/scripts/lib/*.sh; do
   [[ -f "$f" ]] || continue
+  SCANNED=$((SCANNED + 1))
   CR_TOTAL=$((CR_TOTAL + $(tr -cd '\r' <"$f" | wc -c)))
   bash -n "$f" 2>/dev/null || fail "bash -n failed: $f"
 done
-[[ "$CR_TOTAL" -eq 0 ]] && ok "0 CR byte across every worker/batch script, bash -n clean" ||
-  fail "$CR_TOTAL CR bytes found — cron would silently skip these scripts"
+MIN_SCANNED=$((${#EXPECTED_BATCH_SCRIPTS[@]} + 1)) # 7 batch scripts + run-batch.sh
+if [[ "$SCANNED" -lt "$MIN_SCANNED" ]]; then
+  fail "only $SCANNED script(s) inspected, expected ≥ $MIN_SCANNED — the CR/syntax check proved nothing"
+elif [[ "$CR_TOTAL" -eq 0 ]]; then
+  ok "$SCANNED scripts inspected: 0 CR byte, bash -n clean"
+else
+  fail "$CR_TOTAL CR bytes found across $SCANNED scripts — cron would silently skip them"
+fi
 
 # =============================================================================
 # 4. worker.env — tokens MIRRORED from the app's own env, never invented
 # =============================================================================
-echo "[4/7] worker.env"
+echo "[4/8] worker.env"
 if [[ -f "$WORKER_ENV" && "$REFRESH_ENV" == false ]]; then
   ok "worker.env present (pass --refresh-env to re-mirror from $WEB_ENV)"
 elif [[ "$MODE" == check ]]; then
@@ -175,6 +214,23 @@ else
     echo "cannot read $WEB_ENV" >&2
     exit 2
   }
+  # Validate the SOURCE before destroying the destination. The mirror below is
+  # a `>` truncate followed by six `sed -n …p`: a key absent from web.env simply
+  # produces no line, so the token would be silently dropped from worker.env and
+  # the failure only surfaces after the old value is already gone. Check first,
+  # and keep a backup anyway — a hand-placed value is not reproducible.
+  SRC_MISSING=()
+  for k in ADMIN_BATCH_TOKEN MONTHLY_ADMIN_BATCH_TOKEN CALENDAR_ADMIN_BATCH_TOKEN \
+    VERIFICATION_ADMIN_BATCH_TOKEN PROFILE_ADMIN_BATCH_TOKEN SEANCES_ADMIN_BATCH_TOKEN; do
+    grep -qE "^$k=.+" "$WEB_ENV" || SRC_MISSING+=("$k")
+  done
+  if [[ "${#SRC_MISSING[@]}" -gt 0 ]]; then
+    echo "refusing to rewrite $WORKER_ENV: $WEB_ENV has no ${SRC_MISSING[*]}" >&2
+    echo "(the existing worker.env was left untouched)" >&2
+    exit 2
+  fi
+  [[ -f "$WORKER_ENV" ]] &&
+    cp -a "$WORKER_ENV" "$WORKER_ENV.bak-$(date -u +%Y%m%dT%H%M%SZ)"
   install -o "$WORKER_USER" -g "$WORKER_USER" -m 600 /dev/null "$WORKER_ENV"
   {
     echo "# ops/worker/worker.env — generated by install-worker-vps.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)."
@@ -209,7 +265,7 @@ fi
 # =============================================================================
 # 5. Wrappers
 # =============================================================================
-echo "[5/7] Wrappers"
+echo "[5/8] Wrappers"
 if [[ "$MODE" != check ]]; then
   install -o root -g root -m 755 "$REPO_SRC/ops/cron/fxmily-worker" "$BIN_WORKER"
   install -o root -g root -m 755 "$REPO_SRC/ops/cron/fxmily-worker-watchdog" "$BIN_WATCHDOG"
@@ -223,7 +279,7 @@ done
 # =============================================================================
 # 6. Schedule
 # =============================================================================
-echo "[6/7] /etc/cron.d/fxmily-worker"
+echo "[6/8] /etc/cron.d/fxmily-worker"
 if [[ "$MODE" != check ]]; then
   # Strip CR defensively even though the source is LF-pinned: this file is the
   # one whose CRLF corruption is SILENT (crond skips the line, logs nothing).
@@ -245,10 +301,12 @@ fi
 # =============================================================================
 # 7. Log rotation + final auth reminder
 # =============================================================================
-echo "[7/7] Log rotation"
+echo "[7/8] Log rotation"
 if [[ "$MODE" != check ]]; then
+  # Both the one-line-per-tick timeline AND the per-batch transcripts the
+  # wrapper writes next to it — an unrotated transcript is how a disk fills up.
   cat >"$LOGROTATE_DEST" <<EOF
-/var/log/fxmily/worker.log {
+/var/log/fxmily/worker.log /var/log/fxmily/*.wrapper.log {
   weekly
   rotate 8
   compress
@@ -262,6 +320,42 @@ EOF
   chmod 644 "$LOGROTATE_DEST"
 fi
 [[ -f "$LOGROTATE_DEST" ]] && ok "$LOGROTATE_DEST (weekly, 8 kept)" || fail "logrotate rule missing"
+
+# =============================================================================
+# 8. Observation window — armed EXPLICITLY, never assumed
+# =============================================================================
+# The switchover is only "controlled" if the first tick after installation does
+# NOT write to production. That depends on one line in /etc/fxmily/cron.env — a
+# file this installer does not own (it is provisioned once by setup-host.sh and
+# then hand-edited), so on a fresh host, a restore, or a rebuilt VM the line is
+# simply not there. The wrapper defaults to observation for exactly that reason,
+# but a default is not a proof: write the line, and SAY which mode the next tick
+# will run in. An operator who has to infer whether the server is live is an
+# operator who will eventually infer wrong.
+echo "[8/8] Observation window"
+CRON_ENV=/etc/fxmily/cron.env
+if [[ ! -f "$CRON_ENV" ]]; then
+  fail "$CRON_ENV missing — run ops/scripts/setup-host.sh first"
+elif grep -qE '^FXMILY_WORKER_DRY_RUN=' "$CRON_ENV"; then
+  CURRENT="$(grep -E '^FXMILY_WORKER_DRY_RUN=' "$CRON_ENV" | tail -1 | cut -d= -f2 | tr -d '"'"'"' \r')"
+  if [[ "$CURRENT" == "1" ]]; then
+    ok "FXMILY_WORKER_DRY_RUN=1 → next tick runs in OBSERVATION (nothing persisted)"
+  else
+    warn "FXMILY_WORKER_DRY_RUN=$CURRENT → next tick runs in PRODUCTION."
+    warn "Make sure the Windows tasks are disabled, or you now have TWO masters."
+  fi
+elif [[ "$MODE" == check ]]; then
+  fail "$CRON_ENV declares no FXMILY_WORKER_DRY_RUN (the observation window is not armed)"
+else
+  {
+    echo
+    echo "# J9 — AI worker. 1 = observation (every tick runs --dry-run, nothing"
+    echo "# persisted, the PC stays master). Set to 0 to hand over. See"
+    echo "# ops/worker/RUNBOOK.md before flipping it."
+    echo "FXMILY_WORKER_DRY_RUN=1"
+  } >>"$CRON_ENV"
+  ok "armed the observation window (FXMILY_WORKER_DRY_RUN=1 appended to $CRON_ENV)"
+fi
 
 echo
 echo "=== Claude session (the ONE manual step) ==="

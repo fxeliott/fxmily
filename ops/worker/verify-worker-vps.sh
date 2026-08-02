@@ -6,23 +6,39 @@
 #
 # WHY A SCRIPT AND NOT A CHECKLIST. "I ran them and it looked fine" is not a
 # proof. This runs all seven in `--dry-run` against the REAL prod endpoints with
-# the REAL tokens, and prints a verdict per pipeline that distinguishes the
-# three outcomes that actually matter:
+# the REAL tokens and prints a per-pipeline verdict.
 #
+# WHAT `--dry-run` ACTUALLY EXERCISES — and this is the part a checklist gets
+# wrong. Three of the seven pipelines (onboarding, verification, seances) exit
+# right after saving the envelope: "--dry-run set. Skipping claude --print +
+# persist." So for those three, a dry-run proves the token, the endpoint and the
+# envelope shape — and NOTHING about generation. Reporting them as `PASS/empty`
+# alongside the four that really do call the model would be a false green about
+# exactly the thing this jalon exists to verify. They get their own verdict:
+#
+#   PASS/pull-only   token + endpoint + envelope OK. The pipeline short-circuits
+#                    before any model call by design, so generation is NOT
+#                    covered by this run. Only a real (non-dry) run covers it.
 #   PASS/generated   the pull returned work AND `claude --print` produced valid
 #                    JSON for it (nothing persisted — that is what --dry-run is)
-#   PASS/empty       the pull returned no work, so the batch short-circuited
-#                    before any model call. This is a REAL pass: it proves the
-#                    token, the endpoint, the envelope shape and the guard.
-#   FAIL/no-auth     the pull worked but every generation failed and the
-#                    circuit breaker halted. On this host that means exactly one
-#                    thing: no Claude account is signed in. It is reported as a
-#                    FAILURE on purpose — a green run that generated nothing
-#                    would be the very lie this jalon exists to remove.
+#   PASS/empty       the pull returned no work, so the batch stopped before the
+#                    model call. A real pass: token, endpoint, envelope, guard.
+#   FAIL/no-auth     the pull worked but every generation failed and the circuit
+#                    breaker halted. On this host that means exactly one thing:
+#                    no Claude account is signed in. Reported as a FAILURE on
+#                    purpose — a green run that generated nothing would be the
+#                    very lie this jalon exists to remove.
 #
 # `--dry-run` is passed to every pipeline, so this NEVER writes anything
-# member-facing, and it is safe to run at any time, including while the PC
-# worker is still master.
+# member-facing.
+#
+# IT TAKES THE WORKER LOCK. Each pipeline is launched through `run-batch.sh`,
+# not directly, so it acquires the same MACHINE-GLOBAL lock the cron ticks use.
+# Calling the batch scripts directly would have left this script running for
+# hours while cron happily started a SECOND `claude --print` on the same
+# account — defeating the one-at-a-time guarantee that is the entire anti-ban
+# design, in the very script meant to prove that design works. A tick that
+# arrives while this runs exits benignly ("lock held"), which is correct.
 #
 # Usage :
 #   bash ops/worker/verify-worker-vps.sh            # honest timings
@@ -61,16 +77,13 @@ if [[ "$FAST" == true ]]; then
   export FXMILY_MAX_CONSECUTIVE_FAILURES=1
 fi
 
-declare -A SCRIPT=(
-  [onboarding]="ops/scripts/onboarding-batch-local.sh"
-  [verification]="ops/scripts/verification-batch-local.sh"
-  [seances]="ops/scripts/seances-batch-local.sh"
-  [calendar]="ops/scripts/calendar-batch-local.sh"
-  [weekly]="ops/scripts/weekly-batch-local.sh"
-  [monthly]="ops/scripts/monthly-batch-local.sh"
-  [profile]="ops/scripts/member-profile-monthly-local.sh"
-)
 ORDER=(onboarding verification seances calendar weekly monthly profile)
+
+# The three that exit before any `claude --print` when `--dry-run` is set. Kept
+# as data, not as a comment, so the verdict cannot drift away from the truth:
+# if one of them ever grows a dry-run generation path, deleting it from this
+# list is the single edit required.
+declare -A PULL_ONLY=([onboarding]=1 [verification]=1 [seances]=1)
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${FXMILY_VERIFY_LOG:-/tmp/j9-verify-$STAMP.log}"
@@ -97,7 +110,7 @@ for b in "${ORDER[@]}"; do
   {
     echo "################ $b ################"
   } >>"$LOG"
-  bash "$REPO_ROOT/${SCRIPT[$b]}" --dry-run >>"$LOG" 2>&1
+  bash "$REPO_ROOT/ops/worker/run-batch.sh" "$b" -- --dry-run >>"$LOG" 2>&1
   RC=$?
   ELAPSED=$(($(date +%s) - START))
   SECTION="$(awk -v n="################ $b ################" '$0==n{f=1;next} /^################/{f=0} f' "$LOG")"
@@ -109,6 +122,9 @@ for b in "${ORDER[@]}"; do
   elif [[ "$RC" -ne 0 ]]; then
     printf 'FAIL           (%ss, rc=%s)\n' "$ELAPSED" "$RC"
     FAIL=$((FAIL + 1))
+  elif [[ -n "${PULL_ONLY[$b]:-}" ]]; then
+    printf 'PASS/pull-only (%ss, token + endpoint + envelope OK; generation NOT exercised in dry-run)\n' "$ELAPSED"
+    PASS=$((PASS + 1))
   elif grep -qE 'Generated: [1-9]' <<<"$SECTION"; then
     N="$(grep -oE 'Generated: [0-9]+' <<<"$SECTION" | head -1 | grep -oE '[0-9]+')"
     printf 'PASS/generated (%ss, %s generated, JSON valid, nothing persisted)\n' "$ELAPSED" "$N"
@@ -124,7 +140,9 @@ echo "RESULT: $PASS/7 pass, $FAIL/7 fail"
 if [[ "$FAIL" -gt 0 ]]; then
   echo
   echo "A FAIL/no-auth on this host means: no Claude account is signed in."
-  echo "  sudo -u ${USER:-fxmily} -H claude auth login --claudeai"
+  # Hard-coded on purpose: run as root, `$USER` is `root`, and the printed
+  # command would tell the operator to sign in as the wrong user.
+  echo "  sudo -u fxmily -H claude auth login --claudeai"
   echo "Nothing was lost: pulls are idempotent, pending members are re-picked."
 fi
 [[ "$FAIL" -eq 0 ]]

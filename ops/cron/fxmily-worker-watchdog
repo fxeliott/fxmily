@@ -77,16 +77,34 @@ TASKS_OK=0
 
 # --- 1. CONFIG ---------------------------------------------------------------
 ADMIN_TOKEN=""
+
+# `worker.env` is written by hand as often as by the installer, so a value may
+# arrive quoted (KEY="…") or carrying a CR from a Windows editor. run-batch.sh
+# already strips both before using a token; this watchdog has to strip them the
+# SAME way. Reading a quoted token raw would send `X-Admin-Token: "…"`, get a
+# 401 on every heartbeat, and turn the watchdog entry red — an alarm about the
+# watchdog while the watchdog is fine and the quoting is the only bug.
+unwrap() {
+  local v="$1"
+  v="${v%$'\r'}"
+  v="${v#\"}"
+  v="${v%\"}"
+  v="${v#\'}"
+  v="${v%\'}"
+  printf '%s' "$v"
+}
+
 if [[ ! -r "$ENV_FILE" ]]; then
   add_label 'config_missing:worker.env'
 else
   # Read token lengths WITHOUT ever echoing a value.
   while IFS='=' read -r key val; do
     [[ "$key" =~ ^FXMILY_.*TOKEN$ ]] || continue
+    val="$(unwrap "$val")"
     if [[ "${#val}" -lt 32 ]]; then add_label "token_short:$key"; fi
     [[ "$key" == "FXMILY_ADMIN_TOKEN" ]] && ADMIN_TOKEN="$val"
   done < <(grep -E '^FXMILY_[A-Z_]*TOKEN=' "$ENV_FILE" || true)
-  BASE_URL="$(grep -E '^FXMILY_BASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  BASE_URL="$(unwrap "$(grep -E '^FXMILY_BASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)")"
 fi
 BASE_URL="${FXMILY_BASE_URL:-${BASE_URL:-https://app.fxmilyapp.com}}"
 
@@ -171,10 +189,9 @@ fi
 ERRORS="${#ERROR_LABELS[@]}"
 SUMMARY="SUMMARY checked=${#PIPELINES[@]} ok=$TASKS_OK repaired=0 errors=$ERRORS"
 if [[ "$ERRORS" -gt 0 ]]; then
-  SUMMARY+=" [$(
-    IFS='; '
-    printf '%s' "${ERROR_LABELS[*]}"
-  )]"
+  # `IFS='; '` would join with `;` only — bash uses the FIRST character of IFS
+  # for `${arr[*]}`. Build the separator explicitly instead.
+  SUMMARY+=" [$(printf '%s; ' "${ERROR_LABELS[@]}" | sed 's/; $//')]"
 fi
 log "$SUMMARY"
 
@@ -194,7 +211,8 @@ PAYLOAD="$(jq -nc \
   --argjson ok "$TASKS_OK" \
   --argjson errors "$ERRORS" \
   --arg version "$WATCHDOG_VERSION" \
-  --argjson labels "$(printf '%s\n' ${ERROR_LABELS[@]+"${ERROR_LABELS[@]}"} | head -20 | jq -R . | jq -s .)" \
+  --argjson labels "$(printf '%s\n' ${ERROR_LABELS[@]+"${ERROR_LABELS[@]}"} \
+    | head -20 | jq -R . | jq -s 'map(select(length > 0))')" \
   '{tasksChecked: $checked, tasksOk: $ok, repaired: 0, errors: $errors, watchdogVersion: $version}
    + (if ($labels | length) > 0 then {errorLabels: $labels} else {} end)')"
 

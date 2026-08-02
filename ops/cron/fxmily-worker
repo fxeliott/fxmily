@@ -90,6 +90,26 @@ mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
 
 ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 
+# --- OBSERVATION MODE (J9 scope 4 — the controlled switchover) ---------------
+# `FXMILY_WORKER_DRY_RUN=1` in /etc/fxmily/cron.env forces every scheduled tick
+# to run with `--dry-run`: the server is pulled, the generation is exercised for
+# real, and NOTHING is persisted. That is the doublon window — the PC stays
+# master, the server proves it can do the work, and the two outputs can be
+# compared before anything member-facing changes.
+#
+# The switch is deliberately ONE line in ONE file, not a crontab edit:
+#   observation → production :  FXMILY_WORKER_DRY_RUN=0   (or delete the line)
+#   production  → observation :  FXMILY_WORKER_DRY_RUN=1   (instant rollback)
+# No file is re-installed, no schedule is touched, and the change takes effect
+# on the very next tick. A rollback you can perform in five seconds under
+# pressure is the only kind that actually gets performed.
+if [[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]]; then
+  case " ${EXTRA_ARGS[*]-} " in
+    *" --dry-run "*) ;;
+    *) EXTRA_ARGS+=(--dry-run) ;;
+  esac
+fi
+
 # --- Dead-man's switch (Healthchecks.io), env-gated and no-op by default -----
 # Same convention as the host backup crons: one URL per check, BLANK = disabled
 # so the wrapper is a silent no-op until Eliott pastes real URLs. The variable
@@ -137,11 +157,13 @@ EXIT_CODE=$?
 
 END_TS="$(ts)"
 
+MODE_TAG=$([[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]] && echo "observation" || echo "persist")
+
 if [[ "$EXIT_CODE" -eq 0 ]]; then
-  echo "[$END_TS] [fxmily-worker] $BATCH OK ($START_TS → $END_TS)" >>"$WORKER_LOG"
+  echo "[$END_TS] [fxmily-worker] $BATCH OK mode=$MODE_TAG ($START_TS → $END_TS)" >>"$WORKER_LOG"
   hc_ping ""
 else
-  echo "[$END_TS] [fxmily-worker] $BATCH FAIL exit=$EXIT_CODE ($START_TS → $END_TS)" >>"$WORKER_LOG"
+  echo "[$END_TS] [fxmily-worker] $BATCH FAIL exit=$EXIT_CODE mode=$MODE_TAG ($START_TS → $END_TS)" >>"$WORKER_LOG"
   hc_ping "/fail"
 fi
 

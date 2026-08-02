@@ -179,8 +179,30 @@ Observation is also the **default**: if the line is missing entirely, the wrappe
 still runs `--dry-run`. Going to production has to be something someone typed on
 purpose, never something that happens because a config line was lost.
 
-Let it run at least one full weekly cycle so `weekly`, and ideally
-`monthly`/`profile`, have actually fired.
+**Observe WITHOUT signing in, then sign in only to switch over.** This ordering is
+not cosmetic, and it is the opposite of what feels natural.
+
+While no account is signed in on the server, every tick is a clean benign skip
+(`skipped: "no_claude_auth"`): the cron, the lock, the wrappers, the logs, the
+watchdog and the heartbeat are all exercised, and the quota cost is **exactly
+zero**. That is the window you want to let run long — it proves the plumbing,
+which is the only thing observation can prove anyway.
+
+The moment you sign in, the four generators start calling the model for real on
+every tick **and throwing the answer away** (dry-run persists nothing) while the
+PC produces the copy members actually receive. Every one of those calls is pure
+waste, billed to the 5-hour and weekly caps of the very account the PC is using
+to serve members. `calendar` alone is one full generation per member per day.
+
+So do not "sign in, then observe for a week". Do:
+
+1. let the un-authenticated observation run as long as you like (zero cost) ;
+2. sign in ;
+3. run the verification once — that single sweep IS the generation proof ;
+4. switch over the same day.
+
+Keeping both machines generating on one account for days risks a cap, and a cap
+hits the PC too — that is, the members.
 
 During this window the `/admin/system` worker board is written by **two**
 watchdogs (the PC's and the server's). The `watchdogVersion` field says which:

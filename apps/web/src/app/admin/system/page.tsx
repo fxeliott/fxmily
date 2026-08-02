@@ -111,6 +111,22 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   // host that never sleeps. The count is derived, not written, so the séances
   // pipeline joining the board cannot leave a stale "6" behind.
   const workerOnServer = isWorkerOnServer();
+
+  // J9 — the doublon window, where this board used to state something false.
+  //
+  // `WORKER_HOST` stays `pc` for the WHOLE switchover BY CONSTRUCTION (flipping
+  // it is the last gesture), so between the server's first tick and the handover
+  // the board flatly announced "the batches run on the local machine" while two
+  // machines were in fact running. The server watchdog announces itself through
+  // labels only it can emit — that is enough to stop the board from lying,
+  // without inventing a new field or a new heartbeat.
+  const switchoverInProgress =
+    !workerOnServer &&
+    workerReport.entries.some((e) =>
+      e.errorLabels.some(
+        (l) => l === 'claude_auth:observation_pending' || l.startsWith('batch_failed_observation:'),
+      ),
+    );
   const workerPipelineCount = workerReport.entries.filter((e) =>
     e.action.endsWith('.batch.pulled'),
   ).length;
@@ -444,7 +460,12 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
               id="worker-heading"
               className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
             >
-              Worker IA · {workerOnServer ? 'serveur applicatif' : 'machine locale'}
+              Worker IA ·{' '}
+              {workerOnServer
+                ? 'serveur applicatif'
+                : switchoverInProgress
+                  ? 'bascule en cours'
+                  : 'machine locale'}
               <CronStatusPill status={workerReport.overall} />
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
@@ -452,6 +473,12 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
                 <>
                   Les {workerPipelineCount} batchs Claude tournent sur le serveur applicatif (cron),
                   surveillés par un watchdog qui vérifie config, planning, session Claude et verrou.
+                </>
+              ) : switchoverInProgress ? (
+                <>
+                  Les deux machines tournent. La machine locale génère pour de vrai ; le serveur
+                  applicatif tourne à blanc en observation et ne persiste rien. Ce tableau reste
+                  calé sur la machine locale tant que la bascule n&apos;est pas faite.
                 </>
               ) : (
                 <>

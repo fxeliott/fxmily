@@ -76,11 +76,16 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${FXMILY_VERIFY_LOG:-/tmp/j9-verify-$STAMP.log}"
 : >"$LOG"
 
+CLAUDE_VERSION="$(claude --version 2>&1 | head -1)"
+[[ -n "$CLAUDE_VERSION" ]] || CLAUDE_VERSION='MISSING'
+AUTH_STATE="$(claude auth status --json 2>/dev/null | jq -r '.loggedIn // false' 2>/dev/null | head -1)"
+[[ -n "$AUTH_STATE" ]] || AUTH_STATE='unknown'
+
 echo "Fxmily worker — 7-pipeline dry-run verification"
 echo "  host   : $(hostname)"
 echo "  target : $FXMILY_APP_URL"
-echo "  claude : $(claude --version 2>&1 | head -1 || echo 'MISSING')"
-echo "  auth   : $(claude auth status --json 2>/dev/null | jq -r '.loggedIn // false' 2>/dev/null || echo '?')"
+echo "  claude : $CLAUDE_VERSION"
+echo "  auth   : $AUTH_STATE"
 echo "  log    : $LOG"
 echo
 

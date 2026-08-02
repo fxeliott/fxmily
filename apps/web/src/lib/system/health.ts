@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { localDateOf, localInstantToUtc } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
+import { env } from '@/lib/env';
 
 /**
  * J10 Phase J — Cron heartbeat health check.
@@ -755,6 +756,7 @@ type WorkerPipelineAction =
   | 'weekly_report.batch.pulled'
   | 'monthly_debrief.batch.pulled'
   | 'member_profile_monthly.batch.pulled'
+  | 'seance.batch.pulled'
   | 'worker.watchdog.heartbeat';
 
 const MONTH = 30 * DAY;
@@ -854,6 +856,60 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
   },
 ] as const;
 
+/**
+ * J9 — the SERVER variant of the board.
+ *
+ * Every tolerance above exists to absorb ONE excuse: "the PC was off". On the
+ * always-on host that excuse is gone, and keeping the wide windows would be
+ * worse than useless — a dead onboarding pipeline would stay green for half a
+ * day and amber for a full one, on a machine that never sleeps. So the server
+ * set keeps the same periods and cuts the tolerances down to what a real
+ * incident looks like: a few missed ticks, not a missed night.
+ *
+ * It also ADDS `seance.batch.pulled`, which the PC set deliberately excluded
+ * ("pulled on demand, no expected period, an age-based status would lie").
+ * J9 scope 5 gave séances a schedule, so it now HAS an expected period and the
+ * age-based status stops lying.
+ *
+ * `expectedSince` is the switchover instant: before it, a missing row reads
+ * `pending` (calm, "first run to come") instead of `never_ran`.
+ */
+const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
+
+const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] =
+  WORKER_EXPECTATIONS.map((e) => {
+    // Tighten: green stays anchored on the real cadence, red now means "this
+    // pipeline missed several consecutive ticks on a host that was up".
+    const tighter: Record<string, number> = {
+      'onboarding.batch.pulled': 6, // 20 min × 6 = 2h
+      'verification.batch.pulled': 6, // 2h (real cadence is 5 min)
+      'calendar.batch.pulled': 2, // 2 days
+      'weekly_report.batch.pulled': 2, // unchanged — a weekly cannot be tighter
+      'monthly_debrief.batch.pulled': 2, // unchanged
+      'member_profile_monthly.batch.pulled': 2, // unchanged
+      'worker.watchdog.heartbeat': 4, // 30 min × 4 = 2h
+    };
+    const multiplier = tighter[e.action] ?? e.toleranceMultiplier;
+    return {
+      ...e,
+      ...(multiplier === undefined ? {} : { toleranceMultiplier: multiplier }),
+      expectedSince: WORKER_SERVER_INSTALLED_AT,
+    };
+  }).concat([
+    {
+      // J9 scope 5 — the séances pipeline joined the worker contract and is now
+      // ticked every 30 min between 08h and 23h Paris. `periodMs` is the ALERT
+      // baseline, not the cadence: 1h green window absorbs a night gap without
+      // pretending the pipeline is dead, ×12 → red past 12h of silence in a
+      // window where it should have ticked ~24 times.
+      action: 'seance.batch.pulled',
+      label: 'Worker · séances (réconciliation)',
+      periodMs: 60 * MIN,
+      toleranceMultiplier: 12,
+      expectedSince: WORKER_SERVER_INSTALLED_AT,
+    },
+  ]);
+
 export type WorkerHealthEntry = HeartbeatHealthEntry<WorkerPipelineAction>;
 
 export interface WorkerHealthReport {
@@ -863,8 +919,16 @@ export interface WorkerHealthReport {
   entries: WorkerHealthEntry[];
 }
 
+/** True once `WORKER_HOST=server` — the AI worker runs on the always-on host. */
+export function isWorkerOnServer(): boolean {
+  return env.WORKER_HOST === 'server';
+}
+
 export async function getWorkerHealthReport(now: Date = new Date()): Promise<WorkerHealthReport> {
-  return buildHeartbeatReport(WORKER_EXPECTATIONS, now);
+  return buildHeartbeatReport(
+    isWorkerOnServer() ? WORKER_SERVER_EXPECTATIONS : WORKER_EXPECTATIONS,
+    now,
+  );
 }
 
 /**
@@ -919,6 +983,19 @@ export interface HostActionItem {
   severity: HostActionSeverity;
 }
 
+// J9 — the remediation command depends on WHERE the worker runs. Printing
+// `pwsh -File ops/worker/install-worker.ps1` to an operator whose worker moved
+// to the server would be worse than printing nothing: it is a command that
+// looks authoritative and fixes the wrong machine. Resolved once at module load
+// (env is fixed for the process lifetime).
+const WORKER_INSTALL_COMMAND = isWorkerOnServer()
+  ? 'sudo bash ops/worker/install-worker-vps.sh'
+  : 'pwsh -File ops/worker/install-worker.ps1';
+const WORKER_LOGIN_COMMAND = isWorkerOnServer()
+  ? 'sudo -u fxmily -H claude auth login --claudeai'
+  : 'claude login';
+const WORKER_REFERENCE = isWorkerOnServer() ? 'ops/worker/RUNBOOK.md' : 'ops/worker/README.md';
+
 /** Per-action remediation metadata for the host-actionable heartbeats. */
 const HOST_ACTION_REMEDIATION: Record<
   string,
@@ -938,15 +1015,15 @@ const HOST_ACTION_REMEDIATION: Record<
   },
   'worker.watchdog.heartbeat': {
     detail:
-      'Le watchdog du worker IA (machine locale) ne tourne plus : les 6 batchs Claude ne sont plus auto-réparés.',
-    command: 'pwsh -File ops/worker/install-worker.ps1',
-    reference: 'ops/worker/README.md',
+      "Le watchdog du worker IA ne tourne plus : les batchs Claude ne sont plus surveillés, une panne passerait sous le radar jusqu'au prochain regard humain.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
   },
   'verification.batch.pulled': {
     detail:
-      'Le pipeline de vérification des preuves MT5 (machine locale) ne tourne plus : les captures restent en attente.',
-    command: 'pwsh -File ops/worker/install-worker.ps1',
-    reference: 'ops/worker/README.md',
+      'Le pipeline de vérification des preuves MT5 ne tourne plus : les captures restent en attente.',
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
   },
 };
 
@@ -972,18 +1049,29 @@ const LABEL_HOST_ACTIONS: Record<
   'claude_auth:logged_out': {
     label: 'Worker · aucun compte Claude connecté',
     detail:
-      "Aucun compte Claude n'est connecté sur le PC worker : les batchs IA (profils, digests, calendriers, vérifications) ne génèrent plus rien. Reconnecte n'importe lequel de tes comptes, la génération reprend au tick suivant sans rien perdre (les membres en attente sont repris automatiquement).",
-    command: 'claude login',
-    reference: 'ops/worker/README.md',
+      "Aucun compte Claude n'est connecté sur la machine worker : les batchs IA (profils, digests, calendriers, vérifications) ne génèrent plus rien. Reconnecte le compte, la génération reprend au tick suivant sans rien perdre (les membres en attente sont repris automatiquement).",
+    command: WORKER_LOGIN_COMMAND,
+    reference: WORKER_REFERENCE,
     // A logged-out account = the AI is fully mute = a real incident to fix now.
     severity: 'blocked',
+  },
+  // J9 — the SAME fact, reported by the server watchdog while the switchover is
+  // still in its observation window. The PC is master and generating, so this is
+  // a planned state, not an incident: informational, never `blocked`.
+  'claude_auth:observation_pending': {
+    label: 'Worker · serveur pas encore connecté (bascule en cours)',
+    detail:
+      "Le worker serveur tourne en observation (dry-run) et aucun compte Claude n'y est encore connecté. Le PC reste maître et génère normalement — rien n'est en attente côté membre. Connecte le compte dédié quand tu veux passer la main au serveur.",
+    command: WORKER_LOGIN_COMMAND,
+    reference: 'ops/worker/RUNBOOK.md',
+    severity: 'pending',
   },
   'claude_quota:capped': {
     label: 'Worker · quota Claude atteint',
     detail:
       'Le compte Claude du worker a atteint son quota : les batchs sont en pause et reprennent seuls à la prochaine fenêtre. Pour relancer tout de suite, connecte un autre compte (rotation).',
-    command: 'claude login',
-    reference: 'ops/worker/README.md',
+    command: WORKER_LOGIN_COMMAND,
+    reference: WORKER_REFERENCE,
     // Benign + self-resolving (cooldown then next quota window) → informational.
     severity: 'pending',
   },

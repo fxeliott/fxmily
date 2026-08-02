@@ -34,6 +34,7 @@ import {
   getUploadsPersistenceHealth,
   getVerificationBacklogHealth,
   getWorkerHealthReport,
+  isWorkerOnServer,
   type CronStatus,
   type DiskHealth,
   type DiskStatus,
@@ -102,6 +103,17 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   // extra I/O). Surfaces the small set of heartbeat gaps that need a HOST command
   // (root cron sync / worker installer) with the literal command + since when.
   const hostActions = buildHostActionsReport(report, workerReport);
+
+  // J9 — the worker section describes a MACHINE, and after the switchover that
+  // machine is not the same one. Leaving "machine locale · ambre = PC éteint"
+  // printed over a server board would be worse than no caption at all: the
+  // operator would read a wide amber as "Eliott's PC is off, normal" about a
+  // host that never sleeps. The count is derived, not written, so the séances
+  // pipeline joining the board cannot leave a stale "6" behind.
+  const workerOnServer = isWorkerOnServer();
+  const workerPipelineCount = workerReport.entries.filter((e) =>
+    e.action.endsWith('.batch.pulled'),
+  ).length;
 
   // The masthead pill must reflect the WHOLE page: a green server-cron board
   // with a red local worker — a proof queue stuck for hours, or member uploads
@@ -432,18 +444,39 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
               id="worker-heading"
               className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
             >
-              Worker IA · machine locale
+              Worker IA · {workerOnServer ? 'serveur applicatif' : 'machine locale'}
               <CronStatusPill status={workerReport.overall} />
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
-              Les 6 batchs Claude tournent sur la machine locale (Task Scheduler), surveillés par un
-              watchdog qui répare seul les tâches mortes. Chaque pull émet un audit row{' '}
+              {workerOnServer ? (
+                <>
+                  Les {workerPipelineCount} batchs Claude tournent sur le serveur applicatif (cron),
+                  surveillés par un watchdog qui vérifie config, planning, session Claude et verrou.
+                </>
+              ) : (
+                <>
+                  Les {workerPipelineCount} batchs Claude tournent sur la machine locale (Task
+                  Scheduler), surveillés par un watchdog qui répare seul les tâches mortes.
+                </>
+              )}{' '}
+              Chaque pull émet un audit row{' '}
               <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
                 &lt;pipeline&gt;.batch.pulled
               </code>{' '}
-              même à zéro membre. Tolérances larges : ambre = PC probablement éteint (normal la
-              nuit) · rouge = occurrences manquées en série, la tâche elle-même est en panne. La
-              garantie membre reste portée par les filets overdue côté serveur, listés au-dessus.
+              même à zéro membre.{' '}
+              {workerOnServer ? (
+                <>
+                  La machine ne dort jamais, donc les tolérances sont serrées : ambre = quelques
+                  ticks manqués · rouge = la tâche elle-même est en panne. Plus aucune génération ne
+                  dépend d&apos;un poste allumé.
+                </>
+              ) : (
+                <>
+                  Tolérances larges : ambre = PC probablement éteint (normal la nuit) · rouge =
+                  occurrences manquées en série, la tâche elle-même est en panne.
+                </>
+              )}{' '}
+              La garantie membre reste portée par les filets overdue côté serveur, listés au-dessus.
             </p>
           </div>
         </div>

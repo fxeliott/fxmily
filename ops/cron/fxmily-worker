@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-worker — run ONE Fxmily AI batch on the server (J9).
+#
+# WHY THIS EXISTS. Until J9 the 7 `claude --print` pipelines ran on Eliott's
+# Windows PC via Task Scheduler (`ops/worker/install-worker.ps1`): PC off = zero
+# AI generation for every member. J9 moves them to the always-on host. This
+# wrapper is to `ops/worker/run-batch.sh` exactly what `/usr/local/bin/fxmily-cron`
+# is to the `/api/cron/*` routes: the ONE line shape `/etc/cron.d/fxmily-worker`
+# is allowed to use, holding everything cron does NOT give you for free —
+# a usable PATH, a real HOME, a bounded route allowlist, a central log, an
+# optional dead-man's-switch ping, and CPU/IO politeness towards the app
+# containers that share this box.
+#
+# It deliberately does NOT re-implement any worker semantics. The global lock,
+# the jittered sleeps, the quota cooldown stamp, the `claude auth status`
+# pre-flight, `status.json` and the exit-75 remap all live in run-batch.sh and
+# claude-batch-core.sh and are PORTED AS-IS (J9 contract: preserve, never
+# reinvent — those are the anti-ban protections).
+#
+# Usage :
+#   fxmily-worker <batch> [-- <extra args forwarded to the batch script>]
+#     e.g. fxmily-worker onboarding
+#          fxmily-worker weekly -- --dry-run
+#
+# Sources : /etc/fxmily/cron.env (CRON_LOG + optional HEALTHCHECK_PING_URL_WORKER_*).
+#           Absent or unreadable is NOT fatal here (unlike fxmily-cron, which
+#           needs CRON_SECRET to do anything): this wrapper's secrets live in
+#           the checkout's `ops/worker/worker.env`, sourced by run-batch.sh.
+# Logs to : $WORKER_LOG (default /var/log/fxmily/worker.log).
+#
+# Exit codes : whatever run-batch.sh returned. 0 = ran fine, or a BENIGN skip
+# (lock held by another batch, quota cooldown, no Claude account logged in,
+# usage cap remapped from 75). Non-zero = the underlying batch really failed.
+
+set -uo pipefail # NOT -e : we always want the log line + the ping to happen.
+
+# --- Logging FIRST ------------------------------------------------------------
+# Everything that can refuse to run is below, and cron is configured MAILTO=""
+# (a daily mail per tick would be noise nobody reads). So a refusal that only
+# wrote to stderr would vanish completely: no log line, no mail, no ping — the
+# pipeline would simply stop existing, and the only trace would be the slow
+# age-drift of its heartbeat, hours later. The log has to be usable BEFORE the
+# first thing that can fail, not after.
+if [[ -r /etc/fxmily/cron.env ]]; then
+  # shellcheck disable=SC1091
+  source /etc/fxmily/cron.env
+fi
+WORKER_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
+mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+
+# Refuse loudly: one line in the timeline, one line on stderr, then out.
+die() {
+  echo "[$(ts)] [fxmily-worker] REFUSED: $1" >>"$WORKER_LOG" 2>/dev/null
+  echo "[fxmily-worker] $1" >&2
+  exit 2
+}
+
+BATCH="${1:-}"
+if [[ -z "$BATCH" ]]; then
+  die "usage: fxmily-worker <onboarding|weekly|monthly|calendar|verification|profile|seances> [-- args]"
+fi
+shift
+
+# Everything after a literal `--` is forwarded verbatim to the batch script
+# (`--dry-run`, `--max-members 1`, ...). Mirrors run-batch.sh's own contract.
+EXTRA_ARGS=()
+if [[ "${1:-}" == "--" ]]; then
+  shift
+  EXTRA_ARGS=("$@")
+fi
+
+# Allowlist — same rationale as fxmily-cron's: `$BATCH` reaches a script path,
+# so a compromise of /etc/cron.d/* must not be able to point it anywhere else.
+# run-batch.sh validates again on its side (defense in depth).
+case "$BATCH" in
+  onboarding | weekly | monthly | calendar | verification | profile | seances) ;;
+  *) die "batch '$BATCH' is not in the allowlist" ;;
+esac
+
+# --- Environment cron does not give you -------------------------------------
+# cron runs with PATH=/usr/local/bin:/usr/bin:/bin and no login shell, so the
+# npm user prefix (where `claude` lives) is invisible. HOME matters twice over:
+# `claude` reads its OAuth from $HOME/.claude/.credentials.json, and run-batch.sh
+# puts its MACHINE-GLOBAL lock at $HOME/.fxmily-worker.lock — an empty HOME
+# would silently create a SECOND "global" lock and break the one-claude-at-a-time
+# guarantee that is the whole anti-ban design.
+WORKER_USER_HOME="${WORKER_USER_HOME:-$(getent passwd "$(id -un)" | cut -d: -f6)}"
+export HOME="${HOME:-$WORKER_USER_HOME}"
+export PATH="$HOME/.npm-global/bin:$HOME/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Dedicated checkout (J9 contract: a checkout SEPARATE from anything else).
+WORKER_REPO="${FXMILY_WORKER_REPO:-$HOME/worker}"
+RUN_BATCH="$WORKER_REPO/ops/worker/run-batch.sh"
+if [[ ! -f "$RUN_BATCH" ]]; then
+  die "run-batch.sh not found at $RUN_BATCH (checkout moved or FXMILY_WORKER_REPO wrong?)"
+fi
+
+# --- OBSERVATION MODE (J9 scope 4 — the controlled switchover) ---------------
+# `FXMILY_WORKER_DRY_RUN=1` in /etc/fxmily/cron.env forces every scheduled tick
+# to run with `--dry-run`: the server is pulled, the generation is exercised for
+# real, and NOTHING is persisted. That is the doublon window — the PC stays
+# master, the server proves it can do the work, and the two outputs can be
+# compared before anything member-facing changes.
+#
+# The switch is deliberately ONE line in ONE file, not a crontab edit:
+#   observation → production :  FXMILY_WORKER_DRY_RUN=0   (explicit, required)
+#   production  → observation :  FXMILY_WORKER_DRY_RUN=1   (instant rollback)
+# No file is re-installed, no schedule is touched, and the change takes effect
+# on the very next tick. A rollback you can perform in five seconds under
+# pressure is the only kind that actually gets performed.
+#
+# The DEFAULT IS OBSERVATION, and that asymmetry is the whole point. If the key
+# is missing from /etc/fxmily/cron.env — the file is provisioned once by hand,
+# so a fresh host, a restore, or a rebuilt VM will not have it — a `:-0` default
+# would make the very first tick after installation write to production while
+# the PC is still master. Two masters, two quotas, member-facing writes from a
+# machine nobody has validated yet: the exact accident the observation window
+# exists to prevent, triggered by an ABSENT line. Going to production has to be
+# something someone typed on purpose.
+if [[ "${FXMILY_WORKER_DRY_RUN:-1}" == "1" ]]; then
+  case " ${EXTRA_ARGS[*]-} " in
+    *" --dry-run "*) ;;
+    *) EXTRA_ARGS+=(--dry-run) ;;
+  esac
+fi
+
+# --- Dead-man's switch (Healthchecks.io), env-gated and no-op by default -----
+# Same convention as the host backup crons: one URL per check, BLANK = disabled
+# so the wrapper is a silent no-op until Eliott pastes real URLs. The variable
+# name is derived from the batch: HEALTHCHECK_PING_URL_WORKER_ONBOARDING, ...
+# `/start` marks the run as in-flight, the bare URL marks success, `/fail`
+# marks a real failure. A benign skip pings SUCCESS on purpose: the check
+# answers "is this pipeline still being ticked", not "did it have work to do".
+HC_VAR="HEALTHCHECK_PING_URL_WORKER_$(printf '%s' "$BATCH" | tr '[:lower:]' '[:upper:]')"
+HC_URL="${!HC_VAR:-}"
+
+hc_ping() {
+  local suffix="${1:-}"
+  [[ -z "$HC_URL" ]] && return 0
+  curl --silent --show-error --max-time 15 --retry 2 --retry-delay 2 \
+    -o /dev/null "${HC_URL}${suffix}" 2>>"$WORKER_LOG" || true
+}
+
+START_TS="$(ts)"
+hc_ping "/start"
+
+# --- Run ---------------------------------------------------------------------
+# `nice`/`ionice` : the AI batches share this box with fxmily-web + Postgres
+# (ADR-007 — one host, no second VPS, interdit ❶). A `claude --print` run is
+# mostly network-wait, but the CLI still spawns a Node process per member; being
+# polite costs nothing and removes any doubt that member-facing latency could
+# ever regress because a batch is running.
+NICE=(nice -n 10)
+command -v ionice >/dev/null 2>&1 && NICE+=(ionice -c2 -n7)
+
+# Wall-clock ceiling — the Linux equivalent of the Windows task's
+# `ExecutionTimeLimit 2h` (install-worker.ps1). cron gives you nothing here, and
+# the lock's stale-reclaim only kicks in at 150 min, so without this a wedged
+# batch would starve every other pipeline for 2h30. SIGTERM (not KILL) so
+# run-batch.sh's TERM trap still runs: it writes status.json and RELEASES the
+# lock. `--kill-after` is the last resort if the trap itself is stuck.
+BATCH_TIMEOUT="${FXMILY_WORKER_TIMEOUT:-2h}"
+TIMEOUT_CMD=()
+if command -v timeout >/dev/null 2>&1 && [[ "$BATCH_TIMEOUT" != "0" ]]; then
+  TIMEOUT_CMD=(timeout --kill-after=60s "$BATCH_TIMEOUT")
+fi
+
+# Where the batch's own output goes. NOT into $WORKER_LOG: run-batch.sh already
+# `tee`s a full per-batch transcript (banners, per-member progress, the whole
+# `claude` output), and folding that into the central log would drown the one
+# thing that log exists for — the one-line-per-tick timeline the RUNBOOK tells
+# the operator to `tail`. A timeline you have to grep is not a timeline.
+BATCH_STDOUT="$(dirname "$WORKER_LOG")/$BATCH.wrapper.log"
+
+"${TIMEOUT_CMD[@]}" "${NICE[@]}" bash "$RUN_BATCH" "$BATCH" \
+  ${EXTRA_ARGS[0]+-- "${EXTRA_ARGS[@]}"} >>"$BATCH_STDOUT" 2>&1
+EXIT_CODE=$?
+
+END_TS="$(ts)"
+
+# Same default as the gate above (observation). Reading `:-0` here while the
+# gate reads `:-1` would tag an observation run as `persist` in the log — the
+# operator would believe the switchover happened when it had not.
+MODE_TAG=$([[ "${FXMILY_WORKER_DRY_RUN:-1}" == "1" ]] && echo "observation" || echo "persist")
+
+if [[ "$EXIT_CODE" -eq 0 ]]; then
+  echo "[$END_TS] [fxmily-worker] $BATCH OK mode=$MODE_TAG ($START_TS → $END_TS)" >>"$WORKER_LOG"
+  hc_ping ""
+else
+  # Point at the transcript. A failure line with no way to reach the output is
+  # a failure line the operator has to go hunting for.
+  echo "[$END_TS] [fxmily-worker] $BATCH FAIL exit=$EXIT_CODE mode=$MODE_TAG ($START_TS → $END_TS) — see $BATCH_STDOUT" >>"$WORKER_LOG"
+  hc_ping "/fail"
+fi
+
+exit "$EXIT_CODE"

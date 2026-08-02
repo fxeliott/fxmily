@@ -5,7 +5,12 @@ import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
-import { getCronHealthReport, getDiskHealth } from '@/lib/system/health';
+import {
+  getCronHealthReport,
+  getDiskHealth,
+  getWorkerHealthReport,
+  isWorkerOnServer,
+} from '@/lib/system/health';
 
 /**
  * J10 Phase J — Read-only cron health check endpoint.
@@ -57,8 +62,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // like a stale cron. `unknown` (probe unavailable) is neutral — it must NOT
     // flip the endpoint to 503 (no reading is not an incident).
     const disk = getDiskHealth();
+    // J9 — the AI worker joins this endpoint ONCE it runs on the always-on host
+    // (`WORKER_HOST=server`). It was deliberately excluded while it lived on
+    // Eliott's PC: a machine that is legitimately off at night would have made
+    // `cron-watch.yml` open a false-positive issue every evening, and a watcher
+    // that cries wolf nightly is a watcher nobody reads. That objection dies
+    // with the SPOF — and folding the worker in is what finally turns "un batch
+    // ne tourne plus" into an ALERT that reaches a human by itself, instead of
+    // a red square waiting for somebody to open /admin/system.
+    const worker = isWorkerOnServer() ? await getWorkerHealthReport() : null;
     const cronHealthy = report.overall === 'green' || report.overall === 'amber';
-    const healthy = cronHealthy && disk.status !== 'red';
+    const workerHealthy =
+      worker === null || worker.overall === 'green' || worker.overall === 'amber';
+    const healthy = cronHealthy && workerHealthy && disk.status !== 'red';
     // Heartbeat audit row : the watcher itself emits a `cron.health.scan`
     // so a missing health-check (e.g. cron-watch.yml broken) is also
     // detectable. Counts only — no PII.
@@ -72,10 +88,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         pending: report.entries.filter((e) => e.status === 'pending').length,
         diskStatus: disk.status,
         diskFreeBytes: disk.freeBytes,
+        ...(worker
+          ? {
+              workerOverall: worker.overall,
+              workerRed: worker.entries.filter((e) => e.status === 'red').length,
+              workerNeverRan: worker.entries.filter((e) => e.status === 'never_ran').length,
+            }
+          : {}),
         ranAt: report.ranAt,
       },
     });
-    return NextResponse.json({ ...report, disk }, { status: healthy ? 200 : 503 });
+    return NextResponse.json(
+      { ...report, disk, ...(worker ? { worker } : {}) },
+      { status: healthy ? 200 : 503 },
+    );
   } catch (err) {
     reportError('cron.health', err, { route: '/api/cron/health' });
     await flushSentry();

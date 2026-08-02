@@ -985,11 +985,13 @@ describe('getCronHealthReport', () => {
 
 describe('getWorkerHealthReport', () => {
   /**
-   * Why this matters : the worker board is fixed to the 6 pipelines that
-   * install-worker.ps1 actually registers + the tour-12 watchdog heartbeat.
-   * Adding a pipeline (or renaming a slug) must force an explicit
-   * WORKER_EXPECTATIONS update — and `seance.batch.pulled` must NOT appear
-   * (pulled on demand, no period, an age-based status would lie).
+   * Why this matters : in the PC profile (`WORKER_HOST` unset — the default),
+   * the worker board is fixed to the 6 pipelines that install-worker.ps1
+   * actually registers + the tour-12 watchdog heartbeat. Adding a pipeline (or
+   * renaming a slug) must force an explicit WORKER_EXPECTATIONS update — and
+   * `seance.batch.pulled` must NOT appear (on the PC it is pulled on demand,
+   * with no expected period, so an age-based status would lie). J9 gave
+   * séances a schedule on the SERVER only; see the server-profile suite below.
    */
   it('returns exactly the 6 installed pipelines + watchdog, never the on-demand séances slug', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
@@ -1352,6 +1354,139 @@ describe('getWorkerHealthReport', () => {
     // 3h age → amber by age; the STALE label does NOT escalate it to red.
     expect(watchdog?.status).toBe('amber');
     expect(report.overall).not.toBe('red');
+  });
+});
+
+/**
+ * J9 — the SERVER profile of the same board.
+ *
+ * `isWorkerOnServer()` reads `env.WORKER_HOST`, which `@/lib/env` parses ONCE at
+ * module load. So the only honest way to exercise the server branch is to reset
+ * the module registry, set the variable, and re-import — anything cheaper would
+ * test a stub instead of the real switch. `vi.mock` factories are re-run on the
+ * fresh graph and still resolve to the same module-scope spies, so the fixtures
+ * below behave exactly like the PC ones.
+ */
+describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () => {
+  async function importServerHealth() {
+    vi.resetModules();
+    process.env.WORKER_HOST = 'server';
+    return import('./health');
+  }
+
+  afterEach(() => {
+    delete process.env.WORKER_HOST;
+    vi.resetModules();
+  });
+
+  /**
+   * Why this matters : the whole point of J9 scope 5 is that séances stopped
+   * being an on-demand pull and became a scheduled pipeline. On the server it
+   * therefore HAS an expected period, and its absence from the board would hide
+   * exactly the failure this jalon exists to make visible. The PC profile must
+   * keep excluding it (proven by the sibling suite above) — the two sets are
+   * asymmetric ON PURPOSE, and this test pins that asymmetry.
+   */
+  it('adds the séances pipeline the PC profile deliberately excludes', async () => {
+    const { getWorkerHealthReport: serverReport, isWorkerOnServer } = await importServerHealth();
+    expect(isWorkerOnServer()).toBe(true);
+
+    auditGroupByMock.mockResolvedValueOnce([]);
+    const report = await serverReport(
+      new Date('2026-08-02T18:00:00.000Z'), // allow-absolute-date injected-clock-anchor
+    );
+
+    expect(report.entries.map((e) => e.action)).toEqual([
+      'onboarding.batch.pulled',
+      'verification.batch.pulled',
+      'calendar.batch.pulled',
+      'weekly_report.batch.pulled',
+      'monthly_debrief.batch.pulled',
+      'member_profile_monthly.batch.pulled',
+      'worker.watchdog.heartbeat',
+      'seance.batch.pulled',
+    ]);
+  });
+
+  /**
+   * Why this matters : every tolerance in the PC set absorbs ONE excuse — "the
+   * PC was off". On the always-on host that excuse is gone, and re-using the
+   * 24h window would keep a dead onboarding pipeline green for half a day.
+   * Same fixture, same clock, two profiles: 6h of silence is still a calm
+   * night on the PC and a real incident on the server.
+   */
+  it('turns a 6h-old onboarding pull red on the server while the PC profile stays amber', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const stale = [
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 6 * HOUR) },
+      },
+    ];
+
+    // PC profile (module already loaded with WORKER_HOST unset → 'pc'): 24h.
+    auditGroupByMock.mockResolvedValueOnce(stale);
+    const pc = await getWorkerHealthReport(now);
+    expect(pc.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe('amber');
+
+    // Server profile: 20 min × 12 = 4h tolerance → 6h is past it.
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+    auditGroupByMock.mockResolvedValueOnce(stale);
+    const server = await serverReport(now);
+    expect(server.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe('red');
+    expect(server.overall).toBe('red');
+  });
+
+  /**
+   * The other half of the same decision, and the reason the server tolerance is
+   * 4h and not the 2h that "tighten it as far as it goes" would suggest.
+   *
+   * The worker lock is machine-global: while `weekly` walks its members one by
+   * one, every other pipeline exits BEFORE its pull and writes no audit row at
+   * all. That silence is normal, it is the anti-ban design working, and it can
+   * legitimately last until the wrapper's 2h timeout. A 2h tolerance would
+   * therefore turn a healthy Sunday into a red board — and the board does not
+   * just go red, it prints "the pipeline is dead, reinstall the worker", a
+   * confident diagnosis about a machine that is doing exactly what it should.
+   *
+   * So: 2h30 of silence (past the wrapper timeout, past nothing else) must read
+   * amber. If someone tightens this back to 2h, this test fails and says why.
+   */
+  it('does NOT go red while a long batch legitimately holds the global lock', async () => {
+    const now = new Date('2026-08-09T07:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        // Last pull just before `weekly` (Sunday 05h40) took the lock.
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 150 * MIN) },
+      },
+    ]);
+    const report = await serverReport(now);
+    const onboarding = report.entries.find((e) => e.action === 'onboarding.batch.pulled');
+
+    expect(onboarding?.status).toBe('amber');
+    expect(report.overall).not.toBe('red');
+  });
+
+  /**
+   * Why this matters : the switchover instant is what keeps the first hours
+   * calm. Before `WORKER_SERVER_INSTALLED_AT` + tolerance, a missing row means
+   * "the first run has not happened yet", not "the pipeline is dead" — and a
+   * board that shouts `never_ran` on day one is a board the operator learns to
+   * ignore. `pending` must also NOT drag `overall` down.
+   */
+  it("reads a not-yet-due first run as 'pending', not 'never_ran'", async () => {
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+    auditGroupByMock.mockResolvedValueOnce([]);
+    // 30 min after the switchover: no pipeline can have missed its window yet.
+    const report = await serverReport(
+      new Date('2026-08-02T12:30:00.000Z'), // allow-absolute-date injected-clock-anchor
+    );
+
+    expect(report.entries.every((e) => e.status === 'pending')).toBe(true);
+    expect(report.overall).not.toBe('red');
+    expect(report.overall).not.toBe('never_ran');
   });
 });
 
@@ -1859,6 +1994,43 @@ describe('buildHostActionsReport', () => {
     expect(item.reference).toBe('ops/cron/README.md');
     // never_ran with no lastRanAt → the "since" is the first-run deadline.
     expect(item.sinceIso).toBe('2026-07-05T02:00:00Z'); // allow-absolute-date opaque-fixture
+  });
+
+  /**
+   * J9 — the switchover doublon window.
+   *
+   * During observation BOTH watchdogs are alive: the PC generates for real, the
+   * server runs dry. The server one legitimately reports "no Claude account
+   * here", and if it raised the ordinary `claude_auth:logged_out` the board
+   * would go RED and page the operator about an outage that does not exist —
+   * members are being served the whole time. That false alarm is exactly what
+   * would push someone to abort a healthy switchover, so the server watchdog
+   * emits `claude_auth:observation_pending` instead: same fact, informational
+   * severity, one clear next step. This pins that the label never escalates.
+   */
+  it('reports the observation-window auth label as pending, never blocked', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          // Green BY AGE: the server watchdog is ticking fine, it just has no
+          // account signed in yet. Only the label carries that fact.
+          status: 'green',
+          lastRanAt: '2026-08-02T13:00:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 10 * MIN,
+          periodMs: 30 * MIN,
+          errorCount: 1,
+          errorLabels: ['claude_auth:observation_pending'],
+        }),
+      ]),
+    );
+
+    expect(report.items).toHaveLength(1);
+    const item = report.items[0]!;
+    expect(item.key).toBe('label:claude_auth:observation_pending');
+    expect(item.severity).toBe('pending');
+    expect(item.reference).toBe('ops/worker/RUNBOOK.md');
   });
 
   it('uses lastRanAt as the "since" for a red (ran then went stale) heartbeat', () => {

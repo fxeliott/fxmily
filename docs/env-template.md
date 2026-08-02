@@ -105,6 +105,18 @@ AUTH_URL=http://localhost:3000
 # Sans R2 keys, les uploads atterrissent dans ce dossier (gitignored).
 # Si non défini, défaut = `apps/web/.uploads/`.
 # UPLOADS_DIR=
+
+# -- Machine qui exécute les batchs IA (Jalon 9) ------------------------------
+# `pc` (défaut) : les batchs tournent sur le PC Windows d'Eliott. Le tableau
+#   /admin/system garde des tolérances larges (ambre = PC éteint la nuit, c'est
+#   normal) et le worker N'EST PAS branché sur /api/cron/health — un PC
+#   légitimement éteint aurait ouvert une issue GitHub tous les soirs.
+# `server` : les batchs tournent sur le serveur applicatif (cron). La machine
+#   ne dort jamais, donc les tolérances se resserrent, le pipeline `seances`
+#   rejoint le tableau, et le worker rejoint /api/cron/health — c'est ce qui
+#   transforme « un batch ne tourne plus » en alerte qui atteint un humain.
+# À ne basculer QU'APRÈS la fenêtre d'observation (ops/worker/RUNBOOK.md).
+# WORKER_HOST=pc
 ```
 
 ## Sécurité

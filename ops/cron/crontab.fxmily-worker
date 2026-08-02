@@ -1,0 +1,63 @@
+# /etc/cron.d/fxmily-worker — Fxmily AI worker schedule on the server (J9).
+#
+# Owner   : root (system crond reads /etc/cron.d/* with mode 0644).
+# User    : fxmily (each row's 6th field — non-privileged execution).
+# Wrapper : /usr/local/bin/fxmily-worker (ops/cron/fxmily-worker) — it holds the
+#           PATH/HOME/allowlist/log/timeout/heartbeat plumbing; all the WORKER
+#           semantics (global lock, jittered sleeps, quota cooldown, `claude auth
+#           status` pre-flight, status.json, exit-75 remap) stay in
+#           ops/worker/run-batch.sh, ported from Windows unchanged.
+#
+# ⚠ TIMEZONE — this host runs Europe/Paris (/etc/localtime) and Debian vixie-cron
+# interprets /etc/cron.d hour fields in the HOST-LOCAL timezone (no CRON_TZ).
+# Proven at runtime on this box for /etc/cron.d/fxmily-app (see its header). The
+# hours below are therefore PARIS WALL-CLOCK and reproduce the Windows Task
+# Scheduler times 1:1 — which is what J9 requires ("reproduire les schedules en
+# heure Paris") and what is DST-proof for a French cohort.
+#
+# ⚠ SEPARATE FILE, on purpose. The 25 app-side rows live in /etc/cron.d/fxmily-app
+# and are converged by the root `fxmily-sync-cron` validator. Keeping the worker
+# in its OWN file means (a) a worker rollback is `rm /etc/cron.d/fxmily-worker`
+# with zero risk of touching an app cron, and (b) the app validator's line-shape
+# regex is never asked to accept a new command name.
+#
+# ── Schedule (mirrors ops/worker/install-worker.ps1 $Pipelines) ──────────────
+#
+#   onboarding    every 20 min at :01/:21/:41   — the pipeline that kills the
+#                                                 "IA silence 24h après profil"
+#   verification  every 5 min  at :03..:58      — MT5 proofs analysed while the
+#                                                 member is still waiting; an
+#                                                 empty pull short-circuits
+#                                                 before any claude call
+#   seances       every 30 min 08h-23h          — J9 scope 5: the séances
+#                                                 pipeline joins the worker
+#                                                 contract (lock/status/log/
+#                                                 heartbeat). Reconcile+report
+#                                                 only; see the script header
+#                                                 for why its AI leg is
+#                                                 operator-side by design
+#   calendar      daily  05h10
+#   weekly        Sunday 05h40
+#   monthly       day 1  06h10
+#   profile       day 2  06h40                  — one day after the debrief
+#   watchdog      every 30 min at :07/:37       — verifies this very file + the
+#                                                 claude auth, then POSTs the
+#                                                 heartbeat /admin/system reads
+#
+# Minutes are staggered so two pipelines never start on the same tick. A
+# collision is harmless anyway (the loser skips cleanly on the global lock and
+# the next tick picks the work up, idempotently) — the stagger just keeps the
+# logs readable.
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+1,21,41 * * * *              fxmily   /usr/local/bin/fxmily-worker onboarding
+3-58/5 * * * *               fxmily   /usr/local/bin/fxmily-worker verification
+25,55 8-23 * * *             fxmily   /usr/local/bin/fxmily-worker seances
+10 5 * * *                   fxmily   /usr/local/bin/fxmily-worker calendar
+40 5 * * 0                   fxmily   /usr/local/bin/fxmily-worker weekly
+10 6 1 * *                   fxmily   /usr/local/bin/fxmily-worker monthly
+40 6 2 * *                   fxmily   /usr/local/bin/fxmily-worker profile
+7,37 * * * *                 fxmily   /usr/local/bin/fxmily-worker-watchdog

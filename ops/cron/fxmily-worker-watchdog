@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-worker-watchdog — server-side worker watchdog (J9).
+#
+# Linux port of `ops/worker/watchdog.ps1` (tour 12/17). Same contract, same
+# heartbeat endpoint, same bounded `errorLabels` vocabulary — so
+# `/admin/system` (WORKER_EXPECTATIONS + LABEL_HOST_ACTIONS in
+# apps/web/src/lib/system/health.ts) keeps working byte-for-byte after the
+# Windows → VPS move, with no server-side change to the label contract.
+#
+# WHAT IT CHECKS, every 30 min :
+#   1. CONFIG    ops/worker/worker.env present + every token ≥ 32 chars.
+#   2. SCHEDULE  one /etc/cron.d/fxmily-worker line per pipeline (the Linux
+#                equivalent of "the scheduled task is registered"), the file is
+#                readable by crond (mode 0644, root-owned) and free of CR.
+#   3. AUTH      `claude auth status --json` LIVE. This is the single most
+#                valuable signal on this box: a logged-out account means the 7
+#                batches generate NOTHING while every age-based heartbeat stays
+#                green (the exact "IA muette" incident). It maps to the
+#                `claude_auth:logged_out` label, which `health.ts` escalates to
+#                RED via `criticalLabels`.
+#                (The Windows watchdog had to INFER this from a fresh
+#                status.json because it could not always reach the CLI; here we
+#                just ask the CLI — strictly more accurate.)
+#   4. RUNS      each pipeline's `logs/<batch>.status.json` — quota cap
+#                (benign, self-resolving), real failures, stale statuses.
+#   5. LOCK      a global lock older than 6h is a stuck holder.
+#   6. REPORT    POST /api/admin/worker-watchdog/heartbeat (X-Admin-Token).
+#
+# WHAT IT DOES NOT DO. It does not "repair" the schedule. On Windows a task
+# could silently unregister or drift to S4U, so the watchdog re-ran the
+# installer. A /etc/cron.d file does not drift by itself: if it is gone, a human
+# (or a bad deploy) removed it, and silently re-writing a root-owned file from a
+# cron job would be a privilege-escalation shaped hole for a benefit that does
+# not exist here. So we REPORT `task_missing:<batch>` and let `/admin/system`
+# surface the one command to run. Honest beats magic.
+#
+# Exit code: 0 whenever the heartbeat was DELIVERED (errors travel INSIDE the
+# heartbeat, that is the whole design); 1 only when the heartbeat itself could
+# not be sent — and that absence is exactly what the board's
+# `worker.watchdog.heartbeat` entry flags.
+
+set -uo pipefail
+
+WATCHDOG_VERSION="j9-1.0"
+
+WORKER_USER_HOME="${WORKER_USER_HOME:-$(getent passwd "$(id -un)" | cut -d: -f6)}"
+export HOME="${HOME:-$WORKER_USER_HOME}"
+export PATH="$HOME/.npm-global/bin:$HOME/bin:/usr/local/bin:/usr/bin:/bin"
+
+WORKER_REPO="${FXMILY_WORKER_REPO:-$HOME/worker}"
+WORKER_DIR="$WORKER_REPO/ops/worker"
+ENV_FILE="$WORKER_DIR/worker.env"
+LOG_DIR="${FXMILY_WORKER_LOG_DIR:-$WORKER_DIR/logs}"
+CRON_FILE="${FXMILY_WORKER_CRON_FILE:-/etc/cron.d/fxmily-worker}"
+LOCK_DIR="${FXMILY_WORKER_LOCK_DIR:-$HOME/.fxmily-worker.lock}"
+
+if [[ -r /etc/fxmily/cron.env ]]; then
+  # shellcheck disable=SC1091
+  source /etc/fxmily/cron.env
+fi
+WATCHDOG_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
+mkdir -p "$(dirname "$WATCHDOG_LOG")" 2>/dev/null || true
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [watchdog] $*" >>"$WATCHDOG_LOG"; }
+
+# The 7 pipelines the worker owns. `seances` joined the contract in J9 (scope 5).
+PIPELINES=(onboarding verification seances calendar weekly monthly profile)
+
+# Bounded, machine-readable labels. The server caps this at 20 entries of ≤120
+# chars (worker-watchdog/heartbeat route Zod schema) — never a token, never a
+# path, never a local username (§21.5 PII-free).
+ERROR_LABELS=()
+add_label() { ERROR_LABELS+=("$1"); }
+
+TASKS_OK=0
+
+# --- 1. CONFIG ---------------------------------------------------------------
+ADMIN_TOKEN=""
+
+# `worker.env` is written by hand as often as by the installer, so a value may
+# arrive quoted (KEY="…") or carrying a CR from a Windows editor. run-batch.sh
+# already strips both before using a token; this watchdog has to strip them the
+# SAME way. Reading a quoted token raw would send `X-Admin-Token: "…"`, get a
+# 401 on every heartbeat, and turn the watchdog entry red — an alarm about the
+# watchdog while the watchdog is fine and the quoting is the only bug.
+unwrap() {
+  local v="$1"
+  v="${v%$'\r'}"
+  v="${v#\"}"
+  v="${v%\"}"
+  v="${v#\'}"
+  v="${v%\'}"
+  printf '%s' "$v"
+}
+
+if [[ ! -r "$ENV_FILE" ]]; then
+  add_label 'config_missing:worker.env'
+else
+  # Read token lengths WITHOUT ever echoing a value.
+  while IFS='=' read -r key val; do
+    [[ "$key" =~ ^FXMILY_.*TOKEN$ ]] || continue
+    val="$(unwrap "$val")"
+    if [[ "${#val}" -lt 32 ]]; then add_label "token_short:$key"; fi
+    [[ "$key" == "FXMILY_ADMIN_TOKEN" ]] && ADMIN_TOKEN="$val"
+  done < <(grep -E '^FXMILY_[A-Z_]*TOKEN=' "$ENV_FILE" || true)
+  BASE_URL="$(unwrap "$(grep -E '^FXMILY_BASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)")"
+fi
+BASE_URL="${FXMILY_BASE_URL:-${BASE_URL:-https://app.fxmilyapp.com}}"
+
+# --- 2. SCHEDULE -------------------------------------------------------------
+if [[ ! -r "$CRON_FILE" ]]; then
+  add_label 'cron_file_missing'
+  for p in "${PIPELINES[@]}"; do add_label "task_missing:$p"; done
+else
+  # crond ignores a /etc/cron.d file that is group/other-writable, and SILENTLY
+  # skips any line containing a CR (the exact ~20h outage of 2026-05-11, V1.6
+  # bug #2). Both are invisible failures — check them explicitly.
+  perms="$(stat -c '%a' "$CRON_FILE" 2>/dev/null || echo '???')"
+  [[ "$perms" == "644" ]] || add_label "cron_file_perms:$perms"
+  cr_count="$(tr -cd '\r' <"$CRON_FILE" | wc -c)"
+  [[ "$cr_count" -eq 0 ]] || add_label "cron_file_crlf:$cr_count"
+
+  for p in "${PIPELINES[@]}"; do
+    if grep -qE "fxmily-worker[[:space:]]+${p}([[:space:]]|$)" "$CRON_FILE"; then
+      TASKS_OK=$((TASKS_OK + 1))
+    else
+      add_label "task_missing:$p"
+    fi
+  done
+  grep -q 'fxmily-worker-watchdog' "$CRON_FILE" || add_label 'task_missing:watchdog'
+fi
+
+# --- 3. AUTH (live) ----------------------------------------------------------
+# Zero quota cost: `claude auth status --json` reads ~/.claude/.credentials.json.
+#
+# OBSERVATION-AWARE, and this matters. `claude_auth:logged_out` is escalated to
+# RED by health.ts (`criticalLabels`) because it means "the AI is mute". That is
+# TRUE once this host owns generation — and FALSE during the doublon window,
+# where the PC is still master and generating normally. Raising the critical
+# label then would be a false alarm, and a board that cries wolf during a
+# planned migration is a board nobody reads afterwards. So while
+# FXMILY_WORKER_DRY_RUN=1 the same fact is reported under a non-critical label:
+# still visible, still counted in `errors` (→ amber), never a phantom incident.
+OBSERVATION=false
+[[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]] && OBSERVATION=true
+
+if ! command -v claude >/dev/null 2>&1; then
+  add_label 'claude_bin_missing'
+else
+  AUTH_JSON="$(claude auth status --json 2>/dev/null || true)"
+  LOGGED_IN="$(printf '%s' "$AUTH_JSON" | jq -r '.loggedIn // false' 2>/dev/null || echo false)"
+  if [[ "$LOGGED_IN" != "true" ]]; then
+    if [[ "$OBSERVATION" == "true" ]]; then
+      add_label 'claude_auth:observation_pending'
+    else
+      add_label 'claude_auth:logged_out'
+    fi
+  fi
+fi
+
+# --- 4. RUNS -----------------------------------------------------------------
+QUOTA_SEEN=false
+for p in "${PIPELINES[@]}"; do
+  status_file="$LOG_DIR/${p}.status.json"
+  [[ -r "$status_file" ]] || continue
+  ok="$(jq -r '.ok // false' "$status_file" 2>/dev/null || echo false)"
+  code="$(jq -r '.exitCode // 0' "$status_file" 2>/dev/null || echo 0)"
+  capped="$(jq -r '.quotaCapped // false' "$status_file" 2>/dev/null || echo false)"
+  if [[ "$capped" == "true" && "$QUOTA_SEEN" == "false" ]]; then
+    # Benign + self-resolving: the cooldown stamp makes every following tick a
+    # no-op until the quota window reopens. Reported once, machine-wide.
+    add_label 'claude_quota:capped'
+    QUOTA_SEEN=true
+  fi
+  if [[ "$ok" != "true" && "$code" != "0" && "$code" != "75" ]]; then
+    add_label "batch_failed:${p}:${code}"
+  fi
+done
+
+# --- 5. LOCK -----------------------------------------------------------------
+if [[ -d "$LOCK_DIR" ]]; then
+  if [[ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +360 2>/dev/null)" ]]; then
+    add_label 'lock_stale'
+  fi
+fi
+
+# --- 6. REPORT ---------------------------------------------------------------
+ERRORS="${#ERROR_LABELS[@]}"
+SUMMARY="SUMMARY checked=${#PIPELINES[@]} ok=$TASKS_OK repaired=0 errors=$ERRORS"
+if [[ "$ERRORS" -gt 0 ]]; then
+  # `IFS='; '` would join with `;` only — bash uses the FIRST character of IFS
+  # for `${arr[*]}`. Build the separator explicitly instead.
+  SUMMARY+=" [$(printf '%s; ' "${ERROR_LABELS[@]}" | sed 's/; $//')]"
+fi
+log "$SUMMARY"
+
+if [[ -z "$ADMIN_TOKEN" || "${#ADMIN_TOKEN}" -lt 32 ]]; then
+  log 'ERROR heartbeat impossible: FXMILY_ADMIN_TOKEN missing/short in worker.env.'
+  exit 1
+fi
+
+# The board keeps ONE heartbeat slot for "the worker". During the doublon window
+# TWO watchdogs write to it (the PC's and this one), so the version string
+# carries the discriminator: whoever reads the audit metadata can tell which
+# host wrote the row, and whether it was still in observation. ≤20 chars (Zod).
+[[ "$OBSERVATION" == "true" ]] && WATCHDOG_VERSION="${WATCHDOG_VERSION}-obs"
+
+PAYLOAD="$(jq -nc \
+  --argjson checked "${#PIPELINES[@]}" \
+  --argjson ok "$TASKS_OK" \
+  --argjson errors "$ERRORS" \
+  --arg version "$WATCHDOG_VERSION" \
+  --argjson labels "$(printf '%s\n' ${ERROR_LABELS[@]+"${ERROR_LABELS[@]}"} \
+    | head -20 | jq -R . | jq -s 'map(select(length > 0))')" \
+  '{tasksChecked: $checked, tasksOk: $ok, repaired: 0, errors: $errors, watchdogVersion: $version}
+   + (if ($labels | length) > 0 then {errorLabels: $labels} else {} end)')"
+
+HTTP_CODE="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --max-time 30 --retry 2 --retry-delay 5 \
+  -X POST \
+  -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  -H 'User-Agent: fxmily-worker-watchdog/1.0' \
+  --data "$PAYLOAD" \
+  "${BASE_URL%/}/api/admin/worker-watchdog/heartbeat" || echo '000')"
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+  log "heartbeat delivered (http=200)"
+  exit 0
+fi
+log "ERROR heartbeat NOT delivered (http=$HTTP_CODE)"
+exit 1

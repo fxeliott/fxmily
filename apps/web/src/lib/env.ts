@@ -175,6 +175,26 @@ const envSchema = z.object({
   /// (free-tier limit). Une fois verify : `eliot@fxmilyapp.com` ou similaire.
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 
+  // J9 (workers → VPS) — WHERE the AI worker runs. This is not cosmetic: it
+  // decides how strict the alerting on the 7 pipelines is allowed to be.
+  //
+  //   'pc'     (default, historical) the pipelines tick on Eliott's Windows PC.
+  //            A machine that is legitimately off at night, so a missing tick
+  //            is NOT an incident until a full day has passed, and the worker
+  //            board is deliberately kept OUT of /api/cron/health — the GitHub
+  //            watcher would open a false-positive issue every single evening.
+  //
+  //   'server' the pipelines tick on the always-on host. "The PC was off" stops
+  //            being an excuse: tolerances tighten to the real cadence, and the
+  //            worker board joins /api/cron/health, so a dead pipeline finally
+  //            reaches a human through the same automated channel as a dead
+  //            cron instead of waiting for somebody to open /admin/system.
+  //
+  // Flipping this to 'server' is the LAST step of the switchover, after the PC
+  // tasks are disabled — see ops/worker/RUNBOOK.md. Flipping it back is the
+  // alerting half of the rollback.
+  WORKER_HOST: z.enum(['pc', 'server']).default('pc'),
+
   // Jalon 9 — Web Push (VAPID RFC 8292 keys + subject + client-exposed pubkey)
   /// Server-side VAPID public key (base64url, P-256 ECDSA, ~87 chars). Used to
   /// sign the JWT auth header sent to push services (FCM, APNs, Mozilla).

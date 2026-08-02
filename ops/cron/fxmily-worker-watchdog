@@ -115,13 +115,29 @@ fi
 
 # --- 3. AUTH (live) ----------------------------------------------------------
 # Zero quota cost: `claude auth status --json` reads ~/.claude/.credentials.json.
+#
+# OBSERVATION-AWARE, and this matters. `claude_auth:logged_out` is escalated to
+# RED by health.ts (`criticalLabels`) because it means "the AI is mute". That is
+# TRUE once this host owns generation — and FALSE during the doublon window,
+# where the PC is still master and generating normally. Raising the critical
+# label then would be a false alarm, and a board that cries wolf during a
+# planned migration is a board nobody reads afterwards. So while
+# FXMILY_WORKER_DRY_RUN=1 the same fact is reported under a non-critical label:
+# still visible, still counted in `errors` (→ amber), never a phantom incident.
+OBSERVATION=false
+[[ "${FXMILY_WORKER_DRY_RUN:-0}" == "1" ]] && OBSERVATION=true
+
 if ! command -v claude >/dev/null 2>&1; then
   add_label 'claude_bin_missing'
 else
   AUTH_JSON="$(claude auth status --json 2>/dev/null || true)"
   LOGGED_IN="$(printf '%s' "$AUTH_JSON" | jq -r '.loggedIn // false' 2>/dev/null || echo false)"
   if [[ "$LOGGED_IN" != "true" ]]; then
-    add_label 'claude_auth:logged_out'
+    if [[ "$OBSERVATION" == "true" ]]; then
+      add_label 'claude_auth:observation_pending'
+    else
+      add_label 'claude_auth:logged_out'
+    fi
   fi
 fi
 
@@ -166,6 +182,12 @@ if [[ -z "$ADMIN_TOKEN" || "${#ADMIN_TOKEN}" -lt 32 ]]; then
   log 'ERROR heartbeat impossible: FXMILY_ADMIN_TOKEN missing/short in worker.env.'
   exit 1
 fi
+
+# The board keeps ONE heartbeat slot for "the worker". During the doublon window
+# TWO watchdogs write to it (the PC's and this one), so the version string
+# carries the discriminator: whoever reads the audit metadata can tell which
+# host wrote the row, and whether it was still in observation. ≤20 chars (Zod).
+[[ "$OBSERVATION" == "true" ]] && WATCHDOG_VERSION="${WATCHDOG_VERSION}-obs"
 
 PAYLOAD="$(jq -nc \
   --argjson checked "${#PIPELINES[@]}" \

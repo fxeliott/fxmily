@@ -306,9 +306,15 @@ discipline.
 
 La vérification du tableau est volontairement la plus faible qui ne peut pas
 donner de faux positif — la chaîne d'action doit **apparaître** dans le fichier —
-mais elle apparaît désormais **dans du code** : les lignes de commentaire sont
-retirées avant la recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'`
-suffirait à faire verdir la porte sur un tableau qui n'a pas cette entrée.
+mais elle apparaît désormais **dans du code** : les commentaires sont retirés
+avant la recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'` suffirait
+à faire verdir la porte sur un tableau qui n'a pas cette entrée. Les blocs
+`/* … */` sont suivis par un drapeau d'état et non par la forme des lignes : une
+première version ne retirait que les lignes commençant par `//`, `*` ou `/*`, ce
+qui laissait le **corps** d'un bloc entièrement cherchable — démontré, pas
+supposé, par un commentaire de deux lignes qui faisait passer la porte sur un
+tableau vide. Vérifié dans l'autre sens aussi : sur les 1 860 lignes de
+`health.ts`, le retrait n'enlève **aucune** ligne de code.
 
 ### D10 — « Aucun secret dans le dépôt » était vrai, et ne se vérifiait qu'à la main
 
@@ -319,14 +325,35 @@ prouve l'état du jour où elle est faite et rien après : le dépôt est **publ
 et il suffit du prochain contributeur qui colle un vrai jeton dans
 `worker.env.example` « pour montrer la forme ».
 
-Le critère a donc désormais sa porte
+Le critère a donc désormais une porte
 (`apps/web/src/lib/system/worker-secrets-hygiene.test.ts`) : la ligne
 d'ignorance existe, aucune clé de type jeton n'a de valeur dans l'exemple, et
 aucun fichier de la surface worker n'assigne de littéral long à une clé de
-secret. Le balayage énumère les fichiers **sur le disque** plutôt qu'en dur, pour
-qu'un script ajouté demain dans `ops/worker/` soit couvert le jour où il arrive —
-et un quatrième test refuse qu'une liste vide passe pour une preuve, la faute
-même que l'installeur de ce jalon avait dû corriger.
+secret — sous trois formes de collage (`CLÉ=valeur`, `clé: valeur` YAML, et
+l'en-tête HTTP d'un `curl -H`), casse indifférente. Le balayage énumère les
+fichiers **sur le disque** plutôt qu'en dur, pour qu'un script ajouté demain dans
+`ops/worker/` soit couvert le jour où il arrive — et un test refuse qu'une liste
+vide passe pour une preuve, la faute même que l'installeur de ce jalon avait dû
+corriger.
+
+**Ce qu'elle ne prouve pas, et pourquoi c'est écrit ici.** Sa première version
+s'appelait « le dépôt ne livre aucun secret worker ». Elle ne prouvait pas ça, et
+une revue a montré en une minute par où passer (jeton dans un en-tête `curl`,
+clé en minuscules, `AWS_ACCESS_KEY_ID`, hash commençant par `$`). Trois de ces
+angles sont maintenant couverts, les autres non, et le libellé de la porte
+n'énonce plus que ce qu'elle mesure : **aucun littéral long sous une clé de type
+secret, sur une liste de fichiers nommée**. Un scanner de secrets à l'échelle du
+dépôt est un autre outil, avec un autre budget de faux positifs — sa place est au
+pre-commit, pas ici. Sur un dépôt public, une porte dont le nom promet plus que
+sa preuve finit par servir d'argument pour ne pas regarder.
+
+Deux réglages viennent de ce que la porte a trouvé **sur elle-même** au premier
+lancement : `PING_URL` n'est pas ancré en fin de clé (les sept vraies clés sont
+`HEALTHCHECK_PING_URL_WORKER_*`, le marqueur est au milieu — ancré, il ne matchait
+aucune des sept clés pour lesquelles il avait été ajouté), et les valeurs de
+remplacement sont reconnues par **préfixe** (`CRON_SECRET=changeme_openssl_rand_hex_24_BYTES_REQUIRED`
+fait 43 caractères et se lisait comme un vrai secret ; une porte qui crie au loup
+sur le placeholder documenté est une porte qu'on coupe dans la semaine).
 
 ### Ce que la revue a REFUTÉ
 

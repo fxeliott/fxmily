@@ -390,16 +390,26 @@ executes. No deploy touches it. That is what the ops workflow
 is for — the sibling of `sync-caddy-prod.yml`, and the only thing that can
 _measure_ this host from CI:
 
-| Mode       | Does                                                                                                  |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| `inspect`  | measures the host and **compares each installed wrapper byte-for-byte with the checkout**. Read-only. |
-| `converge` | resets the checkout to `origin/main`, then installs the wrappers if it has the root reach to do so.   |
-| `verify`   | runs `verify-worker-vps.sh` — the 7-pipeline dry-run. Never persists.                                 |
+| Mode       | Does                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `inspect`  | measures the host: each installed wrapper **byte-for-byte against what the last deploy staged**, plus the checkout's state |
+| `converge` | resets the checkout to `origin/main`, then installs the wrappers if it has the root reach to do so                         |
+| `verify`   | runs `verify-worker-vps.sh` — the 7-pipeline dry-run. Never persists                                                       |
 
-`inspect` stays useful after the deploy path is wired: it is the only report
-that says whether the machine matches the repo, and the wrapper comparison it
-prints is exactly what would have caught the #580/#581 drift on the day it
-happened.
+**Read the two drift messages as the two different problems they are.** Since the
+wrappers travel with the deploy, `/usr/local/bin/fxmily-worker*` and `~/worker`
+have different update paths, so `inspect` reports on them separately:
+
+| Message          | Means                                                                              | Do                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| _Wrapper drift_  | the installed wrapper is not what the last deploy staged                           | re-install `fxmily-sync-cron` as root (it never installs itself), redeploy |
+| _Stale checkout_ | `~/worker` is behind the installed wrappers — **the batch scripts run from there** | `converge`                                                                 |
+
+That distinction is not cosmetic. Comparing only against the checkout — which is
+what this section did before the wrappers joined the deploy — would report
+_"the host is not running main"_ on a host that is **exactly** at main, the first
+time a deploy lands a wrapper fix. A gate that says the opposite of the truth
+stops being read.
 
 Two things it deliberately does not do, each for a reason this repo already paid for:
 
@@ -409,7 +419,7 @@ Two things it deliberately does not do, each for a reason this repo already paid
   Run `inspect` after any PR that touches `ops/cron/fxmily-worker*`.
 - **It does not install the wrappers on its own** unless the host actually grants
   it root. The `fxmily` sudoers entry is exactly one command with no arguments
-  (`fxmily-sync-cron`, `deploy.yml:361-367`). When the grant is absent, `converge`
+  (`fxmily-sync-cron`, `deploy.yml:366-376`). When the grant is absent, `converge`
   leaves the checkout up to date, prints the one root command, and **fails** —
   rather than reporting a convergence that did not happen.
 

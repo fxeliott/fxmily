@@ -204,24 +204,67 @@ export function parseInstallerScripts(body) {
 }
 
 /**
- * Drop comment-only lines from a TypeScript source before searching it.
+ * Drop comment lines from a TypeScript source before searching it.
  *
  * Without this, the board check below is satisfied by a COMMENT that happens to
- * name a pipeline's action — the one channel by which this guard can go green on
- * a board that has no such entry. A comment is not a remediation: it renders
- * nothing on `/admin/system`. Only whole-line comments are dropped, so a real
- * entry followed by a trailing `// note` still counts.
+ * name a pipeline's action. A comment is not a remediation: it renders nothing
+ * on `/admin/system`, so a `// TODO: wire 'seance.batch.pulled'` must not make
+ * the gate green on a board that has no such entry.
+ *
+ * BLOCK comments are tracked with a state flag rather than by line shape. A
+ * first version only dropped lines starting with `//`, `*` or `/*`, which left
+ * the body of a `/* … *␘/` block — the lines without an alignment asterisk —
+ * fully searchable. That was demonstrated, not assumed: a two-line block comment
+ * naming a pipeline made the gate pass on an EMPTY board.
+ *
+ * Deliberately NOT a parser. It ignores strings, so `const s = '/*'` would open
+ * a phantom block; that shape does not exist in `health.ts` and a false positive
+ * here is loud and obvious (gate red on a healthy repo), whereas the false
+ * NEGATIVE it replaces was silent. Only whole-line `//` comments are dropped, so
+ * a real entry followed by a trailing `// note` still counts.
  * @param {string} body
  * @returns {string}
  */
 export function stripCommentLines(body) {
-  return body
-    .split('\n')
-    .filter((line) => {
-      const t = line.trim();
-      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
-    })
-    .join('\n');
+  const out = [];
+  let inBlock = false;
+
+  for (const line of body.split('\n')) {
+    const t = line.trim();
+
+    if (inBlock) {
+      // The closing delimiter can be followed by real code on the same line.
+      const end = t.indexOf('*/');
+      if (end === -1) continue;
+      inBlock = false;
+      const rest = t.slice(end + 2).trim();
+      if (rest !== '' && !rest.startsWith('//')) out.push(rest);
+      continue;
+    }
+
+    if (t.startsWith('//')) continue;
+
+    const open = t.indexOf('/*');
+    if (open !== -1) {
+      const before = t.slice(0, open).trim();
+      const close = t.indexOf('*/', open + 2);
+      if (close === -1) {
+        // Block opens here and runs on.
+        inBlock = true;
+        if (before !== '') out.push(before);
+        continue;
+      }
+      // Single-line /* … */ — keep what surrounds it.
+      const after = t.slice(close + 2).trim();
+      const kept = `${before} ${after}`.trim();
+      if (kept !== '') out.push(kept);
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  return out.join('\n');
 }
 
 /**

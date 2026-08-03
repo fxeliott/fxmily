@@ -173,6 +173,12 @@ jobs:
           # running the #579 copy. Staging them here + the two matching
           # `MANAGED_SCRIPTS` rows makes every healthy deploy converge them,
           # through the one sudo grant this user has (step 5 below).
+          #
+          # ⚠️ Takes effect only AFTER a root operator installs the updated
+          # `fxmily-sync-cron` once from the staging dir: the validator is
+          # root-pinned and never installs itself (see the note where it is
+          # staged, above). Until then, deploys keep converging the five older
+          # scripts and say nothing about these two.
           source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/cron/fxmily-worker,ops/cron/fxmily-worker-watchdog,ops/scripts/fxmily-autoheal'
           target: /home/fxmily/cron-sync
           strip_components: 2

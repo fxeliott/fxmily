@@ -10,11 +10,10 @@ name: Worker host sync
 #     ops/cron/fxmily-worker            → /usr/local/bin/fxmily-worker
 #     ops/cron/fxmily-worker-watchdog   → /usr/local/bin/fxmily-worker-watchdog
 #
-# NOTHING pushes those two files to the host. `deploy.yml:169` scp's an explicit
-# list of eight files (crontab.fxmily, fxmily-cron, the three backups, the
-# restore drill, fxmily-sync-cron, fxmily-autoheal) and the worker pair is not
-# among them. So J9 created a fresh instance of the exact failure class the
-# repo has already been bitten by twice — a file that is IaC in the repo and
+# J9 shipped those two files with NO path to the host: `deploy.yml` scp'd an
+# explicit list that did not name them, and `fxmily-sync-cron`'s MANAGED_SCRIPTS
+# table did not either. So J9 created a fresh instance of the exact failure class
+# the repo has already been bitten by twice — a file that is IaC in the repo and
 # drifts on the host with nothing watching:
 #
 #   * tour 14: docker-compose.prod.yml lived in the repo, never reached the
@@ -25,12 +24,28 @@ name: Worker host sync
 # It is not hypothetical here. PRs #580 and #581 changed
 # `ops/cron/fxmily-worker-watchdog` (observation-aware labels, and the `:-1`
 # default that stops a healthy host from being reported as logged out). Those
-# fixes are on `main`, they are NOT on the host, and no gate said so.
+# fixes were on `main` and NOT on the host, and no gate said so.
 #
-# WHAT IT IS WORTH. A drift DETECTOR first, a safe installer second, and the
-# only channel that can answer "what is actually running over there?" without
-# an SSH session. The convergence itself is a plain `git pull` in the
-# fxmily-owned checkout — the repo is public, so no credential is involved.
+# WHAT CHANGED, AND WHAT THIS WORKFLOW IS STILL FOR
+# -------------------------------------------------
+# The wrappers now travel with the deploy: they are in `deploy.yml`'s `source:`
+# list and in the `MANAGED_SCRIPTS` table of `fxmily-sync-cron`, the one command
+# `fxmily` may run as root. That is the automatic channel, and it needed two
+# filenames and two rows — not a workflow.
+#
+# What a deploy still cannot do, and this can:
+#
+#   * MEASURE. Nothing else answers "what is actually running over there?"
+#     without an interactive SSH session. Section B compares the installed
+#     wrappers to what the last deploy staged — exactly the check that would
+#     have caught the #580/#581 drift on the day it happened.
+#   * MOVE THE CHECKOUT. `~/worker` is what `fxmily-worker` actually EXECUTES
+#     (run-batch.sh and the seven batch scripts live there) and NO deploy touches
+#     it. `converge` is the only automated thing that does.
+#   * Prove the switchover gate (`verify`) without a human on the box.
+#
+# The convergence itself is a plain `git` in the fxmily-owned checkout — the repo
+# is public, so no credential is involved.
 #
 # ⚠️ THIS REPOSITORY IS PUBLIC, SO THESE RUN LOGS ARE PUBLIC.
 # That is a hard constraint on every line below, not a note:
@@ -58,7 +73,7 @@ name: Worker host sync
 #   * `converge` fast-forwards the checkout (refusing a dirty tree), then
 #     reports the wrapper drift. Installing the wrappers needs root, and the
 #     `fxmily` sudoers grant is exactly one command with no arguments
-#     (`/usr/local/bin/fxmily-sync-cron`, deploy.yml:361-367) — so this mode
+#     (`/usr/local/bin/fxmily-sync-cron`, deploy.yml:366-376) — so this mode
 #     PROBES for the right to run the installer and, when it does not have it,
 #     prints the one root command to run and fails loudly rather than pretending
 #     the drift is closed.
@@ -113,6 +128,11 @@ jobs:
             BIN_WORKER=/usr/local/bin/fxmily-worker
             BIN_WATCHDOG=/usr/local/bin/fxmily-worker-watchdog
             TIMELINE=/var/log/fxmily/worker.log
+            # Where `deploy.yml` drops the ops scripts before calling the one
+            # command this user may run as root. Since the two wrappers joined
+            # that payload, this directory — not the checkout — holds the most
+            # recent copy that `main` actually delivered to this machine.
+            STAGE_DIR="$HOME/cron-sync"
 
             # PUBLIC LOG GUARD. Everything printed from host state goes through
             # this. A URL in a log line is not decoration: `hc_ping` appends curl
@@ -166,27 +186,74 @@ jobs:
             # =================================================================
             # B. Wrapper drift — the whole reason this workflow exists
             # =================================================================
-            # `cmp` on the repo copy vs the installed copy. This is the gate:
-            # a mismatch means a merged fix is not running in production.
-            echo "::group::B · Wrapper drift (repo checkout vs /usr/local/bin)"
+            # There are now TWO sources for /usr/local/bin/fxmily-worker*, and
+            # comparing against the wrong one inverts the verdict:
+            #
+            #   · $STAGE_DIR — what the LAST DEPLOY delivered from `main`, and
+            #     what `fxmily-sync-cron` installed from. This is the reference
+            #     for "is the host running the merged wrapper?".
+            #   · $WORKER_REPO — the checkout, which NO deploy touches. It is
+            #     only moved by `converge` (or by hand). It is the reference for
+            #     a different question, and one that matters just as much:
+            #     `fxmily-worker` EXECUTES `$WORKER_REPO/ops/worker/run-batch.sh`
+            #     and the seven batch scripts. A current wrapper on top of a
+            #     stale checkout ships half of a coupled change.
+            #
+            # Comparing only against the checkout — as this section did when the
+            # deploy did not carry the wrappers — would report "DRIFTED, the host
+            # is not running main" on a host that is EXACTLY at main, the moment
+            # a deploy lands a wrapper fix. That is the inverse of the truth, and
+            # a red-by-default gate stops being read.
+            echo "::group::B · Wrapper drift (host vs last deploy, and the checkout)"
             DRIFT=0
-            for pair in "ops/cron/fxmily-worker:$BIN_WORKER" \
-                        "ops/cron/fxmily-worker-watchdog:$BIN_WATCHDOG"; do
-              SRC="$WORKER_REPO/${pair%%:*}"
+            STALE_CHECKOUT=0
+            for pair in "fxmily-worker:$BIN_WORKER" \
+                        "fxmily-worker-watchdog:$BIN_WATCHDOG"; do
+              NAME="${pair%%:*}"
               DST="${pair##*:}"
-              if [ ! -f "$SRC" ]; then
-                bad "$(basename "$DST"): missing from the checkout"
+              SRC_REPO="$WORKER_REPO/ops/cron/$NAME"
+              SRC_STAGED="$STAGE_DIR/$NAME"
+
+              if [ ! -f "$DST" ]; then
+                bad "$NAME: NOT INSTALLED on the host"
                 DRIFT=1
-              elif [ ! -f "$DST" ]; then
-                bad "$(basename "$DST"): NOT INSTALLED on the host"
-                DRIFT=1
-              elif cmp -s "$SRC" "$DST"; then
-                ok "$(basename "$DST"): identical to the checkout ($(stat -c '%a %U:%G' "$DST"))"
+                continue
+              fi
+
+              # The authoritative comparison, when the deploy payload is there.
+              if [ -f "$SRC_STAGED" ]; then
+                if cmp -s "$SRC_STAGED" "$DST"; then
+                  ok "$NAME: matches the last deploy ($(stat -c '%a %U:%G' "$DST"))"
+                else
+                  bad "$NAME: DRIFTED — the installed copy is not what the last deploy staged"
+                  echo "         installed $(stat -c '%y' "$DST" | cut -d. -f1), $(wc -l <"$DST") lines"
+                  echo "         staged    $(stat -c '%y' "$SRC_STAGED" | cut -d. -f1), $(wc -l <"$SRC_STAGED") lines"
+                  echo "         → the root operator has not re-installed fxmily-sync-cron yet (it never installs itself),"
+                  echo "           or something wrote /usr/local/bin outside the deploy."
+                  DRIFT=1
+                fi
               else
-                bad "$(basename "$DST"): DRIFTED — host copy differs from the checkout"
-                echo "         host $(stat -c '%y' "$DST" | cut -d. -f1), $(wc -l <"$DST") lines"
-                echo "         repo $(stat -c '%y' "$SRC" | cut -d. -f1), $(wc -l <"$SRC") lines"
-                DRIFT=1
+                # No payload on disk: either the deploy predates the two wrappers
+                # joining `source:`, or the scp landed elsewhere. Say so rather
+                # than silently falling back and calling it a clean result.
+                warn "$NAME: no deploy payload at $SRC_STAGED — falling back to the checkout"
+                if [ ! -f "$SRC_REPO" ]; then
+                  bad "$NAME: missing from the checkout too — nothing to compare against"
+                  DRIFT=1
+                elif cmp -s "$SRC_REPO" "$DST"; then
+                  ok "$NAME: identical to the checkout"
+                else
+                  bad "$NAME: DRIFTED — host copy differs from the checkout"
+                  DRIFT=1
+                fi
+              fi
+
+              # Second, independent question: is the checkout in step? Not a
+              # DRIFT (the wrapper on the host may be perfectly current), but the
+              # batch scripts come from here, so it is never "nothing".
+              if [ -f "$SRC_REPO" ] && ! cmp -s "$SRC_REPO" "$DST"; then
+                warn "$NAME: the CHECKOUT differs from the installed copy — run converge (batch scripts come from ~/worker)"
+                STALE_CHECKOUT=1
               fi
             done
             echo "::endgroup::"
@@ -291,7 +358,7 @@ jobs:
 
             echo "::group::G · Root reach (can converge finish by itself?)"
             # Answer this BEFORE someone runs converge, not after it fails at the
-            # last step. The grant is command-specific (deploy.yml:361-367), so
+            # last step. The grant is command-specific (deploy.yml:366-376), so
             # `sudo -n true` is a faithful proxy: if a bare command is refused,
             # so is the installer. `-n` never prompts, so this cannot hang.
             if sudo -n true 2>/dev/null; then
@@ -307,7 +374,7 @@ jobs:
             # EXACT match of a secret's value, and `secrets.HETZNER_HOST` holds
             # the address, not the short hostname, so nothing would redact it.
             # The boolean above answers the only question this section asks, and
-            # the grant itself is already documented at deploy.yml:361-367.
+            # the grant itself is already documented at deploy.yml:366-376.
             echo "::endgroup::"
 
             echo "::group::H · Timeline (last 25 ticks, redacted)"
@@ -317,7 +384,11 @@ jobs:
 
             if [ "$MODE" = "inspect" ]; then
               echo
-              [ "$DRIFT" -eq 1 ] && echo "::warning title=Wrapper drift::the host is running a different wrapper than main. Re-run with mode=converge."
+              # Two DIFFERENT problems, two different sentences. Collapsing them
+              # into one "drift" message is how a gate ends up telling an
+              # operator the opposite of what is wrong.
+              [ "$DRIFT" -eq 1 ] && echo "::warning title=Wrapper drift::an installed wrapper does not match what the last deploy staged. A root operator must re-install fxmily-sync-cron (it never installs itself), then re-run a deploy."
+              [ "$STALE_CHECKOUT" -eq 1 ] && echo "::warning title=Stale checkout::~/worker is behind the installed wrappers. The batch scripts run FROM that checkout — re-run with mode=converge."
               echo "inspect mode — nothing was written."
               [ "$FAILED" -eq 0 ] && echo "RESULT: no failure detected." || echo "RESULT: at least one check FAILED (above)."
               exit "$FAILED"

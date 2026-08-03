@@ -95,7 +95,16 @@ AUTH_STATE="$(claude auth status --json 2>/dev/null | jq -r '.loggedIn // false'
 [[ -n "$AUTH_STATE" ]] || AUTH_STATE='unknown'
 
 echo "Fxmily worker — 7-pipeline dry-run verification"
-echo "  host   : $(hostname)"
+# NO `hostname` here. This banner used to print it, and it is not harmless:
+# `worker-host-sync.yml` runs this script in `verify` mode and pipes the output
+# into a GitHub Actions log, which is PUBLIC because this repository is. The
+# workflow's `redact()` only strips `http(s)://…`, so a bare host name goes
+# straight through, and GitHub masks only an EXACT match of a secret's value —
+# `secrets.HETZNER_HOST` holds the IPv4, not the short name, so nothing would
+# redact it either. A `[ -z "$CI" ]` guard would NOT work: this script runs on
+# the host over SSH, where the runner's environment does not exist.
+# The line was also pointless where it was useful: an operator running this by
+# hand is already logged into the machine it would name.
 echo "  target : $FXMILY_APP_URL"
 echo "  claude : $CLAUDE_VERSION"
 echo "  auth   : $AUTH_STATE"

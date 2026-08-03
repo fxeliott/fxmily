@@ -202,20 +202,57 @@ describe('diffWorkerPipelines — one mutation at a time, each must go red', () 
     expect(r.emptySources).toContain('ops/worker/run-batch.sh (allowlist)');
   });
 
-  it('a board where the missing pipeline is named only in a COMMENT', () => {
-    // The one channel by which this guard could go green on a board that has no
-    // such entry: `boardBody.includes()` is a text search, and a comment is
-    // text. A comment renders nothing on /admin/system, so it must not count.
+  it('a board where the missing pipeline is named only in a LINE comment', () => {
+    // `boardBody.includes()` is a text search, and a comment is text. A comment
+    // renders nothing on /admin/system, so it must not count as an entry.
     const input = healthyInput();
     input.boardBody = [
       ...CANONICAL_ORDER.filter((p) => p !== 'seances').map((p) => `action: '${actionFor[p]}',`),
       `  // TODO: wire '${actionFor.seances}' here once the board is refactored`,
-      `   * see also '${actionFor.seances}' in the worker crontab`,
     ].join('\n');
 
     const r = diffWorkerPipelines(input);
     expect(r.ok).toBe(false);
     expect(r.missingFromBoard).toEqual(['seances']);
+  });
+
+  it('a board where it is named inside a JSDoc block', () => {
+    const input = healthyInput();
+    input.boardBody = [
+      ...CANONICAL_ORDER.filter((p) => p !== 'seances').map((p) => `action: '${actionFor[p]}',`),
+      '/**',
+      ` * See also '${actionFor.seances}', emitted by the worker crontab.`,
+      ' */',
+    ].join('\n');
+
+    expect(diffWorkerPipelines(input).missingFromBoard).toEqual(['seances']);
+  });
+
+  it('a board where it is named in a BLOCK comment body with no asterisks', () => {
+    // The shape that survived the first fix. It only dropped lines *starting*
+    // with `//`, `*` or `/*`, so the body of a plain `/* … */` block went
+    // straight through the search — demonstrated, not assumed.
+    const input = healthyInput();
+    input.boardBody = [
+      ...CANONICAL_ORDER.filter((p) => p !== 'seances').map((p) => `action: '${actionFor[p]}',`),
+      '/*',
+      `  TODO: add the board entry for '${actionFor.seances}' later.`,
+      '  Not implemented yet.',
+      '*/',
+    ].join('\n');
+
+    expect(diffWorkerPipelines(input).missingFromBoard).toEqual(['seances']);
+  });
+
+  it('still sees an entry that SHARES a line with a block comment', () => {
+    // The symmetric risk: over-stripping blinds the scan to real code. A gate
+    // that goes green because it stopped looking is the worse failure.
+    const input = healthyInput();
+    input.boardBody = CANONICAL_ORDER.map(
+      (p) => `/* heartbeat */ action: '${actionFor[p]}', /* emitted by the worker */`,
+    ).join('\n');
+
+    expect(diffWorkerPipelines(input).ok).toBe(true);
   });
 
   it('still counts an entry followed by a trailing comment', () => {

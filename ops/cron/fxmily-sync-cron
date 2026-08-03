@@ -65,10 +65,16 @@ MANAGED_SCRIPTS=(
   # Same failure class as the tour-14 one described above, one layer down.
   #
   # They are referenced by /etc/cron.d/fxmily-worker, a SEPARATE file that the
-  # crontab gate below never reads — so a missing wrapper will not fail a deploy
-  # the way a missing app binary does. That asymmetry is deliberate (a worker
-  # rollback must never be able to fail an app deploy), and it is why the
-  # `worker-host-sync.yml` inspector exists alongside this line.
+  # crontab gate below never reads — so a worker ROLLBACK (the wrapper leaves
+  # the repo, nothing is staged) is skipped harmlessly and cannot fail an app
+  # deploy. That asymmetry is deliberate.
+  #
+  # It does NOT extend to a wrapper that is staged but MALFORMED: the shebang
+  # and size checks below `fail`, like they do for every managed script, and
+  # that aborts the deploy. Kept fatal on purpose — a staged script with no
+  # shebang means the repo file is corrupt, which CI (`bash -n`, shellcheck)
+  # catches long before here, and silently installing nothing over a corrupt
+  # payload is the kind of quiet degradation this table exists to prevent.
   "fxmily-worker /usr/local/bin/fxmily-worker 0755"
   "fxmily-worker-watchdog /usr/local/bin/fxmily-worker-watchdog 0755"
 )
@@ -157,7 +163,16 @@ for spec in "${MANAGED_SCRIPTS[@]}"; do
   [[ "$sz" -lt 65536 ]] || fail "staged $name unexpectedly large ($sz bytes)."
   if ! cmp -s "$src" "$dst" 2>/dev/null; then
     [[ -f "$dst" ]] && cp -p "$dst" "${dst}.bak-${STAMP}"
-    install -o root -g root -m "$mode" "$src" "$dst"
+    # Install to a sibling, then RENAME. `install` writes the destination in
+    # place, and bash reads a script incrementally by byte offset: rewriting a
+    # file under a running interpreter makes it execute shifted content. That
+    # was a theoretical worry while this table held five occasional jobs; it
+    # stopped being theoretical when the worker wrappers joined it —
+    # `fxmily-worker verification` fires every 5 minutes with a 2-hour cap, so
+    # a run is very often in flight. `mv` on the same filesystem is rename(2):
+    # the inode a running process holds survives untouched until it exits.
+    install -o root -g root -m "$mode" "$src" "${dst}.new-${STAMP}"
+    mv -f "${dst}.new-${STAMP}" "$dst"
     log "installed $dst (backup: ${dst}.bak-${STAMP})"
     changed=1
   fi

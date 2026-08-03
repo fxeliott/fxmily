@@ -2319,6 +2319,27 @@ describe('buildHostActionsReport', () => {
     expect(pc.command).toBe('pwsh -File ops/worker/install-worker.ps1');
     expect(pc.reference).toBe('ops/worker/README.md');
 
+    // A HOST-side cron entry, whatever its version string says. `allEntries`
+    // merges the cron report into the same loop, and `cron.autoheal.heartbeat`
+    // — labelled "(hôte)" — reports `watchdogVersion: '1.1.0'`, byte-identical
+    // to the WINDOWS worker watchdog. Nothing emits a label on that path today,
+    // so this is not reachable; it is one `errorLabels` away from being so, and
+    // it would print PowerShell for a fault on a Linux host. Provenance decides.
+    const hostCron = buildHostActionsReport(
+      cronReport([
+        entry({
+          action: 'cron.autoheal.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['cron_file_crlf:60'],
+          watchdogVersion: PC_WATCHDOG_VERSION,
+        }),
+      ]),
+      workerReport([]),
+    ).items[0]!;
+    expect(hostCron.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
+
     // A heartbeat that predates versioning: no marker, so it reads as the PC —
     // which is what `WORKER_HOST` says today, i.e. the safe default.
     const legacy = commandFor('');

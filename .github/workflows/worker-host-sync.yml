@@ -251,7 +251,10 @@ jobs:
               # Second, independent question: is the checkout in step? Not a
               # DRIFT (the wrapper on the host may be perfectly current), but the
               # batch scripts come from here, so it is never "nothing".
-              if [ -f "$SRC_REPO" ] && ! cmp -s "$SRC_REPO" "$DST"; then
+              # Skipped when the verdict above was ALREADY based on the checkout
+              # (the no-payload fallback): saying the same thing twice in two
+              # wordings is how a report stops being read.
+              if [ -f "$SRC_STAGED" ] && [ -f "$SRC_REPO" ] && ! cmp -s "$SRC_REPO" "$DST"; then
                 warn "$NAME: the CHECKOUT differs from the installed copy — run converge (batch scripts come from ~/worker)"
                 STALE_CHECKOUT=1
               fi

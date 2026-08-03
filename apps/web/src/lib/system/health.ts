@@ -1519,17 +1519,30 @@ export function buildHostActionsReport(
       // `onboarding`. Kept even on the first label of a family, so the card can
       // say WHICH subjects it covers instead of pointing at a table that cannot
       // answer (see `HostActionItem.details`).
-      const emittedByServer = fromHost || labelEmittedByServer(entry.watchdogVersion);
-      // A fault the SERVER reports while the PC is still master is not an
-      // incident: the server is in dry-run, it serves nobody, and the PC is
-      // generating normally. Marking it `blocked` printed "À traiter" for a
-      // machine no member depends on yet — and it did so next to a board row
-      // that stays amber, because the age/criticality profile is still the PC
-      // one while `WORKER_HOST=pc`. That mismatch is the same class of lie as
-      // the wrong-machine command: two halves of the board reading two
-      // different notions of "who is live". Both now read the emitter.
-      const severity: HostActionSeverity =
-        emittedByServer && !isWorkerOnServer() ? 'pending' : remediation.severity;
+      // Two DIFFERENT questions below, and one boolean cannot answer both.
+      //
+      // (1) WHICH machine does the repair run on? A cron entry is the host's
+      // own, whatever its version string says — `cron.autoheal.heartbeat` is
+      // labelled "(hôte)" and reports `1.1.0`, byte-identical to the WINDOWS
+      // watchdog. So provenance decides, and the version string arbitrates only
+      // the genuinely ambiguous case: the worker heartbeat, `pc` until the last
+      // step of the switchover.
+      const repairRunsOnServer = fromHost || labelEmittedByServer(entry.watchdogVersion);
+      // (2) Is the fault an INCIDENT yet? This downgrade exists for exactly one
+      // situation: the WORKER reporting while it is still in dry-run — it
+      // serves nobody, the PC generates normally, so "À traiter" would be a lie
+      // next to a board row that stays amber (the age profile is still the PC
+      // one while `WORKER_HOST=pc`).
+      //
+      // The host's own crons are NOT in dry-run. A corrupted schedule or a dead
+      // backup there is live production breakage. Folding (1) into (2) — which
+      // the first version of this fix did, by reusing one flag — silently
+      // downgraded EVERY cron label card from `blocked` to `pending`: the same
+      // class of lie as the wrong-machine command, moved one square over. Hence
+      // two names, and a test that pins the severity, not just the command.
+      const workerIdleInDryRun =
+        !fromHost && labelEmittedByServer(entry.watchdogVersion) && !isWorkerOnServer();
+      const severity: HostActionSeverity = workerIdleInDryRun ? 'pending' : remediation.severity;
       const subject = label.slice(resolved.key.length + 1).trim();
       const key = `label:${resolved.key}`;
       const existing = labelItems.get(key);
@@ -1547,7 +1560,7 @@ export function buildHostActionsReport(
         detail: remediation.detail,
         // Resolved from the watchdog that REPORTED this label, not from
         // `WORKER_HOST` — the two disagree for the whole observation window.
-        ...resolveLabelCommand(remediation.commandKind, emittedByServer),
+        ...resolveLabelCommand(remediation.commandKind, repairRunsOnServer),
         // NOT `entry.lastRanAt`. That is the watchdog's last beat — a signal
         // open for three weeks would have rendered "Ouvert depuis il y a 6
         // minutes", rejuvenating on every tick. Nothing in the heartbeat records

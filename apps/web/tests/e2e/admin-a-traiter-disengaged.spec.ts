@@ -117,19 +117,38 @@ test.describe('J6 scope 2 — /admin/a-traiter : membres en décrochage (preuve 
     await page.goto('/admin/a-traiter');
 
     // pass/fail #2: both disengaged members surface with a deep link to their fiche.
-    // `:visible` scopes to the live node only: during RSC streaming the row can
-    // momentarily exist twice (the hidden Suspense-stream buffer copy + the placed
-    // node), which trips strict mode. Measured here: `/admin/*` has a `loading.tsx`,
-    // so the page streams, and the buffered copy carries its OWN `<main>` — two
-    // `<main>` coexist mid-stream and the staged anchor sits under a `div[hidden]`.
-    // The app mounts each row exactly once; the filter makes the assertion robust
-    // to the streaming window, not lenient about a dup. Scoping to the section
-    // instead does NOT help — the buffered copy carries the same aria-label.
+    // `:visible` scopes to the live node only. `/admin/*` ships a `loading.tsx`,
+    // so the page streams and the buffered copy carries its OWN `<main>`.
+    // Precisely (this matters — "two `<main>`" alone would NOT explain the
+    // symptom): the fallback `<main>` is a skeleton with zero member anchors, so
+    // while only the buffer exists a locator matches ONE hidden node and
+    // `toBeVisible` merely retries. The strict-mode violation comes one beat
+    // later, when the placed content has mounted and the buffer has not yet been
+    // torn down — the original failure caught exactly that, reporting the staged
+    // copy as `.nth(2)` of four "Ouvrir la fiche de" anchors for two seeded rows.
+    // Measured directly: `mains: 2` with the anchor under a `div[hidden]`
+    // ancestor, on three independent navigations; the settled DOM is correct.
+    // The app mounts each row exactly once — this is robustness to the streaming
+    // window, not leniency about a duplicate.
+    //
+    // The aria-label suffix is intersected on purpose, and `:visible` alone would
+    // NOT be enough: in `attention-service.ts`, both `listRecentBehavioralSignals`
+    // and `listDisengagedMembers` emit the identical `/admin/members/<id>` string
+    // as their row `href`, and `page.tsx` renders both. A member in both
+    // sections — a long-absent member is a prime `no_checkin_streak` trigger, so
+    // this is correlated rather than hypothetical — would produce TWO fully
+    // VISIBLE anchors and trip strict mode again, permanently this time. Keyed on
+    // the suffix, the assertion also says what it means: this row is in the
+    // disengaged section, which is the claim under test.
     await expect(
-      page.locator(`main a[href$="/admin/members/${neverSeen.id}"]:visible`),
+      page.locator(
+        `main a[href$="/admin/members/${neverSeen.id}"][aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`,
+      ),
     ).toBeVisible();
     await expect(
-      page.locator(`main a[href$="/admin/members/${longAbsent.id}"]:visible`),
+      page.locator(
+        `main a[href$="/admin/members/${longAbsent.id}"][aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`,
+      ),
     ).toBeVisible();
 
     // The rows belong to the disengaged section (unique aria-label suffix), not to

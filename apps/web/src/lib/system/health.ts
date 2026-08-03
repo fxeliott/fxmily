@@ -1475,7 +1475,23 @@ export function buildHostActionsReport(
   cronReport: CronHealthReport,
   workerReport: WorkerHealthReport,
 ): HostActionsReport {
-  const allEntries = [...cronReport.entries, ...workerReport.entries];
+  // Provenance travels WITH the entry. `labelEmittedByServer` reads a version
+  // string, and an entry that carries no marker falls back to "PC" — which is the
+  // safe default for the worker heartbeat (the only genuinely ambiguous source,
+  // `pc` until the last step of the switchover) and the WRONG one for a cron.
+  //
+  // The cron entries are the host's own crons; `cron.autoheal.heartbeat` is even
+  // labelled "(hôte)" and reports `watchdogVersion: "1.1.0"` — byte-identical to
+  // the WINDOWS worker watchdog's string. Nothing emits a label on that path
+  // today (measured: the autoheal script writes none), so this is not reachable
+  // now. It is one `errorLabels` away from being reachable, and it would print a
+  // PowerShell command for a fault on a Linux host — the exact defect this
+  // resolution was rewritten to make unrepresentable. So the source decides, and
+  // the version string only arbitrates the one case that is actually ambiguous.
+  const allEntries = [
+    ...cronReport.entries.map((entry) => ({ entry, fromHost: true })),
+    ...workerReport.entries.map((entry) => ({ entry, fromHost: false })),
+  ];
 
   // Tour 17 — label-derived actions come first: a machine-wide critical label
   // (auth lost / quota capped) is MORE specific than the entry's age status. A
@@ -1487,7 +1503,7 @@ export function buildHostActionsReport(
   // (the same machine-wide state can be raised on several pipelines' status.json).
   const labelItems = new Map<string, HostActionItem>();
   const supersededActions = new Set<string>();
-  for (const entry of allEntries) {
+  for (const { entry, fromHost } of allEntries) {
     // A STALE label (heartbeat older than 3 periods) is not a live machine-wide
     // state: the watchdog is likely asleep or dead, so its age status ("re-
     // register the watchdog" when red) is the honest action — do NOT let an old
@@ -1503,7 +1519,7 @@ export function buildHostActionsReport(
       // `onboarding`. Kept even on the first label of a family, so the card can
       // say WHICH subjects it covers instead of pointing at a table that cannot
       // answer (see `HostActionItem.details`).
-      const emittedByServer = labelEmittedByServer(entry.watchdogVersion);
+      const emittedByServer = fromHost || labelEmittedByServer(entry.watchdogVersion);
       // A fault the SERVER reports while the PC is still master is not an
       // incident: the server is in dry-run, it serves nobody, and the PC is
       // generating normally. Marking it `blocked` printed "À traiter" for a
@@ -1547,6 +1563,7 @@ export function buildHostActionsReport(
   // Status-derived actions (dead cron / dead worker task, by age status), minus
   // entries whose more-specific label action already covers them.
   const statusItems = allEntries
+    .map(({ entry }) => entry)
     .filter((entry) => !supersededActions.has(entry.action))
     .map(toHostAction)
     .filter((item): item is HostActionItem => item !== null);

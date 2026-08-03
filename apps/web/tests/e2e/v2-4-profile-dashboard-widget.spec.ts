@@ -121,7 +121,10 @@ test.describe('V2.4 Profile dashboard widget — surfaces the profiling pipeline
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/dashboard/);
 
-    const widget = page.locator('[data-slot="profile-status-widget"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/dashboard` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode.
+    const widget = page.locator('[data-slot="profile-status-widget"]:visible');
     await expect(widget).toBeVisible();
     await expect(widget).toHaveAttribute('data-state', 'not-started');
     await expect(widget).toContainText(/Établis ton profil/i);
@@ -144,7 +147,10 @@ test.describe('V2.4 Profile dashboard widget — surfaces the profiling pipeline
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/dashboard/);
 
-    const widget = page.locator('[data-slot="profile-status-widget"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/dashboard` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode.
+    const widget = page.locator('[data-slot="profile-status-widget"]:visible');
     await expect(widget).toBeVisible();
     await expect(widget).toHaveAttribute('data-state', 'ready');
     await expect(widget).toContainText(/Ton profil est prêt/i);

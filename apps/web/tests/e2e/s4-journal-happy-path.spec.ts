@@ -89,7 +89,15 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + lien Trad
     // Régression S4 DOD1-01 : the CTA must be an anchor wired to /journal/new
     // (`EmptyState ctaHref` renders a `<Link>` — a Server Component cannot
     // pass `onPrimary`, so a button here would be dead on click).
-    const emptyStateCta = page.locator('[data-slot="empty-state"] a[href="/journal/new"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/journal` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy — strict mode then throws on
+    // `toBeVisible` / `click`. It goes on the ANCHOR, and note that `empty-state` is
+    // a SHARED UI slot with ~40 call sites: on other routes several can be visible
+    // at once, so `:visible` would not disambiguate it there. This occurrence is safe
+    // only because the `/journal` call sites are mutually exclusive ternary arms and
+    // the `href` already pins the one CTA — do not cite it as precedent for the slot.
+    const emptyStateCta = page.locator('[data-slot="empty-state"] a[href="/journal/new"]:visible');
     await expect(emptyStateCta).toBeVisible();
     await expect(emptyStateCta).toContainText('Logger mon premier trade');
 

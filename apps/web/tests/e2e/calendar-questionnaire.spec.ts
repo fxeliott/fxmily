@@ -192,6 +192,15 @@ test.describe('§26 Calendar questionnaire — auth-gate + happy-path persist/re
     // already awaits `load`; the `toBeVisible` assertions auto-wait. Deterministic
     // in dev AND prod (CI `next start` has no HMR socket).
     await expect(page).toHaveURL(/\/calendar\/questionnaire\/new/);
+    // Deliberately NOT `:visible`, unlike the widget assertion in the next test.
+    // The `:visible` canon (cf. session24/session25) only earns its place on a
+    // route that STREAMS: the two-node window exists because React parks page
+    // content in a hidden buffer behind a Suspense boundary. This route has none —
+    // there is no `loading.tsx` under `src/app/calendar/` (nor a root one), and
+    // the page itself renders no `<Suspense>`, so the wizard is part of the shell
+    // and is flushed once. Adding `:visible` here would be a no-op that turns a
+    // clear "element is not visible" into "element(s) not found" and would record
+    // a streaming claim about this route that is simply false.
     await expect(page.locator('[data-slot="calendar-questionnaire-wizard"]')).toBeVisible();
     await expect(page.locator('[data-slot="calendar-step-progress"]')).toBeVisible();
 
@@ -208,7 +217,9 @@ test.describe('§26 Calendar questionnaire — auth-gate + happy-path persist/re
     // No `networkidle` (see the wizard RENDER test) — deterministic via `goto`
     // load + the `toBeVisible` auto-wait.
     await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.locator('[data-slot="calendar-status-widget"]')).toBeVisible();
+    // `/dashboard` DOES ship a `loading.tsx`, so here the buffer window is real and
+    // `:visible` is warranted — the contrast with the wizard test above is the point.
+    await expect(page.locator('[data-slot="calendar-status-widget"]:visible')).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });

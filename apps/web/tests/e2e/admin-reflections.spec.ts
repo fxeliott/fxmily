@@ -181,7 +181,14 @@ test.describe('J6 item 4 — admin reflections view (real DB + admin session)', 
       await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
 
       // The feed exists and carries the seeded member's identity + ABCD text.
-      await expect(page.locator('[data-slot="admin-reflections-list"]')).toBeVisible();
+      // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+      // `/admin/*` ships a `loading.tsx`, so the page streams and the placed
+      // content momentarily coexists with its hidden buffer copy — strict mode
+      // then throws before any visibility check runs. Only assertions that THROW
+      // in strict mode get it; the `toHaveCount(0)` guards above are left bare on
+      // purpose (`toHaveCount` never trips strict mode, and `:visible` there would
+      // downgrade "absent from the DOM" to "merely not visible").
+      await expect(page.locator('[data-slot="admin-reflections-list"]:visible')).toBeVisible();
       await expect(
         page.getByText(`${member!.firstName} ${member!.lastName}`, { exact: false }).first(),
       ).toBeVisible();
@@ -199,7 +206,7 @@ test.describe('J6 item 4 — admin reflections view (real DB + admin session)', 
       await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
 
       await expect(page.getByText('Réflexions ABCD', { exact: false })).toBeVisible();
-      await expect(page.locator('[data-slot="member-reflections-list"]')).toBeVisible();
+      await expect(page.locator('[data-slot="member-reflections-list"]:visible')).toBeVisible();
       await expect(page.getByText(R2_TRIGGER, { exact: false })).toBeVisible();
       await expect(page.getByText(R1_TRIGGER, { exact: false })).toBeVisible();
     });

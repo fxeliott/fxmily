@@ -125,7 +125,14 @@ test.describe('Séances admin — go/no-go (runtime)', () => {
     await expect(page.getByRole('heading', { name: 'Go / No-Go des séances' })).toBeVisible();
 
     // Locate the seeded cell (today, debrief).
-    const cell = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]`);
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/admin/*` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy — strict mode then throws on
+    // the `toBeVisible` and `click` calls below. The `date#slot` key is unique per
+    // copy, so `:visible` alone disambiguates here (unlike the `seance-viewers`
+    // badge in `admin-seance-views.spec.ts`, which is one-per-cell under a map and
+    // therefore had to be scoped by its parent cell instead).
+    const cell = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]:visible`);
     await expect(cell).toBeVisible();
 
     // Declare "Tenue" then save.
@@ -144,7 +151,7 @@ test.describe('Séances admin — go/no-go (runtime)', () => {
 
     // no-rewind — after a fresh render, a held session locks "Prévue".
     await page.reload();
-    const cell2 = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]`);
+    const cell2 = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]:visible`);
     await expect(cell2.locator('input[value="scheduled"]')).toBeDisabled();
     // The pipeline panel now shows for a held session.
     await expect(cell2.getByText('Pipeline')).toBeVisible();

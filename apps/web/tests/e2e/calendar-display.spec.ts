@@ -227,7 +227,11 @@ test.describe('§26 Calendar display — auth-gate + 3 states + admin + disclosu
 
     await page.goto('/calendrier');
     await expect(page).toHaveURL(/\/calendrier/);
-    await expect(page.locator('[data-state="no-questionnaire"]')).toBeVisible();
+    // `:visible` past the RSC stream buffer — same reason as state (iii) below.
+    // The three states share one `Promise.all` fetch, so they suspend the boundary
+    // identically: the attribute being `data-state` rather than `data-slot` changes
+    // nothing about the exposure.
+    await expect(page.locator('[data-state="no-questionnaire"]:visible')).toBeVisible();
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
 
@@ -241,7 +245,7 @@ test.describe('§26 Calendar display — auth-gate + 3 states + admin + disclosu
 
     await page.goto('/calendrier');
     await expect(page).toHaveURL(/\/calendrier/);
-    await expect(page.locator('[data-state="preparing"]')).toBeVisible();
+    await expect(page.locator('[data-state="preparing"]:visible')).toBeVisible();
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
 
@@ -255,8 +259,15 @@ test.describe('§26 Calendar display — auth-gate + 3 states + admin + disclosu
 
     await page.goto('/calendrier');
     await expect(page).toHaveURL(/\/calendrier/);
-    await expect(page.locator('[data-slot="calendar-week-view"]')).toBeVisible();
-    await expect(page.locator('[data-slot="calendar-overview"]')).toBeVisible();
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25): both
+    // `/calendrier` and `/admin/*` ship a `loading.tsx`, so the page streams and the
+    // placed content momentarily coexists with its hidden buffer copy — strict mode
+    // throws before any visibility check runs. Only the strict-mode-throwing
+    // assertions get it; the `toHaveCount(0)` overlay guards stay bare on purpose
+    // (`toHaveCount` never trips strict mode, and `:visible` there would downgrade
+    // "absent from the DOM" to "merely not visible").
+    await expect(page.locator('[data-slot="calendar-week-view"]:visible')).toBeVisible();
+    await expect(page.locator('[data-slot="calendar-overview"]:visible')).toBeVisible();
     // EU AI Act 50(1) banner BEFORE the blocks.
     await expect(
       page.getByRole('note', { name: 'Avis sur le contenu généré par IA' }),
@@ -284,8 +295,8 @@ test.describe('§26 Calendar display — auth-gate + 3 states + admin + disclosu
 
     await page.goto(`/admin/members/${memberCal.id}?tab=calendar`);
     await expect(page).toHaveURL(/tab=calendar/);
-    await expect(page.locator('[data-slot="member-calendar-panel"]')).toBeVisible();
-    await expect(page.locator('[data-slot="calendar-week-view"]')).toBeVisible();
+    await expect(page.locator('[data-slot="member-calendar-panel"]:visible')).toBeVisible();
+    await expect(page.locator('[data-slot="calendar-week-view"]:visible')).toBeVisible();
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
 });

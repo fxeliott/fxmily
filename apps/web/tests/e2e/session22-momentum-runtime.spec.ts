@@ -113,7 +113,13 @@ test.describe('S22 — MomentumCard surfacée au membre (runtime, posture §2)',
 
     await page.goto('/dashboard');
 
-    const card = page.locator('[data-slot="momentum-card"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/dashboard` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode. The
+    // `toHaveCount(0)` absence guard further down stays bare on purpose —
+    // `toHaveCount` never trips strict mode, and `:visible` there would downgrade
+    // "absent from the DOM" to "merely not visible".
+    const card = page.locator('[data-slot="momentum-card"]:visible');
     await expect(card).toBeVisible();
     // The drifting dimension is named, calmly — and the word-spacing is intact
     // (regression guard: JSX must keep the space between the dimension label and

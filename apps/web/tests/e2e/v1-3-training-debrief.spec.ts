@@ -188,7 +188,10 @@ test.describe('V1.3 TrainingDebrief — auth-gates + happy-path persist/render',
     await expect(page).toHaveURL(/\/training\/debrief/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/débrief/i);
     await expect(page.getByRole('heading', { level: 2 })).toContainText(/débriefs récents/i);
-    await expect(page.locator('[data-slot="training-debrief-timeline"]')).toBeVisible();
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/training` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode.
+    await expect(page.locator('[data-slot="training-debrief-timeline"]:visible')).toBeVisible();
     await expect(page.getByText(new RegExp(TD_MARKER))).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
@@ -207,9 +210,19 @@ test.describe('V1.3 TrainingDebrief — auth-gates + happy-path persist/render',
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(/\/training\/debrief\/new/);
+    // `training-debrief-stats` is deliberately left bare, unlike its neighbours.
+    // Its panel is loaded through `dynamic(..., { ssr: false })`, so the node is
+    // never emitted in server HTML and therefore never parked in the stream buffer:
+    // the locator goes 0 → 1, never 2, and `toBeVisible` already auto-waits through
+    // that. Worse, the slot IS genuinely multi-instance elsewhere (one per item in
+    // the admin `?tab=training` list), so `:visible` would not disambiguate it there
+    // — making this a bad precedent to set on that slot name.
     await expect(page.locator('[data-slot="training-debrief-stats"]')).toBeVisible();
-    await expect(page.locator('[data-slot="training-debrief-wizard"]')).toBeVisible();
+    await expect(page.locator('[data-slot="training-debrief-wizard"]:visible')).toBeVisible();
     // An in-week backtest exists → the panel must NOT show the empty block.
+    // Bare on purpose: `toHaveCount` never trips strict mode, and `:visible` would
+    // downgrade "absent from the DOM" to "merely not visible" — precisely the
+    // regression this line exists to catch.
     await expect(page.locator('[data-slot="training-debrief-stats-empty"]')).toHaveCount(0);
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
@@ -228,7 +241,7 @@ test.describe('V1.3 TrainingDebrief — auth-gates + happy-path persist/render',
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(new RegExp(`/admin/members/${member.id}`));
-    await expect(page.locator('[data-slot="member-training-debriefs"]')).toBeVisible();
+    await expect(page.locator('[data-slot="member-training-debriefs"]:visible')).toBeVisible();
     await expect(page.getByText(new RegExp(TD_MARKER))).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);

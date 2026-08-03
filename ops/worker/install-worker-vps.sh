@@ -300,7 +300,17 @@ if [[ -f "$CRON_DEST" ]]; then
   PERMS="$(stat -c '%a' "$CRON_DEST")"
   CR="$(tr -cd '\r' <"$CRON_DEST" | wc -c)"
   ROWS="$(grep -cE '^[0-9*]' "$CRON_DEST" || true)"
-  [[ "$PERMS" == 644 ]] && ok "mode 0644" || fail "mode $PERMS (crond ignores group/other-writable files)"
+  # Test the property the message names — group/other WRITE — not one exact mode.
+  # `== 644` failed on 0600, which is stricter and which crond accepts, while the
+  # error text talked about writability. Same masking the watchdog now applies to
+  # this file, so the two agree on what "wrong" means.
+  if [[ ! "$PERMS" =~ ^[0-7]+$ ]]; then
+    fail "mode unreadable ('$PERMS')"
+  elif (( 8#$PERMS & 0022 )); then
+    fail "mode $PERMS is group/other-writable — crond ignores the file entirely"
+  else
+    ok "mode $PERMS (not group/other-writable)"
+  fi
   [[ "$CR" -eq 0 ]] && ok "0 CR byte" || fail "$CR CR bytes — crond would skip those lines SILENTLY"
   [[ "$ROWS" -eq 8 ]] && ok "8 schedule rows (7 pipelines + watchdog)" || fail "$ROWS rows, expected 8"
 else

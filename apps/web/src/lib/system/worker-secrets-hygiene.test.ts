@@ -25,7 +25,8 @@ import { describe, expect, it } from 'vitest';
 //
 // Claim 3 deliberately scans a NARROW, ENUMERATED set of files rather than the
 // whole tree: a repo-wide secret scanner is a different tool with a different
-// false-positive budget (gitleaks, and `.husky/pre-commit` is where it belongs).
+// false-positive budget. There is NO such scanner in this repository today (see
+// the note below); a pre-commit hook would be where one belongs.
 // This one guards the J9 worker surface, which is the surface J9 created.
 //
 // TWO PATHS, because one of them will always be incomplete.
@@ -45,8 +46,18 @@ import { describe, expect, it } from 'vitest';
 // WHAT IT DOES NOT PROVE, stated because a gate whose name overpromises is worse
 // than one that is modest. It does not prove the repository is free of secrets.
 // It proves three specific things about an enumerated list of files. A repo-wide
-// scanner is a different tool with a different false-positive budget (gitleaks,
-// at the pre-commit hook). The `describe` below says only what is measured.
+// scanner is a different tool with a different false-positive budget.
+//
+// An earlier version of this comment said such a scanner ran "gitleaks, at the
+// pre-commit hook". It does not: a ripgrep of this repository returns that word
+// only inside this file. No repo-wide secret scanner is installed anywhere —
+// not in `.github/workflows/`, not in `.husky/`, not in `package.json`. The
+// claim is left here, corrected rather than deleted,
+// because a comment that invents a control is worse than no comment: it retires
+// the question. `.husky/pre-commit` runs a lint-staged stash guardrail and then
+// `pnpm exec lint-staged` — no secret scanning of any kind.
+//
+// The `describe` below says only what is measured.
 //
 // Every bypass an adversarial pass demonstrated is kept as a regression case in
 // "catches every form an adversarial pass walked past" — narrowing any pattern
@@ -137,7 +148,15 @@ const PATTERNS: { label: string; re: RegExp }[] = [
   // idiom this repo documents (ops/worker/README.md), and a single `exec` only
   // ever returned the leftmost pair — so the token in second position was never
   // even looked at.
-  { label: 'assignment', re: /(?:^|\s)(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*([^\s]*)/g },
+  // A QUOTED value is captured whole, spaces included. `[^\s]*` alone truncated
+  // at the first space, so `GPG_PASSPHRASE="correct horse battery staple"` was
+  // compared as `"correct` — four characters, under the length floor, waved
+  // through. That is not a hypothetical shape: the passphrase that decrypts every
+  // Postgres dump is exactly the kind of secret written as words with spaces.
+  {
+    label: 'assignment',
+    re: /(?:^|\s)(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*("[^"]*"|'[^']*'|[^\s]*)/g,
+  },
   // PowerShell. FOUR of the files this gate scans are `.ps1`, and every
   // PowerShell variable starts with `$`, which `[A-Za-z]` cannot match — so the
   // entire language was invisible to a gate that reads it. `watchdog.ps1` holds
@@ -291,6 +310,26 @@ function candidatesOn(line: string): { key: string; value: string }[] {
 function secretOn(line: string): { key: string; value: string } | null {
   for (const { label, re } of SECRET_SHAPES) {
     const m = re.exec(line);
+    // NO inertness check here, ON PURPOSE — and this was tried and reverted.
+    //
+    // A review flagged that this path returns without the placeholder test the
+    // name-based path below applies, so a documented `sk-ant-api03-XXXX…` example
+    // would fail the suite. A filter was written for it. Measured, it dismissed
+    // the regression vector on line ~446: the test asserts the gate catches an
+    // Anthropic key, and it necessarily uses filler for the body, because a REAL
+    // credential cannot be committed to a test.
+    //
+    // That is the whole argument. Any rule broad enough to spare a documented
+    // example is broad enough to spare a leaked key whose body happens to contain
+    // a run of `x` or the letters of `EXAMPLE` — and AWS's own sample key,
+    // `AKIAIOSFODNN7EXAMPLE`, is a legal 16-character key body. The name-based
+    // path can afford `isInert` because it has a second signal (the key name);
+    // here the shape IS the only signal, so weakening it removes the control.
+    //
+    // The cost of leaving it: a placeholder that carries a real credential PREFIX
+    // will fail this suite. That has not happened once — no scanned file trips it
+    // today. Writing `sk-ant-api03-…` (elided) in a doc costs nothing; a token in
+    // a public repository costs a rotation. Trade taken knowingly.
     if (m) return { key: `shape:${label}`, value: m[0] };
   }
   for (const c of candidatesOn(line)) {
@@ -385,6 +424,19 @@ describe('J9 Done-quand #5 — no long literal sits under a secret-ish key on th
 
     // A commented-out secret is still a secret in a public repository.
     expect(secretOn(`# FXMILY_ADMIN_TOKEN=${tok}`)).not.toBeNull();
+
+    // A QUOTED value containing SPACES. `[^\s]*` truncated at the first space, so
+    // this was compared as `"correct` — under the length floor, waved through.
+    // The passphrase that decrypts every Postgres dump is precisely the kind of
+    // secret written as words, and it is the heaviest one in this infra.
+    expect(secretOn(`GPG_PASSPHRASE="correct horse battery staple reserve margin"`)?.key).toBe(
+      'GPG_PASSPHRASE',
+    );
+    expect(secretOn(`  BACKUP_SECRET='${'z'.repeat(20)} ${'q'.repeat(20)}'`)).not.toBeNull();
+
+    // …and the same value as a documented placeholder must still be inert, or
+    // the fix above just traded a false negative for a false positive.
+    expect(secretOn(`GPG_PASSPHRASE="changeme openssl rand hex 24 required"`)).toBeNull();
 
     // SHAPE, independent of the key name — the path that does not require
     // guessing what someone called the variable.

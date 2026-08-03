@@ -24,34 +24,34 @@ on:
     # trigger to them so the job doesn't burn Actions minutes on unrelated commits.
     paths:
       - 'apps/web/src/app/api/cron/**'
-      - 'ops/cron/crontab.fxmily'
-      - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
       # J9 — the AI worker's own six lists (see the second step below).
-      - 'ops/cron/crontab.fxmily-worker'
-      - 'ops/cron/fxmily-worker'
-      - 'ops/cron/fxmily-worker-watchdog'
-      - 'ops/worker/run-batch.sh'
-      - 'ops/worker/verify-worker-vps.sh'
-      - 'ops/worker/install-worker-vps.sh'
+      # `ops/**`, not the six worker files. The shell gate below sweeps every
+      # executable script under `ops/`, and it used to be reachable only when one
+      # of those six changed: 36 of the 42 files it checks — including
+      # `fxmily-sync-cron`, which runs as ROOT, and `fxmily-autoheal`, which crond
+      # runs as root every hour — could be edited, merged and deployed without the
+      # gate ever running. A gate that does not fire on the file it protects is
+      # the same false claim it was written to remove.
+      - 'ops/**'
       - 'apps/web/src/lib/system/health.ts'
       - 'scripts/check-worker-pipeline-sync.mjs'
   pull_request:
     branches: [main]
     paths:
       - 'apps/web/src/app/api/cron/**'
-      - 'ops/cron/crontab.fxmily'
-      - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
       # J9 — the AI worker's own six lists (see the second step below).
-      - 'ops/cron/crontab.fxmily-worker'
-      - 'ops/cron/fxmily-worker'
-      - 'ops/cron/fxmily-worker-watchdog'
-      - 'ops/worker/run-batch.sh'
-      - 'ops/worker/verify-worker-vps.sh'
-      - 'ops/worker/install-worker-vps.sh'
+      # `ops/**`, not the six worker files. The shell gate below sweeps every
+      # executable script under `ops/`, and it used to be reachable only when one
+      # of those six changed: 36 of the 42 files it checks — including
+      # `fxmily-sync-cron`, which runs as ROOT, and `fxmily-autoheal`, which crond
+      # runs as root every hour — could be edited, merged and deployed without the
+      # gate ever running. A gate that does not fire on the file it protects is
+      # the same false claim it was written to remove.
+      - 'ops/**'
       - 'apps/web/src/lib/system/health.ts'
       - 'scripts/check-worker-pipeline-sync.mjs'
   workflow_dispatch:
@@ -124,29 +124,38 @@ jobs:
       # verdict without running it is the mistake this step was born from.
       - name: Shell syntax — every ops script that reaches the host
         run: |
-          set -euo pipefail
+          set -uo pipefail
           FAILED=0
-          FILES=$(find ops -type f \( -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' \) \
-                  ! -name '*.example' ! -name '*.md' ! -name 'crontab.fxmily*' | sort)
           COUNT=0
-          for f in $FILES; do
+          # Built with awk, not a printf escape: a literal CR byte written into THIS
+          # file would be the exact defect the step exists to catch.
+          CR=$(awk 'BEGIN{printf "%c", 13}')
+          # -print0 / read -d '': a path containing a space is split by the default
+          # IFS in `for f in $FILES`, and both halves then fail `head` and are skipped
+          # WITHOUT incrementing COUNT — a file could leave the sweep by being renamed.
+          while IFS= read -r -d '' f; do
             head -c 3 "$f" | grep -q '^#!' || continue   # crontabs and data files
             COUNT=$((COUNT + 1))
             if ! bash -n "$f" 2>&1; then
               echo "::error file=$f::bash -n failed"
               FAILED=1
             fi
-            if grep -q $'\r' "$f"; then
+            if LC_ALL=C grep -q "$CR" "$f"; then
               echo "::error file=$f::contains CR bytes — cron and bash both break on these"
               FAILED=1
             fi
-          done
-          # Refuse an empty sweep: a find that matches nothing would make this
-          # step green while checking zero files — the same false-proof this
-          # repo has already had to fix in install-worker-vps.sh.
-          if [ "$COUNT" -lt 8 ]; then
-            echo "::error::only $COUNT shell scripts were checked — the sweep is broken, not the repo"
+          done < <(find ops -type f '(' -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' ')' ! -name '*.example' ! -name '*.md' ! -name 'crontab.fxmily*' -print0 | sort -z)
+          # Floor set just under the real count (42 at the time of writing), not at a
+          # token value. A floor of 8 was worthless: dropping the `*.sh` clause leaves
+          # 9 files — 33 of 42 could fall out of the sweep and the step would still
+          # pass. An anti-vacuity check whose threshold sits far below the real
+          # population does not detect vacuity, it certifies it.
+          if [ "$COUNT" -lt 35 ]; then
+            echo "::error::only $COUNT shell scripts were checked (expected ~42) — the sweep is broken, not the repo"
+            exit 1
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::$COUNT scripts checked, at least one FAILED (see annotations above)"
             exit 1
           fi
           echo "bash -n + CR check: $COUNT scripts, all clean."
-          exit "$FAILED"

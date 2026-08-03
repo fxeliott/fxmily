@@ -254,9 +254,26 @@ wrapper changeait donc le dépôt et **rien d'autre**, sans qu'aucune porte ne l
 dise.
 
 Depuis, cette liste en compte **dix** (les deux wrappers ont été ajoutés). Elle
-vit sur la ligne `source:` du step `Sync cron + ops scripts` — pas de numéro de
-ligne ici, les précédents pointaient déjà vers un commentaire et non vers la
-liste.
+vit sur la ligne `source:` du step `Stage cron + ops scripts on host` — pas de
+numéro de ligne ici, les précédents pointaient déjà vers un commentaire et non
+vers la liste. Pour la recompter :
+
+```bash
+sed -n "/name: Stage cron + ops scripts on host/,/target:/p" .github/workflows/deploy.yml \
+  | sed -n '/source:/,/target:/p' | grep -oE 'ops/[a-zA-Z0-9./_-]+' | sort -u
+```
+
+> ⚠️ **Dix fichiers _acheminés_, neuf chemins _écrits en root_ — deux nombres
+> différents, à ne pas confondre.** Le scp dépose dix fichiers dans
+> `/home/fxmily/cron-sync` ; le validateur n'en écrit que neuf en root (cf.
+> `RUNBOOK.md`, qui embarque sa propre commande de recomptage).
+>
+> L'écart vaut exactement **un**, et sa cause est **unique** : `fxmily-sync-cron`
+> est acheminé pour convenance et ne s'installe jamais lui-même (root-pinned).
+> Les neuf autres sont en correspondance 1→1 — y compris `crontab.fxmily`, qui
+> est installé sous un autre nom (`/etc/cron.d/fxmily-app`) mais reste **un**
+> chemin. Un renommage ne creuse pas d'écart ; seule une absence d'installation
+> le fait.
 
 Ce n'est pas théorique : #580 et #581 ont tous deux modifié le watchdog, et
 l'hôte a continué de faire tourner la version de #579.
@@ -333,17 +350,29 @@ et vérifie que chaque pipeline a une entrée sur le tableau. Ajouter un huitiè
 pipeline demande six éditions correctes ; c'est désormais une porte, plus une
 discipline.
 
-La vérification du tableau est volontairement la plus faible qui ne peut pas
-donner de faux positif — la chaîne d'action doit **apparaître** dans le fichier —
-mais elle apparaît désormais **dans du code** : les commentaires sont retirés
-avant la recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'` suffirait
-à faire verdir la porte sur un tableau qui n'a pas cette entrée. Les blocs
-`/* … */` sont suivis par un drapeau d'état et non par la forme des lignes : une
-première version ne retirait que les lignes commençant par `//`, `*` ou `/*`, ce
-qui laissait le **corps** d'un bloc entièrement cherchable — démontré, pas
-supposé, par un commentaire de deux lignes qui faisait passer la porte sur un
-tableau vide. Vérifié dans l'autre sens aussi : sur les 1 860 lignes de
-`health.ts`, le retrait n'enlève **aucune** ligne de code.
+La vérification du tableau cherche la **forme d'une entrée** — `action: '<nom>'` —
+et non la chaîne nue. Cette phrase a décrit deux règles successives ; c'est la
+seconde qui est en vigueur (`scripts/check-worker-pipeline-sync.mjs`, la ligne
+`boardCode.includes(\`action: '${action}'\`)`). Chercher la chaîne seule était
+satisfait par ce qui n'existe pas au runtime : un `type X = 'seance.batch.pulled'`
+verdissait la porte sur un tableau qui n'a pas l'entrée.
+
+Elle cherche de plus **dans du code** : les commentaires sont retirés avant la
+recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'` suffirait aussi.
+Les blocs `/* … */` sont suivis par un drapeau d'état et non par la forme des
+lignes : une première version ne retirait que les lignes commençant par `//`, `*`
+ou `/*`, ce qui laissait le **corps** d'un bloc entièrement cherchable — démontré,
+pas supposé, par un commentaire de deux lignes qui faisait passer la porte sur un
+tableau vide.
+
+Vérifié dans l'autre sens aussi : le retrait n'enlève **aucune** ligne de code de
+`health.ts`. La taille de ce fichier a déjà été inscrite ici en dur puis a dérivé
+(« 1 860 lignes » y est resté après qu'il en compte plus de deux mille) — la voici
+mesurable au lieu d'être recopiée :
+
+```bash
+wc -l < apps/web/src/lib/system/health.ts
+```
 
 ### D10 — « Aucun secret dans le dépôt » était vrai, et ne se vérifiait qu'à la main
 

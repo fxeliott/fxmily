@@ -75,7 +75,13 @@ ENV_FILE="${FXMILY_WORKER_ENV:-$WORKER_DIR/worker.env}"
 #
 # Nothing else detects it either: the watchdog only asserts `${#val} -ge 32`, and
 # 32 + CR = 33. The class was closed on one reader out of three.
-ENV_TMP="$(mktemp)"
+# `set -e` is not in force here, so an unchecked mktemp would leave ENV_TMP empty:
+# `tr` would then write to the CWD, `.` would source an empty path, every secret
+# would be unset, and this gate would report FAIL on all seven pipelines with a
+# perfectly healthy cron path. Same inverse-verdict failure the CR bug produced,
+# which is the whole reason this block exists — so it is checked.
+ENV_TMP="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
+[[ -n "$ENV_TMP" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
 trap 'rm -f "$ENV_TMP"' EXIT
 tr -d '\r' <"$ENV_FILE" >"$ENV_TMP"
 if ! cmp -s "$ENV_FILE" "$ENV_TMP"; then

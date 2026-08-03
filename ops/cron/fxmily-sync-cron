@@ -98,8 +98,14 @@ fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 # --- Am I myself out of date? -------------------------------------------------
 # This script is ROOT-PINNED: it is never in MANAGED_SCRIPTS, because it is the
 # thing that decides which paths this channel may write. Letting the deploy
-# replace it would turn a bounded grant (eight known paths) into an unbounded
+# replace it would turn a bounded grant (nine known paths) into an unbounded
 # one. That boundary stays.
+#
+# Nine is the count on the day this line was written, and it has drifted three
+# times. Do not trust it: RUNBOOK.md §"root-pinned" carries the command that
+# recounts it from this file. That command strips comments first, because an
+# earlier version of it did not and reported ten — it had matched a path that
+# appears only in the commentary a few lines below.
 #
 # The price of keeping it is a silent gap: a NEW entry in the table below has no
 # effect until a root operator installs this file by hand, and nothing used to

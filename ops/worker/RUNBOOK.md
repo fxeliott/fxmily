@@ -381,8 +381,21 @@ automatically, on every healthy deploy.
 > installs itself**. The updated table only takes effect after a root operator
 > installs the new validator once:
 > `install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron`.
-> Until that is done, deploys keep converging the five older scripts and say
-> nothing about the two wrappers.
+> Until that is done, deploys keep converging the five older scripts and the two
+> wrappers stay behind.
+>
+> **You will not have to remember this.** Keeping the pin has a cost — a change
+> to the table does nothing until a human acts — and an unannounced cost is the
+> exact silence this jalon exists to remove. So it is announced, twice, on every
+> deploy: the deploy step compares the staged validator with the installed one
+> and raises a GitHub warning, and the validator itself prints a `NOTE:` when a
+> different copy of it is staged. The first works even while the OLD validator is
+> the one installed, which is the case that matters today.
+>
+> The pin itself is **not** an oversight to be fixed later. This script decides
+> which paths the deploy may write as root; if the deploy could replace it, a
+> bounded grant (eight known paths) would become an unbounded one. The gesture is
+> the price of that boundary, and it is worth paying.
 
 **The checkout.** `~/worker` is what `/usr/local/bin/fxmily-worker` actually
 executes. No deploy touches it. That is what the ops workflow

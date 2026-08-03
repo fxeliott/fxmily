@@ -86,6 +86,26 @@ fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 [[ -f "$SRC_CRONTAB" ]] || fail "staged crontab not found: $SRC_CRONTAB"
 [[ -f "$SRC_RUNNER" ]] || fail "staged runner not found: $SRC_RUNNER"
 
+# --- Am I myself out of date? -------------------------------------------------
+# This script is ROOT-PINNED: it is never in MANAGED_SCRIPTS, because it is the
+# thing that decides which paths this channel may write. Letting the deploy
+# replace it would turn a bounded grant (eight known paths) into an unbounded
+# one. That boundary stays.
+#
+# The price of keeping it is a silent gap: a NEW entry in the table below has no
+# effect until a root operator installs this file by hand, and nothing used to
+# say so. Now it does — on every deploy, in the deploy log, from the copy that
+# is actually running. Non-fatal on purpose: being out of date is a message for
+# a human, not a reason to abort an application deploy.
+SELF_STAGED="$STAGE_DIR/fxmily-sync-cron"
+if [[ -f "$SELF_STAGED" ]] && ! cmp -s "$SELF_STAGED" "$0"; then
+  log "NOTE: a DIFFERENT fxmily-sync-cron is staged at $SELF_STAGED."
+  log "      This script never installs itself (root-pinned by design), so any"
+  log "      new MANAGED_SCRIPTS entry in the staged copy is being IGNORED."
+  log "      To adopt it, as root:"
+  log "        install -o root -g root -m 0755 $SELF_STAGED $0"
+fi
+
 # --- Validate the staged crontab, line by line ---------------------------------
 # Accepted:
 #   - blank lines and comments

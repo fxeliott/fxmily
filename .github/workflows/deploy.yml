@@ -376,6 +376,26 @@ jobs:
               # new image's crontab. Failure here fails the job loudly (the
               # app deploy itself is fine, but the operator must know the
               # cron drift persists).
+              # J9 follow-up — SAY IT when the validator on the host is older
+              # than the one just staged.
+              #
+              # `fxmily-sync-cron` is root-pinned: it is the thing that decides
+              # which paths this channel may write, so letting `fxmily` replace
+              # it would turn a bounded grant into an unbounded one. That
+              # boundary is kept — deliberately, it is not an oversight.
+              #
+              # But the cost of keeping it is a SILENT gap: until a root
+              # operator installs the new copy by hand, every change to the
+              # MANAGED_SCRIPTS table has exactly zero effect and nothing says
+              # so. That is the same silence this jalon exists to remove, so it
+              # gets the same treatment — a comparison that needs no root and
+              # runs on every deploy.
+              if [ -f /home/fxmily/cron-sync/fxmily-sync-cron ] \
+                 && [ -f /usr/local/bin/fxmily-sync-cron ] \
+                 && ! cmp -s /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron; then
+                echo "::warning title=Stale cron validator::/usr/local/bin/fxmily-sync-cron differs from the staged copy. It is root-pinned and never installs itself, so any NEW entry in its MANAGED_SCRIPTS table is being ignored. Run as root: install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron"
+              fi
+
               if [ -x /usr/local/bin/fxmily-sync-cron ]; then
                 sudo /usr/local/bin/fxmily-sync-cron
               else

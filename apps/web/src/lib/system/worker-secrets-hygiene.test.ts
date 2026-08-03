@@ -50,19 +50,50 @@ function read(relative: string): string {
 }
 
 /**
- * Every tracked file the worker surface is made of. Enumerated on disk rather
+ * Paths under `ops/` that `.gitignore` excludes, read FROM `.gitignore` rather
+ * than restated here.
+ *
+ * This closes a real defect in the first version of this gate. It enumerated
+ * files on disk and scanned everything it found — including `ops/worker/worker.env`
+ * on any machine where a developer had created it. That file is gitignored
+ * BECAUSE it holds six real tokens: scanning it would fail the suite for a
+ * legitimate reason, on a file the repository does not ship, and the "fix" a
+ * hurried developer would reach for is to delete the assertion.
+ *
+ * The gate is about what the REPOSITORY SHIPS. Deriving the exclusion from
+ * `.gitignore` keeps the two coupled by construction: add an ignore rule under
+ * `ops/`, and this scan honours it without anyone remembering to.
+ */
+function ignoredUnderOps(): string[] {
+  return read('.gitignore')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('ops/') && !l.startsWith('#'));
+}
+
+/**
+ * Every shippable file the worker surface is made of. Enumerated on disk rather
  * than hard-coded so a NEW script added to `ops/worker/` is scanned the day it
  * lands — the failure mode being guarded against is precisely "someone added a
  * file and nobody thought about the token in it".
  */
 function workerSurfaceFiles(): string[] {
   const files: string[] = [];
+  const ignored = ignoredUnderOps();
 
   const walk = (relativeDir: string, keep: (name: string) => boolean) => {
     const abs = join(REPO_ROOT, relativeDir);
     for (const name of readdirSync(abs)) {
       const rel = `${relativeDir}/${name}`;
       if (statSync(join(REPO_ROOT, rel)).isDirectory()) continue;
+      // A trailing slash means a DIRECTORY rule (prefix); anything else is an
+      // exact path. Treating a file rule as a prefix — which the first attempt
+      // did — silently excluded `worker.env.example` too, because it starts with
+      // `worker.env`. The gate caught that itself, on the run that was meant to
+      // prove the exclusion worked.
+      if (ignored.some((rule) => (rule.endsWith('/') ? rel.startsWith(rule) : rel === rule))) {
+        continue;
+      }
       if (keep(name)) files.push(rel);
     }
   };
@@ -259,5 +290,12 @@ describe('J9 Done-quand #5 — no long literal sits under a secret-ish key on th
     expect(files).toContain('ops/worker/run-batch.sh');
     expect(files).toContain('ops/cron/fxmily-worker-watchdog');
     expect(files).toContain('ops/cron/cron.env.example');
+
+    // …and NOT the runtime secret file, on a machine where it exists. The gate
+    // is about what the repository ships; `worker.env` is gitignored precisely
+    // because it holds six real tokens, and failing the suite on it would push
+    // the next developer to delete the assertion rather than fix anything.
+    expect(files).not.toContain('ops/worker/worker.env');
+    expect(ignoredUnderOps()).toContain('ops/worker/worker.env');
   });
 });

@@ -122,19 +122,66 @@ jobs:
       #
       # `bash -n` only — shellcheck is not installed here and claiming its
       # verdict without running it is the mistake this step was born from.
-      - name: Shell syntax — every ops script that reaches the host
+      - name: Shell syntax + CR bytes — every ops file that reaches the host
         run: |
           set -uo pipefail
           FAILED=0
           COUNT=0
+          CRONTABS=0
           # Built with awk, not a printf escape: a literal CR byte written into THIS
           # file would be the exact defect the step exists to catch.
           CR=$(awk 'BEGIN{printf "%c", 13}')
+          # POSITIVE CONTROL — prove the probe can SEE a CR before trusting any
+          # "all clean" it reports. This is not ceremony: on MSYS/Git Bash (this
+          # project's dev machine) grep reads files in TEXT mode and strips CR, so
+          # `grep -q "$CR"` there returns "no match" on a file that demonstrably
+          # contains one — verified with `od -c`. A CR guard developed and
+          # eyeballed on that machine cannot fail, and every green it prints is
+          # vacuous. The check therefore has to validate itself HERE, on the runner
+          # that actually executes it, on every run — a control that has never been
+          # shown to detect the thing it looks for is not a control.
+          CANARY=$(mktemp)
+          awk 'BEGIN{printf "x%c\n", 13}' > "$CANARY"
+          if ! LC_ALL=C grep -q "$CR" "$CANARY"; then
+            rm -f "$CANARY"
+            echo "::error::the CR probe cannot detect a CR byte on this runner — every 'all clean' verdict from this step would be meaningless"
+            exit 1
+          fi
+          rm -f "$CANARY"
           # -print0 / read -d '': a path containing a space is split by the default
           # IFS in `for f in $FILES`, and both halves then fail `head` and are skipped
           # WITHOUT incrementing COUNT — a file could leave the sweep by being renamed.
           while IFS= read -r -d '' f; do
-            head -c 3 "$f" | grep -q '^#!' || continue   # crontabs and data files
+            case "$f" in
+              */crontab.*)
+                # A crontab is not a shell script, so `bash -n` is meaningless on it
+                # — but a CR byte is FATAL here in a way it is nowhere else: cron
+                # reads the user field as `fxmily<CR>`, matches no such user, and
+                # drops the line WITH NO LOG AND NO ERROR. That is V1.6 Bug #2: ~20 h
+                # of zero automated runs, invisible.
+                #
+                # The first version of this step excluded crontabs outright AND
+                # skipped anything without a shebang — so the CR guard whose own
+                # message says "cron and bash both break on these" had never once
+                # looked at a cron file. It checked 42 scripts and 0 of the 2 files
+                # the check exists for.
+                CRONTABS=$((CRONTABS + 1))
+                if LC_ALL=C grep -q "$CR" "$f"; then
+                  echo "::error file=$f::contains CR bytes — cron drops those lines silently, with no log"
+                  FAILED=1
+                fi
+                continue
+                ;;
+            esac
+            if ! head -c 3 "$f" | grep -q '^#!'; then
+              # Loud, not silent. A matched file with no shebang means a script has
+              # left the sweep and is now checked by nothing at all. A UTF-8 BOM is
+              # enough to cause it, and PowerShell 5.1 `Set-Content`/`Out-File` on
+              # this project's dev machine writes one by default.
+              echo "::error file=$f::no shebang in the first 3 bytes (UTF-8 BOM?) — this file would leave the sweep unchecked"
+              FAILED=1
+              continue
+            fi
             COUNT=$((COUNT + 1))
             if ! bash -n "$f" 2>&1; then
               echo "::error file=$f::bash -n failed"
@@ -144,18 +191,25 @@ jobs:
               echo "::error file=$f::contains CR bytes — cron and bash both break on these"
               FAILED=1
             fi
-          done < <(find ops -type f '(' -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' ')' ! -name '*.example' ! -name '*.md' ! -name 'crontab.fxmily*' -print0 | sort -z)
-          # Floor set just under the real count (42 at the time of writing), not at a
-          # token value. A floor of 8 was worthless: dropping the `*.sh` clause leaves
+          done < <(find ops -type f '(' -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' ')' ! -name '*.example' ! -name '*.md' -print0 | sort -z)
+          # Floors set just under the real counts (42 scripts, 2 crontabs), not at
+          # token values. A floor of 8 was worthless: dropping the `*.sh` clause leaves
           # 9 files — 33 of 42 could fall out of the sweep and the step would still
           # pass. An anti-vacuity check whose threshold sits far below the real
-          # population does not detect vacuity, it certifies it.
+          # population does not detect vacuity, it certifies it. The crontab floor is
+          # separate on purpose: the two populations can break independently, and a
+          # single combined floor would let all the crontabs vanish under script slack.
           if [ "$COUNT" -lt 35 ]; then
             echo "::error::only $COUNT shell scripts were checked (expected ~42) — the sweep is broken, not the repo"
             exit 1
           fi
+          if [ "$CRONTABS" -lt 2 ]; then
+            echo "::error::only $CRONTABS crontabs were checked (expected 2) — the CR guard is not seeing the files it exists for"
+            exit 1
+          fi
           if [ "$FAILED" -ne 0 ]; then
-            echo "::error::$COUNT scripts checked, at least one FAILED (see annotations above)"
+            echo "::error::$COUNT scripts + $CRONTABS crontabs checked, at least one FAILED (see annotations above)"
             exit 1
           fi
           echo "bash -n + CR check: $COUNT scripts, all clean."
+          echo "CR check: $CRONTABS crontabs, all clean."

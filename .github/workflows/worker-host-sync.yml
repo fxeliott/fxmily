@@ -1,0 +1,424 @@
+name: Worker host sync
+
+# Ops workflow — manual trigger only. J9 follow-up.
+#
+# WHY THIS EXISTS
+# ---------------
+# J9 put the seven AI pipelines on the app host, and shipped two host-side
+# wrappers to run them:
+#
+#     ops/cron/fxmily-worker            → /usr/local/bin/fxmily-worker
+#     ops/cron/fxmily-worker-watchdog   → /usr/local/bin/fxmily-worker-watchdog
+#
+# NOTHING pushes those two files to the host. `deploy.yml:169` scp's an explicit
+# list of eight files (crontab.fxmily, fxmily-cron, the three backups, the
+# restore drill, fxmily-sync-cron, fxmily-autoheal) and the worker pair is not
+# among them. So J9 created a fresh instance of the exact failure class the
+# repo has already been bitten by twice — a file that is IaC in the repo and
+# drifts on the host with nothing watching:
+#
+#   * tour 14: docker-compose.prod.yml lived in the repo, never reached the
+#     host, and the uploads volume mount went missing (data loss).
+#   * 2026-07-29: ops/caddy/Caddyfile, same shape — which is why
+#     `sync-caddy-prod.yml` exists. This workflow is its sibling.
+#
+# It is not hypothetical here. PRs #580 and #581 changed
+# `ops/cron/fxmily-worker-watchdog` (observation-aware labels, and the `:-1`
+# default that stops a healthy host from being reported as logged out). Those
+# fixes are on `main`, they are NOT on the host, and no gate said so.
+#
+# WHAT IT IS WORTH. A drift DETECTOR first, a safe installer second, and the
+# only channel that can answer "what is actually running over there?" without
+# an SSH session. The convergence itself is a plain `git pull` in the
+# fxmily-owned checkout — the repo is public, so no credential is involved.
+#
+# ⚠️ THIS REPOSITORY IS PUBLIC, SO THESE RUN LOGS ARE PUBLIC.
+# That is a hard constraint on every line below, not a note:
+#   * no token VALUE is ever printed — only key names and lengths ;
+#   * `claude auth status` is reduced to its `.loggedIn` boolean. The full JSON
+#     carries the account e-mail, which is personal data (§21.5) ;
+#   * `status.json` is read field by field. It carries an `account` field, which
+#     is never one of them ;
+#   * the per-batch `*.wrapper.log` transcripts are NEVER tailed — they contain
+#     member content. Only `/var/log/fxmily/worker.log`, the one-line-per-tick
+#     timeline, whose line shape is designed to be PII-free ;
+#   * every printed line goes through `redact()`, which strips URLs — a blank
+#     Healthchecks.io ping URL is inert today, but a populated one is a
+#     capability token and curl writes its errors into that very log ;
+#   * the host name and IP live in `secrets.HETZNER_HOST` and are never echoed.
+#
+# SAFETY MODEL
+# ------------
+#   * `inspect` (default) changes NOTHING about what runs on the host: no file
+#     is installed, no schedule touched, no container restarted, no batch
+#     started. It is not literally write-free — it runs `git fetch`, which
+#     writes objects into the checkout's own `.git` — and saying "writes
+#     nothing" would be the kind of imprecision this repo has been bitten by.
+#     Always run this mode first.
+#   * `converge` fast-forwards the checkout (refusing a dirty tree), then
+#     reports the wrapper drift. Installing the wrappers needs root, and the
+#     `fxmily` sudoers grant is exactly one command with no arguments
+#     (`/usr/local/bin/fxmily-sync-cron`, deploy.yml:361-367) — so this mode
+#     PROBES for the right to run the installer and, when it does not have it,
+#     prints the one root command to run and fails loudly rather than pretending
+#     the drift is closed.
+#   * `verify` runs the read-only 7-pipeline dry-run. It never persists.
+#   * No mode ever touches /etc/cron.d/fxmily-app, restarts a container, or
+#     writes outside the paths the J9 installer already owns.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'inspect = measure (safe) | converge = git pull + install wrappers | verify = 7-pipeline dry-run'
+        required: true
+        type: choice
+        options:
+          - inspect
+          - converge
+          - verify
+        default: inspect
+
+permissions: {}
+
+concurrency:
+  group: worker-host-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: ${{ inputs.mode }} worker on prod host
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: SSH → ${{ inputs.mode }}
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 40m
+          envs: MODE
+          script: |
+            set -uo pipefail
+
+            WORKER_REPO="$HOME/worker"
+            WORKER_ENV="$WORKER_REPO/ops/worker/worker.env"
+            LOG_DIR="$WORKER_REPO/ops/worker/logs"
+            CRON_FILE=/etc/cron.d/fxmily-worker
+            CRON_ENV=/etc/fxmily/cron.env
+            BIN_WORKER=/usr/local/bin/fxmily-worker
+            BIN_WATCHDOG=/usr/local/bin/fxmily-worker-watchdog
+            TIMELINE=/var/log/fxmily/worker.log
+
+            # PUBLIC LOG GUARD. Everything printed from host state goes through
+            # this. A URL in a log line is not decoration: `hc_ping` appends curl
+            # errors to the timeline, and a populated Healthchecks.io URL is a
+            # capability token that would then be public forever.
+            redact() { sed -E 's#https?://[^[:space:]]+#<url-redacted>#g'; }
+
+            FAILED=0
+            # Initialised UP FRONT, not inside the branch that computes them.
+            # Section A only reaches the `git status` line when a checkout
+            # exists; on a host where it does not, `converge` then read `$DIRTY`
+            # under `set -u` and the script died on an unbound variable instead
+            # of printing the diagnosis it had just gathered. A guard that
+            # crashes before it can report is worse than no guard.
+            DIRTY=0
+            HAS_CHECKOUT=0
+            ok()   { printf '  [OK]   %s\n' "$*"; }
+            warn() { printf '  [WARN] %s\n' "$*"; }
+            bad()  { printf '  [FAIL] %s\n' "$*"; FAILED=1; }
+
+            # =================================================================
+            # A. Checkout — the thing `git pull` converges
+            # =================================================================
+            echo "::group::A · Dedicated checkout"
+            if [ ! -d "$WORKER_REPO/.git" ]; then
+              bad "no checkout at ~/worker — run ops/worker/install-worker-vps.sh as root first"
+            else
+              HAS_CHECKOUT=1
+              HEAD_SHA="$(git -C "$WORKER_REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
+              echo "  local HEAD : $HEAD_SHA"
+              git -C "$WORKER_REPO" log --oneline -1 2>/dev/null | redact
+              # `git fetch` is read-only on the working tree: safe in inspect.
+              if git -C "$WORKER_REPO" fetch --quiet origin main 2>/dev/null; then
+                REMOTE_SHA="$(git -C "$WORKER_REPO" rev-parse FETCH_HEAD)"
+                echo "  origin/main: $REMOTE_SHA"
+                if [ "$HEAD_SHA" = "$REMOTE_SHA" ]; then
+                  ok "checkout is at origin/main"
+                else
+                  BEHIND="$(git -C "$WORKER_REPO" rev-list --count HEAD..FETCH_HEAD 2>/dev/null || echo '?')"
+                  warn "checkout is $BEHIND commit(s) BEHIND origin/main"
+                fi
+              else
+                bad "git fetch failed (network, or the clone has no usable origin)"
+              fi
+              DIRTY="$(git -C "$WORKER_REPO" status --porcelain 2>/dev/null | grep -vE '^\?\?' | wc -l)"
+              [ "$DIRTY" -eq 0 ] && ok "working tree clean (tracked files)" \
+                                 || warn "$DIRTY tracked file(s) locally modified — converge will refuse"
+            fi
+            echo "::endgroup::"
+
+            # =================================================================
+            # B. Wrapper drift — the whole reason this workflow exists
+            # =================================================================
+            # `cmp` on the repo copy vs the installed copy. This is the gate:
+            # a mismatch means a merged fix is not running in production.
+            echo "::group::B · Wrapper drift (repo checkout vs /usr/local/bin)"
+            DRIFT=0
+            for pair in "ops/cron/fxmily-worker:$BIN_WORKER" \
+                        "ops/cron/fxmily-worker-watchdog:$BIN_WATCHDOG"; do
+              SRC="$WORKER_REPO/${pair%%:*}"
+              DST="${pair##*:}"
+              if [ ! -f "$SRC" ]; then
+                bad "$(basename "$DST"): missing from the checkout"
+                DRIFT=1
+              elif [ ! -f "$DST" ]; then
+                bad "$(basename "$DST"): NOT INSTALLED on the host"
+                DRIFT=1
+              elif cmp -s "$SRC" "$DST"; then
+                ok "$(basename "$DST"): identical to the checkout ($(stat -c '%a %U:%G' "$DST"))"
+              else
+                bad "$(basename "$DST"): DRIFTED — host copy differs from the checkout"
+                echo "         host $(stat -c '%y' "$DST" | cut -d. -f1), $(wc -l <"$DST") lines"
+                echo "         repo $(stat -c '%y' "$SRC" | cut -d. -f1), $(wc -l <"$SRC") lines"
+                DRIFT=1
+              fi
+            done
+            echo "::endgroup::"
+
+            # =================================================================
+            # C. Schedule
+            # =================================================================
+            echo "::group::C · /etc/cron.d/fxmily-worker"
+            if [ ! -r "$CRON_FILE" ]; then
+              bad "$CRON_FILE missing or unreadable"
+            else
+              PERMS="$(stat -c '%a' "$CRON_FILE")"
+              CR="$(tr -cd '\r' <"$CRON_FILE" | wc -c)"
+              ROWS="$(grep -cE '^[0-9*]' "$CRON_FILE" || true)"
+              [ "$PERMS" = 644 ] && ok "mode 0644" || bad "mode $PERMS — crond ignores group/other-writable files"
+              [ "$CR" -eq 0 ]    && ok "0 CR byte"  || bad "$CR CR byte(s) — crond skips those lines SILENTLY"
+              [ "$ROWS" -eq 8 ]  && ok "8 rows (7 pipelines + watchdog)" || bad "$ROWS rows, expected 8"
+              for p in onboarding verification seances calendar weekly monthly profile; do
+                grep -qE "fxmily-worker[[:space:]]+${p}([[:space:]]|$)" "$CRON_FILE" \
+                  || bad "no schedule row for '$p'"
+              done
+              grep -q 'fxmily-worker-watchdog' "$CRON_FILE" || bad "no watchdog row"
+            fi
+            # The 25 app rows must be untouched — J9's rollback proof depends on it.
+            if [ -r /etc/cron.d/fxmily-app ]; then
+              ok "/etc/cron.d/fxmily-app: $(grep -cE '^[0-9*]' /etc/cron.d/fxmily-app) rows (worker never touches this file)"
+            fi
+            echo "::endgroup::"
+
+            # =================================================================
+            # D. Observation switch + config (NO VALUES, ever)
+            # =================================================================
+            echo "::group::D · Mode + config"
+            if [ ! -r "$CRON_ENV" ]; then
+              bad "$CRON_ENV unreadable"
+            elif grep -qE '^FXMILY_WORKER_DRY_RUN=' "$CRON_ENV"; then
+              # This key's value is a mode flag (0/1), not a secret.
+              DRY="$(grep -E '^FXMILY_WORKER_DRY_RUN=' "$CRON_ENV" | tail -1 | cut -d= -f2 | tr -d '"'"'"' \r')"
+              if [ "$DRY" = "1" ]; then
+                ok "FXMILY_WORKER_DRY_RUN=1 → OBSERVATION (server persists nothing, PC is master)"
+              else
+                warn "FXMILY_WORKER_DRY_RUN=$DRY → PRODUCTION (server persists)"
+              fi
+            else
+              bad "$CRON_ENV declares no FXMILY_WORKER_DRY_RUN (observation window not armed)"
+            fi
+            if [ -r "$WORKER_ENV" ]; then
+              # Lengths only. A length cannot reconstruct a token.
+              N_OK=0
+              for k in FXMILY_ADMIN_TOKEN FXMILY_MONTHLY_ADMIN_TOKEN FXMILY_CALENDAR_TOKEN \
+                       FXMILY_VERIFICATION_ADMIN_BATCH_TOKEN FXMILY_PROFILE_ADMIN_TOKEN FXMILY_SEANCES_TOKEN; do
+                LEN="$(awk -F= -v k="$k" '$1==k {print length($2)}' "$WORKER_ENV" | head -1)"
+                if [ -n "$LEN" ] && [ "$LEN" -ge 32 ]; then N_OK=$((N_OK + 1)); else bad "$k missing or <32 chars"; fi
+              done
+              ok "$N_OK/6 pipeline tokens present and >=32 chars (lengths only, never values)"
+              ok "worker.env mode $(stat -c '%a %U:%G' "$WORKER_ENV")"
+            else
+              bad "worker.env unreadable at ~/worker/ops/worker/worker.env"
+            fi
+            echo "::endgroup::"
+
+            # =================================================================
+            # E. Claude session — the ONE boolean, never the account identity
+            # =================================================================
+            echo "::group::E · Claude session"
+            export PATH="$HOME/.npm-global/bin:$HOME/bin:$PATH"
+            if ! command -v claude >/dev/null 2>&1; then
+              bad "claude CLI not on PATH for the fxmily user"
+            else
+              ok "claude $(claude --version 2>&1 | head -1)"
+              # `.loggedIn` ONLY. The full payload names the account.
+              LOGGED="$(claude auth status --json 2>/dev/null | jq -r '.loggedIn // false' 2>/dev/null || echo false)"
+              if [ "$LOGGED" = "true" ]; then
+                ok "a Claude account is signed in → the pipelines can generate"
+              else
+                warn "no Claude account signed in → every tick is a benign, free skip"
+                warn "this is the EXPECTED state during un-authenticated observation"
+              fi
+            fi
+            echo "::endgroup::"
+
+            # =================================================================
+            # F. Did it actually run? (status.json, field by field)
+            # =================================================================
+            echo "::group::F · Last run per pipeline"
+            NOW="$(date -u +%s)"
+            for p in onboarding verification seances calendar weekly monthly profile; do
+              F="$LOG_DIR/${p}.status.json"
+              if [ ! -r "$F" ]; then
+                printf '  %-13s no status file yet\n' "$p"
+                continue
+              fi
+              AGE=$(( (NOW - $(stat -c '%Y' "$F")) / 60 ))
+              # Named fields only — `.account` is deliberately not among them.
+              printf '  %-13s age=%smin ok=%s exit=%s skipped=%s capped=%s\n' "$p" "$AGE" \
+                "$(jq -r '.ok // "?"'          "$F" 2>/dev/null)" \
+                "$(jq -r '.exitCode // "?"'    "$F" 2>/dev/null)" \
+                "$(jq -r '.skipped // "-"'     "$F" 2>/dev/null)" \
+                "$(jq -r '.quotaCapped // "-"' "$F" 2>/dev/null)"
+            done
+            echo "::endgroup::"
+
+            echo "::group::G · Root reach (can converge finish by itself?)"
+            # Answer this BEFORE someone runs converge, not after it fails at the
+            # last step. The grant is command-specific (deploy.yml:361-367), so
+            # `sudo -n true` is a faithful proxy: if a bare command is refused,
+            # so is the installer. `-n` never prompts, so this cannot hang.
+            if sudo -n true 2>/dev/null; then
+              ok "passwordless sudo available → mode=converge can install the wrappers itself"
+            else
+              warn "no general sudo for this user → mode=converge will stop at the wrapper install"
+              warn "and print the single root command to run. Expected: the sudoers grant is"
+              warn "limited to fxmily-sync-cron with no arguments."
+            fi
+            sudo -n -l 2>/dev/null | redact | sed 's/^/  /' || true
+            echo "::endgroup::"
+
+            echo "::group::H · Timeline (last 25 ticks, redacted)"
+            # The one-line-per-tick log ONLY. Never the *.wrapper.log transcripts.
+            [ -r "$TIMELINE" ] && tail -25 "$TIMELINE" | redact || echo "  (no $TIMELINE yet)"
+            echo "::endgroup::"
+
+            if [ "$MODE" = "inspect" ]; then
+              echo
+              [ "$DRIFT" -eq 1 ] && echo "::warning title=Wrapper drift::the host is running a different wrapper than main. Re-run with mode=converge."
+              echo "inspect mode — nothing was written."
+              [ "$FAILED" -eq 0 ] && echo "RESULT: no failure detected." || echo "RESULT: at least one check FAILED (above)."
+              exit "$FAILED"
+            fi
+
+            # =================================================================
+            # VERIFY — the read-only 7-pipeline dry-run (Done-quand #1)
+            # =================================================================
+            if [ "$MODE" = "verify" ]; then
+              echo "::group::Verify · 7-pipeline dry-run (never persists)"
+              # `--dry-run` is forced by the script itself for all seven.
+              bash "$WORKER_REPO/ops/worker/verify-worker-vps.sh" 2>&1 | redact
+              RC="${PIPESTATUS[0]}"
+              echo "::endgroup::"
+              if [ "$RC" -eq 0 ]; then
+                echo "RESULT: 7/7 pass."
+              else
+                echo "::error::verify-worker-vps.sh exited $RC — read the per-pipeline verdicts above."
+                echo "A FAIL/skipped on every pipeline means no Claude account is signed in on the host."
+              fi
+              exit "$RC"
+            fi
+
+            # =================================================================
+            # CONVERGE — fast-forward the checkout, then install the wrappers
+            # =================================================================
+            echo "::group::Converge · git pull --ff-only"
+            if [ "$HAS_CHECKOUT" -ne 1 ]; then
+              echo "::error::there is no checkout at ~/worker to converge."
+              echo "This is a first-install, not a drift. As root on the host:"
+              echo "    sudo bash <repo>/ops/worker/install-worker-vps.sh"
+              exit 1
+            fi
+            if [ "$DIRTY" -ne 0 ]; then
+              echo "::error::the checkout has locally modified tracked files — refusing to pull over them."
+              git -C "$WORKER_REPO" status --porcelain | grep -vE '^\?\?' | redact
+              exit 1
+            fi
+            # `reset --hard FETCH_HEAD`, NOT `pull --ff-only`, and deliberately:
+            #   * the checkout is a `--depth 1` clone (install-worker-vps.sh:147),
+            #     so a fast-forward can be refused for lack of a common ancestor
+            #     even when nothing has actually diverged ;
+            #   * it is the operation the RUNBOOK already prescribes
+            #     (ops/worker/RUNBOOK.md:356) — one procedure, not two ;
+            #   * `reset --hard` does not touch UNTRACKED files, so `worker.env`
+            #     (gitignored, 0600, possibly hand-rotated) and `logs/` survive.
+            # The clean-tree guard above is what makes it safe: it is the only
+            # thing standing between this and discarding a hand edit.
+            BEFORE_SHA="$(git -C "$WORKER_REPO" rev-parse --short HEAD)"
+            git -C "$WORKER_REPO" fetch --quiet origin main || { echo "::error::fetch failed"; exit 1; }
+            if ! git -C "$WORKER_REPO" reset --hard FETCH_HEAD 2>&1 | redact; then
+              echo "::error::reset to origin/main failed."
+              exit 1
+            fi
+            AFTER_SHA="$(git -C "$WORKER_REPO" rev-parse --short HEAD)"
+            ok "checkout $BEFORE_SHA → $AFTER_SHA"
+            # Prove worker.env survived. If this ever fails, every pipeline is
+            # about to start failing auth and the operator must know NOW, not at
+            # the next tick.
+            [ -r "$WORKER_ENV" ] && ok "worker.env still present after the reset" \
+                                 || bad "worker.env DISAPPEARED — re-run the installer with --refresh-env"
+            # Re-prove the invariant the installer checks: the seven batch scripts.
+            MISSING=0
+            for s in onboarding verification seances calendar weekly monthly member-profile-monthly; do
+              [ -f "$WORKER_REPO/ops/scripts/${s}-batch-local.sh" ] || \
+              [ -f "$WORKER_REPO/ops/scripts/${s}-local.sh" ] || { bad "batch script for '$s' missing after pull"; MISSING=1; }
+            done
+            [ "$MISSING" -eq 0 ] && ok "7/7 batch scripts present after the pull"
+            echo "::endgroup::"
+
+            echo "::group::Converge · wrappers (needs root)"
+            # Re-measure the drift AFTER the pull — the pull is what changes it.
+            POST_DRIFT=0
+            for pair in "ops/cron/fxmily-worker:$BIN_WORKER" \
+                        "ops/cron/fxmily-worker-watchdog:$BIN_WATCHDOG"; do
+              SRC="$WORKER_REPO/${pair%%:*}"; DST="${pair##*:}"
+              cmp -s "$SRC" "$DST" 2>/dev/null || POST_DRIFT=1
+            done
+
+            if [ "$POST_DRIFT" -eq 0 ]; then
+              ok "both wrappers already match the checkout — nothing to install."
+              echo "::endgroup::"
+              echo "RESULT: converged."
+              exit "$FAILED"
+            fi
+
+            warn "wrappers differ from the checkout — the installer must run as root."
+            # `sudo -n` never prompts. This PROBES the grant instead of assuming it.
+            if sudo -n true 2>/dev/null; then
+              echo "  passwordless sudo available — running the installer."
+              sudo -n bash "$WORKER_REPO/ops/worker/install-worker-vps.sh" 2>&1 | redact
+              INST_RC="${PIPESTATUS[0]}"
+              echo "::endgroup::"
+              [ "$INST_RC" -eq 0 ] && { echo "RESULT: converged and verified."; exit 0; }
+              echo "::error::the installer exited $INST_RC."
+              exit "$INST_RC"
+            fi
+
+            echo "::endgroup::"
+            echo "::error title=Root gesture required::the deploy user's sudoers grant is limited to fxmily-sync-cron, so this workflow cannot install the wrappers."
+            echo
+            echo "The checkout IS now up to date — only the two root-owned wrappers remain."
+            echo "One command, as root on the host:"
+            echo
+            echo "    sudo bash /home/fxmily/worker/ops/worker/install-worker-vps.sh"
+            echo
+            echo "It is idempotent, it never touches /etc/cron.d/fxmily-app, and it"
+            echo "re-runs every check above. Then re-run this workflow in mode=inspect"
+            echo "to prove the drift is closed."
+            exit 1

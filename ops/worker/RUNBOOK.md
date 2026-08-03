@@ -350,12 +350,50 @@ previous state. The uninstall deliberately **keeps** the checkout, `worker.env`,
 
 ## Routine maintenance
 
-| When                    | What                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                              |
-| after merging to `main` | `sudo -u fxmily git -C ~/worker fetch --depth 1 origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD` then re-run the installer |
-| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                     |
-| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                        |
+| When                    | What                                                                                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                                                                                               |
+| after merging to `main` | **Actions → “Worker host sync” → `converge`** (below). Manual equivalent: `sudo -u fxmily git -C ~/worker fetch origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD`, then re-run the installer |
+| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                                                                                      |
+| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                                                                                         |
+
+### ⚠️ Merging to `main` does NOT reach this host
+
+`deploy.yml` rolls the app image and scp's **eight** files to the host
+(`deploy.yml:169`: `crontab.fxmily`, `fxmily-cron`, the three backups, the
+restore drill, `fxmily-sync-cron`, `fxmily-autoheal`). The worker's own pair —
+`ops/cron/fxmily-worker` and `ops/cron/fxmily-worker-watchdog` — is **not** in
+that list, and neither is this checkout. So a merged fix to a wrapper is live in
+the repo, absent from the machine, and nothing said so.
+
+That is not hypothetical: PRs #580 and #581 both changed
+`fxmily-worker-watchdog`, and the host kept running the #579 version.
+
+The channel that closes it is the ops workflow
+[`.github/workflows/worker-host-sync.yml`](../../.github/workflows/worker-host-sync.yml),
+the sibling of `sync-caddy-prod.yml`:
+
+| Mode       | Does                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `inspect`  | measures the host and **compares each installed wrapper byte-for-byte with the checkout**. Read-only. |
+| `converge` | resets the checkout to `origin/main`, then installs the wrappers if it has the root reach to do so.   |
+| `verify`   | runs `verify-worker-vps.sh` — the 7-pipeline dry-run. Never persists.                                 |
+
+Two things it deliberately does not do, each for a reason this repo already paid for:
+
+- **It is not scheduled.** A red-by-default watcher stops being a signal:
+  `Cron Watch` has been failing on the apex probe for days, so it can no longer
+  announce a _new_ outage. One more permanently-red run would buy nothing.
+  Run `inspect` after any PR that touches `ops/cron/fxmily-worker*`.
+- **It does not install the wrappers on its own** unless the host actually grants
+  it root. The `fxmily` sudoers entry is exactly one command with no arguments
+  (`fxmily-sync-cron`, `deploy.yml:361-367`). When the grant is absent, `converge`
+  leaves the checkout up to date, prints the one root command, and **fails** —
+  rather than reporting a convergence that did not happen.
+
+Its run logs are **public** (this repository is public), so it prints token
+_lengths_ and never values, the `.loggedIn` boolean and never the account, and
+never the `*.wrapper.log` transcripts, which contain member content.
 
 **Keep the checkout in step with the deployed app.** The batch scripts speak to
 `/api/admin/*` endpoints whose contract lives in the same commit. A checkout that

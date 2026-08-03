@@ -27,7 +27,13 @@ import {
   scriptFileFor,
 } from '../../../../../scripts/check-worker-pipeline-sync.mjs';
 
-const SEVEN = [...CANONICAL_ORDER].sort();
+const SEVEN: string[] = [...CANONICAL_ORDER].sort();
+
+// The checker is an ESM `.mjs` typed only by JSDoc, so `ACTION_FOR` arrives as a
+// closed object literal and `CANONICAL_ORDER` as `string[]`. Indexing one with
+// the other trips `noImplicitAny` + `noUncheckedIndexedAccess`. Widen once, here,
+// rather than casting at each of the three call sites.
+const actionFor = ACTION_FOR as Record<string, string>;
 
 /** A fully-consistent input set — the baseline every mutation perturbs by one. */
 function healthyInput() {
@@ -38,8 +44,8 @@ function healthyInput() {
     watchdog: [...SEVEN],
     verify: [...SEVEN],
     installer: [...SEVEN],
-    unmappedScripts: [],
-    boardBody: CANONICAL_ORDER.map((p) => `action: '${ACTION_FOR[p]}',`).join('\n'),
+    unmappedScripts: [] as string[],
+    boardBody: CANONICAL_ORDER.map((p) => `action: '${actionFor[p]}',`).join('\n'),
   };
 }
 
@@ -176,7 +182,7 @@ describe('diffWorkerPipelines — one mutation at a time, each must go red', () 
     // It would run on the server with nothing on /admin/system representing it.
     const input = healthyInput();
     input.boardBody = CANONICAL_ORDER.filter((p) => p !== 'seances')
-      .map((p) => `action: '${ACTION_FOR[p]}',`)
+      .map((p) => `action: '${actionFor[p]}',`)
       .join('\n');
 
     const r = diffWorkerPipelines(input);
@@ -210,7 +216,7 @@ describe('the LIVE repository', () => {
     }).toEqual({
       emptySources: [],
       mismatches: [],
-      unmappedScripts: [],
+      unmappedScripts: [] as string[],
       missingFromBoard: [],
     });
     expect(report.reference).toEqual(SEVEN);

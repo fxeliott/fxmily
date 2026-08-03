@@ -218,3 +218,74 @@ tick est un skip propre et documenté — jamais un échec silencieux.
 | Cap de quota qui martèle un compte limité                  | Halte immédiate à la détection + stamp de cooldown + skip bénin des ticks suivants (porté tel quel du PC)                                               |
 | Le worker sature l'hôte de l'app                           | `nice`/`ionice` + plafond 2 h + verrou global ; escalade = VPS dédié, décision d'Eliot                                                                  |
 | Fausse alarme pendant la fenêtre d'observation             | Le watchdog serveur rapporte `claude_auth:observation_pending` (informatif) et non `claude_auth:logged_out` (rouge) tant que `FXMILY_WORKER_DRY_RUN=1`  |
+
+## Addendum 2026-08-03 — ce que le jalon avait créé sans le voir
+
+Trois passes de revue en contexte frais ont fermé les défauts que J9 s'était
+lui-même infligés (#580, #581). Une quatrième, menée depuis deux angles opposés,
+en a trouvé un cinquième et un structurel. Consignés ici parce qu'ils changent
+la façon de maintenir ce worker, pas seulement son code.
+
+### D7 — Les wrappers n'avaient aucun canal vers l'hôte
+
+`deploy.yml:169` envoie une liste **explicite de huit fichiers**. Les deux
+wrappers que ce jalon a créés — `ops/cron/fxmily-worker` et
+`ops/cron/fxmily-worker-watchdog` — n'en font pas partie, et le checkout `~/worker`
+non plus. Merger un correctif de wrapper changeait donc le dépôt et **rien
+d'autre**, sans qu'aucune porte ne le dise.
+
+Ce n'est pas théorique : #580 et #581 ont tous deux modifié le watchdog, et
+l'hôte a continué de faire tourner la version de #579.
+
+C'est la **troisième occurrence** de la même classe de panne dans ce dépôt
+(tour 14 : `docker-compose.prod.yml`, volume uploads perdu ; 2026-07-29 :
+`ops/caddy/Caddyfile`, d'où `sync-caddy-prod.yml`). D'où
+`.github/workflows/worker-host-sync.yml`, son frère : `inspect` compare chaque
+wrapper installé **octet à octet** avec le checkout, `converge` remet le checkout
+sur `origin/main` puis installe si l'hôte lui en donne le droit, `verify` lance
+le balayage 7 pipelines.
+
+Il n'est **délibérément pas planifié** : `Cron Watch` est rouge en permanence sur
+la sonde de l'apex depuis des jours et ne peut donc plus annoncer une panne
+_nouvelle_. Un second veilleur rouge par défaut n'achèterait rien.
+
+### D8 — Sept familles de labels critiques sur huit n'avaient aucune remédiation
+
+`SERVER_CRITICAL_LABELS` escalade huit familles en rouge ; `LABEL_HOST_ACTIONS`
+n'en couvrait que **trois**, en égalité stricte. `task_missing:onboarding`
+rougissait bien la ligne (#580 avait appris les préfixes à `isCriticalLabel`)
+puis tombait dans `if (!remediation) continue` : la carte « Actions hôte »
+affichait alors _« le watchdog du worker ne tourne plus, réinstalle »_ — le
+diagnostic exactement inverse, énoncé avec assurance, sur un hôte dont le
+watchdog était vivant et disait vrai.
+
+Corrigé par une résolution exacte-puis-famille qui reprend la règle ancrée sur
+`:` de `isCriticalLabel` — c'est le séparateur qui empêche
+`batch_failed_observation:*`, émis à **chaque** tick d'une fenêtre d'observation
+saine, d'être capté par la famille bloquante `batch_failed`.
+
+### D9 — Les sept pipelines vivaient dans six listes qui ne se parlaient pas
+
+Le nom des sept pipelines est codé en dur dans six fichiers, en trois langages
+(planification, deux listes blanches, watchdog, porte de bascule, installeur).
+Rien ne les comparait ; `check-cron-crontab-sync.mjs` fait ce travail pour les
+routes `/api/cron/*` de l'app et ne contient pas le mot « worker ».
+
+Les deux pannes sont asymétriques et toutes deux silencieuses : **planifié mais
+non surveillé** (le pipeline tourne, et le jour où il meurt rien ne le dit — la
+cécité même que ce jalon existe pour supprimer) et **surveillé mais non
+planifié** (`task_missing:<nom>` à chaque tick, pour toujours, donc un tableau
+rouge en permanence que plus personne ne lit).
+
+`scripts/check-worker-pipeline-sync.mjs` tient les six listes à l'égalité stricte
+et vérifie que chaque pipeline a une entrée sur le tableau. Ajouter un huitième
+pipeline demande six éditions correctes ; c'est désormais une porte, plus une
+discipline.
+
+### Ce que la revue a REFUTÉ
+
+Un relecteur a remonté en BLOQUANT que rien ne crée `/var/log/fxmily` avec les
+droits `fxmily`, ce qui ferait échouer silencieusement toute redirection de
+sortie de batch. Mesuré : `ops/scripts/setup-host.sh:91-92` fait exactement ça.
+Le grep qui fondait le finding portait sur six fichiers dont `setup-host.sh` était
+absent — un négatif **scopé** présenté comme global. Aucune modification.

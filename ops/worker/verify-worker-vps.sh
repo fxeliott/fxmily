@@ -63,9 +63,27 @@ ENV_FILE="${FXMILY_WORKER_ENV:-$WORKER_DIR/worker.env}"
   echo "worker.env not readable at $ENV_FILE" >&2
   exit 2
 }
+# Source through a CR-stripped copy, NOT directly.
+#
+# `run-batch.sh` strips the CR from every token it reads, because `worker.env` is
+# hand-edited as often as it is generated and one of the two machines that read
+# it is a WINDOWS box. This script — the switchover gate, the thing that decides
+# whether "7/7" may be ticked — sourced the file raw. So a single CR would enter
+# `FXMILY_ADMIN_TOKEN`, every pipeline would take a 401, and this gate would
+# report FAIL on all seven while the real cron path worked perfectly: the exact
+# inverse verdict, on the one script whose whole job is to be believed.
+#
+# Nothing else detects it either: the watchdog only asserts `${#val} -ge 32`, and
+# 32 + CR = 33. The class was closed on one reader out of three.
+ENV_TMP="$(mktemp)"
+trap 'rm -f "$ENV_TMP"' EXIT
+tr -d '\r' <"$ENV_FILE" >"$ENV_TMP"
+if ! cmp -s "$ENV_FILE" "$ENV_TMP"; then
+  echo "  note   : CR bytes stripped from $(basename "$ENV_FILE") while reading it" >&2
+fi
 set -a
 # shellcheck disable=SC1090
-. "$ENV_FILE"
+. "$ENV_TMP"
 set +a
 # Same bridge run-batch.sh applies: 4 of the 7 scripts read FXMILY_APP_URL.
 export FXMILY_APP_URL="${FXMILY_APP_URL:-${FXMILY_BASE_URL:-https://app.fxmilyapp.com}}"

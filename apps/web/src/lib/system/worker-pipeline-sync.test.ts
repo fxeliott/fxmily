@@ -244,6 +244,53 @@ describe('diffWorkerPipelines — one mutation at a time, each must go red', () 
     expect(diffWorkerPipelines(input).missingFromBoard).toEqual(['seances']);
   });
 
+  it('a board where the action exists ONLY in a type union', () => {
+    // The finding that made this whole check honest. `health.ts` declares
+    // `type WorkerPipelineAction = | 'seance.batch.pulled' | …` — code to a text
+    // search, ERASED by TypeScript at runtime, and not an entry on any board.
+    // Deleting the real WORKER_EXPECTATIONS entry left the gate GREEN, on the
+    // exact scenario the file says it catches. Verified by doing it.
+    const input = healthyInput();
+    input.boardBody = [
+      'type WorkerPipelineAction =',
+      ...CANONICAL_ORDER.map((p) => `  | '${actionFor[p]}'`),
+      '  | "worker.watchdog.heartbeat";',
+      '',
+      // Real entries for six of the seven; `seances` has only its union member.
+      ...CANONICAL_ORDER.filter((p) => p !== 'seances').map(
+        (p) => `      action: '${actionFor[p]}',`,
+      ),
+    ].join('\n');
+
+    expect(diffWorkerPipelines(input).missingFromBoard).toEqual(['seances']);
+  });
+
+  it('a trailing comment naming the action on a line of real code', () => {
+    // Comment-stripping deliberately keeps a line that carries real code, so a
+    // trailing `// TODO` used to satisfy a bare-string search. Anchoring on
+    // `action: '…'` closes it without having to parse comments harder.
+    const input = healthyInput();
+    input.boardBody = [
+      ...CANONICAL_ORDER.filter((p) => p !== 'seances').map(
+        (p) => `      action: '${actionFor[p]}',`,
+      ),
+      `export const WORKER_EXPECTATIONS = []; // TODO: wire '${actionFor.seances}'`,
+    ].join('\n');
+
+    expect(diffWorkerPipelines(input).missingFromBoard).toEqual(['seances']);
+  });
+
+  it('an EMPTY board body, which used to read as agreement', () => {
+    // Same refusal the six shell sources get. An empty read made
+    // `missingFromBoard` an empty list, and `ok` called that agreement.
+    const input = healthyInput();
+    input.boardBody = '';
+
+    const r = diffWorkerPipelines(input);
+    expect(r.ok).toBe(false);
+    expect(r.emptySources).toContain('apps/web/src/lib/system/health.ts (board)');
+  });
+
   it('still sees an entry that SHARES a line with a block comment', () => {
     // The symmetric risk: over-stripping blinds the scan to real code. A gate
     // that goes green because it stopped looking is the worse failure.

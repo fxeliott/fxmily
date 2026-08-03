@@ -300,6 +300,13 @@ export function diffWorkerPipelines({
   // had to be fixed for (install-worker-vps.sh:180-197) — do not repeat it here.
   const emptySources = sources.filter((s) => s.list.length === 0).map((s) => s.source);
 
+  // The board deserves the same refusal. `boardBody = ''` — the default, or a
+  // truncated read — used to make `missingFromBoard` an empty list, which `ok`
+  // then read as agreement. That is the very false-green this function refuses
+  // three lines above for the six shell sources; it had simply been left out of
+  // its own rule.
+  if (boardBody === '') emptySources.push('apps/web/src/lib/system/health.ts (board)');
+
   // The schedule is the reference: it is the only one of the six that has a
   // real-world effect all by itself.
   const reference = crontab;
@@ -314,13 +321,27 @@ export function diffWorkerPipelines({
     if (missing.length > 0 || extra.length > 0) mismatches.push({ source, missing, extra });
   }
 
-  // Weakest claim that cannot false-positive: the action string must appear in
-  // CODE. Comment lines are stripped first — see stripCommentLines.
+  // The board claim. It searches for `action: '<x>'` — the SHAPE OF AN ENTRY —
+  // not for the bare string `'<x>'`.
+  //
+  // That distinction is the whole check. An adversarial pass deleted the real
+  // `seances` entry from WORKER_EXPECTATIONS and this gate stayed GREEN, because
+  // `health.ts` also declares a `type WorkerPipelineAction = | 'seance.batch.pulled' | …`
+  // union — code to a text search, ERASED by TypeScript at runtime, and not an
+  // entry on any board. The gate was decorative on its central claim: it could
+  // not fail on the exact scenario it names ("a pipeline the server runs has no
+  // board entry at all"). Verified by doing it, then verified again after this
+  // change by doing it a second time.
+  //
+  // Anchoring on `action:` also settles a contradiction the previous comment
+  // carried: a trailing `// TODO: wire 'seance.batch.pulled'` on a line of real
+  // code survives comment-stripping by design, and used to satisfy the search.
+  // It no longer can — it does not contain `action: '…'`.
   const boardCode = boardBody ? stripCommentLines(boardBody) : '';
   const missingFromBoard = boardBody
     ? reference.filter((p) => {
         const action = ACTION_FOR[p];
-        return !action || !boardCode.includes(`'${action}'`);
+        return !action || !boardCode.includes(`action: '${action}'`);
       })
     : [];
 

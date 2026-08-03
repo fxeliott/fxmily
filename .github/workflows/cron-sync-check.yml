@@ -107,3 +107,46 @@ jobs:
       # does not.
       - name: Verify the 7 worker pipelines agree across all six lists
         run: node scripts/check-worker-pipeline-sync.mjs
+
+      # Shell syntax gate. It exists because a comment in `fxmily-sync-cron`
+      # justified keeping a fatal check by claiming "CI (bash -n, shellcheck)
+      # catches it long before here" — and a grep of `.github/` for
+      # `shellcheck|bash -n|shfmt` returned NOTHING. The claim was false on the
+      # day it was written, in the very PR that gave those scripts an automatic
+      # path to production.
+      #
+      # It matters more than syntax hygiene: `fxmily-sync-cron` validates a
+      # staged script with `head -c 3 | grep '^#!'` plus a size bound, and
+      # NEITHER sees a syntax error. Without this gate, a broken wrapper reaches
+      # /usr/local/bin and the pipeline that fires every 5 minutes runs it.
+      #
+      # `bash -n` only — shellcheck is not installed here and claiming its
+      # verdict without running it is the mistake this step was born from.
+      - name: Shell syntax — every ops script that reaches the host
+        run: |
+          set -euo pipefail
+          FAILED=0
+          FILES=$(find ops -type f \( -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' \) \
+                  ! -name '*.example' ! -name '*.md' ! -name 'crontab.fxmily*' | sort)
+          COUNT=0
+          for f in $FILES; do
+            head -c 3 "$f" | grep -q '^#!' || continue   # crontabs and data files
+            COUNT=$((COUNT + 1))
+            if ! bash -n "$f" 2>&1; then
+              echo "::error file=$f::bash -n failed"
+              FAILED=1
+            fi
+            if grep -q $'\r' "$f"; then
+              echo "::error file=$f::contains CR bytes — cron and bash both break on these"
+              FAILED=1
+            fi
+          done
+          # Refuse an empty sweep: a find that matches nothing would make this
+          # step green while checking zero files — the same false-proof this
+          # repo has already had to fix in install-worker-vps.sh.
+          if [ "$COUNT" -lt 8 ]; then
+            echo "::error::only $COUNT shell scripts were checked — the sweep is broken, not the repo"
+            exit 1
+          fi
+          echo "bash -n + CR check: $COUNT scripts, all clean."
+          exit "$FAILED"

@@ -28,19 +28,29 @@ import { describe, expect, it } from 'vitest';
 // false-positive budget (gitleaks, and `.husky/pre-commit` is where it belongs).
 // This one guards the J9 worker surface, which is the surface J9 created.
 //
-// WHAT IT DOES NOT PROVE, stated because a gate whose name overpromises is worse
-// than one that is modest. An earlier version of this file called itself "the
-// repository ships no worker secret". It does not prove that, and a review
-// showed exactly how to walk past it: a bearer inside `curl -H "…: <token>"`, a
-// key spelled in lower case, an `AWS_ACCESS_KEY_ID`, a hash starting with `$`.
-// Three of those are now covered (header form, lower case, YAML `key: value`),
-// the rest are not, and the `describe` below says only what is measured.
+// TWO PATHS, because one of them will always be incomplete.
 //
-// The one that matters most here is covered on purpose: a populated
-// Healthchecks.io ping URL. The ops workflow calls it "a capability token" in
-// its own header, so a gate on this surface that ignored it would be theatre —
-// which is why `cron.env.example` joined the walk and `PING_URL` joined the
-// secret-ish key list.
+//   · BY NAME — a long literal under a secret-ish key, across the syntaxes this
+//     surface is actually written in (shell, PowerShell, YAML, JSON, cron, an
+//     HTTP header inside a curl call).
+//   · BY SHAPE — a recognisable credential format, whatever it is called and
+//     whatever syntax surrounds it.
+//
+// The second exists because the first cannot be finished. An adversarial pass
+// walked past the name-based rules with the two heaviest secrets in this infra:
+// the passphrase that decrypts every Postgres dump, and a
+// `postgresql://user:password@host` URL. Neither advertises itself in its key
+// name. Guessing names is an endless list; a shape is not.
+//
+// WHAT IT DOES NOT PROVE, stated because a gate whose name overpromises is worse
+// than one that is modest. It does not prove the repository is free of secrets.
+// It proves three specific things about an enumerated list of files. A repo-wide
+// scanner is a different tool with a different false-positive budget (gitleaks,
+// at the pre-commit hook). The `describe` below says only what is measured.
+//
+// Every bypass an adversarial pass demonstrated is kept as a regression case in
+// "catches every form an adversarial pass walked past" — narrowing any pattern
+// for any reason must make one of them fail loudly.
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
@@ -115,21 +125,65 @@ function workerSurfaceFiles(): string[] {
 }
 
 /**
- * Three shapes a credential is pasted in, on this surface.
+ * The syntaxes a credential gets pasted into, on THIS surface.
  *
- * Only the first existed at first, and a review walked past the gate with the
- * other two in about a minute: a bearer inside `curl -H "X-Admin-Token: …"` (no
- * `=` anywhere) and a YAML `KEY: value` — in a workflow file this very list
- * already scanned. The key is matched case-INSENSITIVELY for the same reason:
- * `token=…` in a shell script is the same mistake as `TOKEN=…`.
+ * The list grew every time someone tried to walk past it, and each entry below
+ * names the walk-past it closes rather than a language in the abstract. Keys are
+ * matched case-INSENSITIVELY: `token=…` in a shell script is the same mistake as
+ * `TOKEN=…`.
  */
 const PATTERNS: { label: string; re: RegExp }[] = [
-  // KEY=value / export KEY=value
-  { label: 'assignment', re: /(?:^|\s)(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*)$/ },
+  // KEY=value / export KEY=value. GLOBAL: `A=1 B=<token>` on one line is an
+  // idiom this repo documents (ops/worker/README.md), and a single `exec` only
+  // ever returned the leftmost pair — so the token in second position was never
+  // even looked at.
+  { label: 'assignment', re: /(?:^|\s)(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*([^\s]*)/g },
+  // PowerShell. FOUR of the files this gate scans are `.ps1`, and every
+  // PowerShell variable starts with `$`, which `[A-Za-z]` cannot match — so the
+  // entire language was invisible to a gate that reads it. `watchdog.ps1` holds
+  // `$adminToken` and builds an `X-Admin-Token` header from it: the single most
+  // likely place in this repo for a debugging paste.
+  { label: 'powershell', re: /\$(?:env:)?([A-Za-z][A-Za-z0-9_:]*)\s*=\s*([^\s]+)/g },
+  // PowerShell hashtable / JSON / TOML: `'X-Admin-Token' = $t`, `"token": "…"`.
+  { label: 'quoted-key', re: /["']([A-Za-z][A-Za-z0-9_-]*)["']\s*[:=]\s*([^\s,}]+)/g },
   // YAML `KEY: value` — anchored, so a prose colon does not match.
   { label: 'yaml', re: /^\s*-?\s*([A-Za-z][A-Za-z0-9_-]*)\s*:\s+(.*)$/ },
-  // HTTP header, quoted or not: `X-Admin-Token: <value>` inside a curl call.
-  { label: 'header', re: /([A-Za-z][A-Za-z0-9-]*)\s*:\s*([^"'\s]+)["']?\s*$/ },
+  // HTTP header inside a curl call. NOT anchored at end-of-line: every single
+  // one of this repo's real `curl -H "X-Admin-Token: …"` lines ends with a
+  // line-continuation backslash, and the anchored version could not match one
+  // of them. The only place the un-backslashed form existed was the test that
+  // "proved" the pattern worked.
+  { label: 'header', re: /([A-Za-z][A-Za-z0-9-]*)\s*:\s*["']?([^"'\s\\]+)/g },
+];
+
+/**
+ * Credential SHAPES, matched on the whole line, independently of any key name.
+ *
+ * This is the second, orthogonal path. Everything above depends on guessing what
+ * someone called the variable — and the two heaviest secrets in this infra do
+ * not advertise themselves in their name: the passphrase that decrypts every
+ * Postgres dump, and a `postgresql://user:password@host` URL. Naming will always
+ * be an incomplete list. A shape is not.
+ *
+ * Deliberately restricted to formats with an UNAMBIGUOUS prefix. Generic
+ * "40 hex characters" was tried and rejected: this gate scans
+ * `worker-host-sync.yml`, where every action is pinned to a 40-hex commit SHA,
+ * so entropy alone would light up on correct, required lines. A gate that cries
+ * wolf on the pinning convention is a gate that gets muted.
+ */
+const SECRET_SHAPES: { label: string; re: RegExp }[] = [
+  { label: 'anthropic', re: /\bsk-ant-[A-Za-z0-9_-]{16,}/ },
+  { label: 'openai-style', re: /\bsk-[A-Za-z0-9]{32,}/ },
+  { label: 'resend', re: /\bre_[A-Za-z0-9_-]{20,}/ },
+  { label: 'github-pat', re: /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/ },
+  { label: 'slack', re: /\bxox[abposr]-[A-Za-z0-9-]{10,}/ },
+  { label: 'aws-key-id', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { label: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./ },
+  { label: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+  // Credentials inside a URL — the classic `DATABASE_URL` leak. The password
+  // must be non-trivial, so `postgres://user@host` and `https://a:b@x` (a
+  // placeholder shape) do not fire.
+  { label: 'url-credentials', re: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s:/@]{8,}@/ },
 ];
 
 /**
@@ -140,7 +194,22 @@ const PATTERNS: { label: string; re: RegExp }[] = [
  * siblings, so the marker sits in the middle. Anchoring it — as a first version
  * did — matched none of the seven keys it was added for.
  */
-const SECRETISH = /(TOKEN|SECRET|PASSWORD|PASSPHRASE|API_KEY|_KEY|AUTHORIZATION)$|PING_URL/i;
+/**
+ * A key that would hold a credential if it held anything.
+ *
+ * Two deliberate exclusions, both learned by watching this list misfire:
+ *
+ *   · `DATABASE_URL` is NOT here. It was, and it fired on
+ *     `postgresql://fxmily@localhost/fxmily` — a connection string with no
+ *     password, which is not a secret and is legitimate in examples. The
+ *     dangerous form (`user:password@host`) is caught precisely by the
+ *     `url-credentials` SHAPE instead. Prefer the precise detector to the noisy
+ *     one; the noisy one is how a gate gets muted.
+ *   · `GPG_PASS` is ANCHORED, so `GPG_PASS_FILE=/etc/fxmily/…` — a path, not a
+ *     passphrase — cannot trip it as the file path grows.
+ */
+const SECRETISH =
+  /(TOKEN|SECRET|PASSWORD|PASSPHRASE|API_KEY|_KEY|AUTHORIZATION|CREDENTIALS?|BEARER|SALT|COOKIE|SIGNING|GPG_PASS|PASS|PASSWD|PWD)$|PING_URL/i;
 
 /**
  * Strips one layer of quotes and trailing shell noise so `TOKEN="abc" # note`
@@ -163,9 +232,13 @@ function literalValue(raw: string): string {
  */
 function isInert(value: string): boolean {
   if (value === '') return true;
-  if (value.includes('$')) return true; // ${VAR}, $(cmd), "$1"
+  // A VARIABLE REFERENCE, not "contains a dollar anywhere". The looser rule
+  // waved through `$2b$12$…` — a bcrypt/argon hash, which is attackable offline
+  // and has no business in a public repo.
+  if (/^["']?\$[({A-Za-z_]/.test(value)) return true; // $VAR, ${VAR}, $(cmd)
+  if (/\$\{|\$\(/.test(value)) return true; // interpolation anywhere
   if (value.includes('`')) return true;
-  if (/^<.*>$/.test(value)) return true; // <paste-token-here>
+  if (/<[^>]*>/.test(value)) return true; // <uuid>, https://hc-ping.com/<uuid>
   if (/^(x{8,}|\.{3,})$/.test(value)) return true;
   // Placeholder PREFIXES, not exact words. The repo's own idiom is
   // `CRON_SECRET=changeme_openssl_rand_hex_24_BYTES_REQUIRED` — 43 characters,
@@ -182,13 +255,22 @@ function isInert(value: string): boolean {
 const SECRET_LENGTH = 32;
 
 /**
- * Every `key → value` a line yields, across the three shapes. A line can match
- * more than one (a YAML entry also looks like a header), which is fine: the
- * caller only cares whether ANY reading is a secret-ish key with a long value.
+ * Every `key → value` a line yields, across every shape. A line can match more
+ * than one (a YAML entry also looks like a header), and a single line can carry
+ * SEVERAL pairs — which is why the global patterns are drained rather than
+ * probed once.
  */
 function candidatesOn(line: string): { key: string; value: string }[] {
   const out: { key: string; value: string }[] = [];
   for (const { re } of PATTERNS) {
+    if (re.global) {
+      re.lastIndex = 0; // a global regex carries state between calls
+      for (const m of line.matchAll(re)) {
+        const [, key = '', raw = ''] = m;
+        out.push({ key, value: literalValue(raw) });
+      }
+      continue;
+    }
     const m = re.exec(line);
     if (!m) continue;
     const [, key = '', raw = ''] = m;
@@ -197,8 +279,20 @@ function candidatesOn(line: string): { key: string; value: string }[] {
   return out;
 }
 
-/** True when a line, read any way, hides a long literal under a secret-ish key. */
+/**
+ * True when a line hides a credential — by NAME (a long literal under a
+ * secret-ish key) or by SHAPE (a recognisable credential format, whatever it is
+ * called and whatever syntax surrounds it).
+ *
+ * Shape is checked FIRST and on the raw line, because it is the path that does
+ * not depend on guessing the variable's name — which is exactly how a
+ * `GPG_PASS`, a `DATABASE_URL` or a PEM block walked past the name-based rules.
+ */
 function secretOn(line: string): { key: string; value: string } | null {
+  for (const { label, re } of SECRET_SHAPES) {
+    const m = re.exec(line);
+    if (m) return { key: `shape:${label}`, value: m[0] };
+  }
   for (const c of candidatesOn(line)) {
     if (!SECRETISH.test(c.key)) continue;
     if (isInert(c.value)) continue;
@@ -249,13 +343,79 @@ describe('J9 Done-quand #5 — no long literal sits under a secret-ish key on th
       read(file)
         .split('\n')
         .forEach((line, i) => {
-          if (line.trim().startsWith('#')) return;
+          // Comment lines are NOT skipped here. "I'll just comment it out while
+          // I test" is one of the most common ways a credential reaches a public
+          // repository, and `#` is a comment marker in shell, cron AND
+          // PowerShell — three of the four languages on this surface. The
+          // example-env check below still skips them, because there the comments
+          // ARE the documentation.
           const hit = secretOn(line);
           if (hit) offenders.push(`${file}:${i + 1} ${hit.key} (${hit.value.length} chars)`);
         });
     }
 
     expect(offenders).toEqual([]);
+  });
+
+  it('catches every form an adversarial pass walked past', () => {
+    // Each line below is a bypass that was DEMONSTRATED against an earlier
+    // version of this file. They are kept as a regression suite: narrowing a
+    // pattern for any reason must make one of them fail loudly.
+    const tok = 'a'.repeat(40);
+
+    // PowerShell — four of the sixteen scanned files are .ps1, and every
+    // variable starts with `$`, which the original `[A-Za-z]` could not match.
+    // `watchdog.ps1` holds `$adminToken` and builds an X-Admin-Token header.
+    expect(secretOn(`$adminToken = '${tok}'`)?.key).toBe('adminToken');
+    expect(secretOn(`$env:FXMILY_ADMIN_TOKEN = "${tok}"`)).not.toBeNull();
+    expect(secretOn(`  $headers = @{ 'X-Admin-Token' = '${tok}' }`)).not.toBeNull();
+
+    // Line-continuation backslash. EVERY real `curl -H` in this repo ends with
+    // one; the anchored pattern could not match a single one of them.
+    expect(secretOn(`  curl -H "X-Admin-Token: ${tok}" \\`)).not.toBeNull();
+
+    // Two assignments on one line — a documented idiom of this repo
+    // (ops/worker/README.md). A non-global exec only ever saw the first.
+    expect(
+      secretOn(`FXMILY_BASE_URL=http://localhost:3000 FXMILY_ADMIN_TOKEN=${tok} \\`)?.key,
+    ).toBe('FXMILY_ADMIN_TOKEN');
+
+    // JSON.
+    expect(secretOn(`  "token": "${tok}",`)?.key).toBe('token');
+
+    // A commented-out secret is still a secret in a public repository.
+    expect(secretOn(`# FXMILY_ADMIN_TOKEN=${tok}`)).not.toBeNull();
+
+    // SHAPE, independent of the key name — the path that does not require
+    // guessing what someone called the variable.
+    expect(secretOn(`GPG_PASS=${tok}`)?.key).toBe('GPG_PASS');
+    expect(secretOn(`ANY_NAME=sk-ant-api03-${'x'.repeat(40)}`)?.key).toBe('shape:anthropic');
+    expect(secretOn(`  anything: re_${'A1b2C3d4'.repeat(3)}`)?.key).toBe('shape:resend');
+    expect(secretOn(`export FOO=ghp_${'B'.repeat(36)}`)?.key).toBe('shape:github-pat');
+    expect(secretOn(`  id = AKIAIOSFODNN7EXAMPLE`)?.key).toBe('shape:aws-key-id');
+    expect(secretOn(`Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdef`)?.key).toBe(
+      'shape:jwt',
+    );
+    expect(secretOn('-----BEGIN OPENSSH PRIVATE KEY-----')?.key).toBe('shape:private-key-block');
+    expect(
+      secretOn('DATABASE_URL=postgresql://fxmily:S3cr3tPassw0rd@db.internal:5432/fxmily')?.key,
+    ).toBe('shape:url-credentials');
+
+    // A bcrypt/argon hash is attackable offline; `includes('$')` used to wave
+    // it through as if it were a variable reference.
+    expect(secretOn(`ADMIN_PASSWORD=$2b$12$${'c'.repeat(40)}`)).not.toBeNull();
+
+    // …and the lines that must stay SILENT, or this gate gets muted.
+    // A pinned GitHub Action is 40 hex characters on a file this gate scans.
+    expect(
+      secretOn('        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1'),
+    ).toBeNull();
+    expect(secretOn('  key: ${{ secrets.HETZNER_SSH_KEY }}')).toBeNull();
+    expect(
+      secretOn('HEALTHCHECK_PING_URL_WORKER_ONBOARDING=https://hc-ping.com/<uuid>'),
+    ).toBeNull();
+    expect(secretOn('DATABASE_URL=postgresql://fxmily@localhost:5432/fxmily')).toBeNull();
+    expect(secretOn('# Generate via : `openssl rand -hex 24`')).toBeNull();
   });
 
   it('catches the three paste shapes, including the two that walked past v1', () => {

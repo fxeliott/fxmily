@@ -388,7 +388,7 @@ and then runs the one command `fxmily` may run as root
 two wrappers in **neither** list, so a merged wrapper fix changed the repository
 and nothing else — PRs #580 and #581 both patched
 `fxmily-worker-watchdog` while the machine kept running the #579 copy. Two
-filenames in `deploy.yml:169` and two rows in `fxmily-sync-cron:56` close that,
+filenames in the scp `source:` list in `deploy.yml` and two rows in `fxmily-sync-cron:56` close that,
 automatically, on every healthy deploy.
 
 > **One-off, root, once:** `fxmily-sync-cron` is **root-pinned — it never
@@ -463,7 +463,8 @@ Two things it deliberately does not do, each for a reason this repo already paid
   Run `inspect` after any PR that touches `ops/cron/fxmily-worker*`.
 - **It does not install the wrappers on its own** unless the host actually grants
   it root. The `fxmily` sudoers entry is exactly one command with no arguments
-  (`fxmily-sync-cron`, `deploy.yml:366-376`). When the grant is absent, `converge`
+  (`fxmily-sync-cron`; the grant is described in the comment above the
+  `sudo /usr/local/bin/fxmily-sync-cron` call in `deploy.yml`). When the grant is absent, `converge`
   leaves the checkout up to date, prints the one root command, and **fails** —
   rather than reporting a convergence that did not happen.
 

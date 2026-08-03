@@ -73,7 +73,8 @@ name: Worker host sync
 #   * `converge` fast-forwards the checkout (refusing a dirty tree), then
 #     reports the wrapper drift. Installing the wrappers needs root, and the
 #     `fxmily` sudoers grant is exactly one command with no arguments
-#     (`/usr/local/bin/fxmily-sync-cron`, deploy.yml:366-376) — so this mode
+#     (`/usr/local/bin/fxmily-sync-cron`, granted at the `sudo` call in
+#     deploy.yml) — so this mode
 #     PROBES for the right to run the installer and, when it does not have it,
 #     prints the one root command to run and fails loudly rather than pretending
 #     the drift is closed.
@@ -361,7 +362,8 @@ jobs:
 
             echo "::group::G · Root reach (can converge finish by itself?)"
             # Answer this BEFORE someone runs converge, not after it fails at the
-            # last step. The grant is command-specific (deploy.yml:366-376), so
+            # last step. The grant is command-specific (see the comment above
+            # the `sudo` call in deploy.yml), so
             # `sudo -n true` is a faithful proxy: if a bare command is refused,
             # so is the installer. `-n` never prompts, so this cannot hang.
             if sudo -n true 2>/dev/null; then
@@ -377,7 +379,8 @@ jobs:
             # EXACT match of a secret's value, and `secrets.HETZNER_HOST` holds
             # the address, not the short hostname, so nothing would redact it.
             # The boolean above answers the only question this section asks, and
-            # the grant itself is already documented at deploy.yml:366-376.
+            # the grant itself is already documented above the `sudo` call in
+            # deploy.yml.
             echo "::endgroup::"
 
             echo "::group::H · Timeline (last 25 ticks, redacted)"

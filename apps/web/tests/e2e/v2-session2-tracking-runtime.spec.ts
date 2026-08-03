@@ -94,7 +94,14 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Fidélité à ton cadre/i);
 
     // The wizard form + preamble are present.
-    const form = page.locator('[data-slot="tracking-wizard"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/tracking/[instrument]` ships a `loading.tsx`, so the page streams and the
+    // placed content momentarily coexists with its hidden buffer copy, tripping
+    // strict mode. The `TRACKING_NUDGE` selector further down is deliberately left
+    // alone: it is a shared constant used BOTH by a `.first().toBeVisible()` (where
+    // `.first()` already resolves strict mode) AND by a `toHaveCount(0)` absence
+    // check — editing it would silently downgrade that absence guard.
+    const form = page.locator('[data-slot="tracking-wizard"]:visible');
     await expect(form).toBeVisible();
     await expect(form).toContainText(/Repense à ta semaine de trading/i);
 
@@ -137,7 +144,14 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     await loginAs(page, request, submitMember.email, submitMember.password);
 
     await page.goto('/tracking/process-fidelity');
-    const form = page.locator('[data-slot="tracking-wizard"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/tracking/[instrument]` ships a `loading.tsx`, so the page streams and the
+    // placed content momentarily coexists with its hidden buffer copy, tripping
+    // strict mode. The `TRACKING_NUDGE` selector further down is deliberately left
+    // alone: it is a shared constant used BOTH by a `.first().toBeVisible()` (where
+    // `.first()` already resolves strict mode) AND by a `toHaveCount(0)` absence
+    // check — editing it would silently downgrade that absence guard.
+    const form = page.locator('[data-slot="tracking-wizard"]:visible');
     await expect(form).toBeVisible();
 
     // Answer EVERY radiogroup (required + optional + confidence) by picking the
@@ -155,8 +169,10 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     // Calm reveal — lands on ?done=1 with the acknowledgement, re-renders in
     // edit mode (the H1 flips to « Reprendre »).
     await expect(page).toHaveURL(/\/tracking\/process-fidelity\?done=1/);
-    await expect(page.locator('[data-slot="tracking-done"]')).toBeVisible();
-    await expect(page.locator('[data-slot="tracking-done"]')).toContainText(/c['’]est noté/i);
+    await expect(page.locator('[data-slot="tracking-done"]:visible')).toBeVisible();
+    await expect(page.locator('[data-slot="tracking-done"]:visible')).toContainText(
+      /c['’]est noté/i,
+    );
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Reprendre/i);
 
     // Real DB row: exactly one entry for this member, on the risk_discipline axis,

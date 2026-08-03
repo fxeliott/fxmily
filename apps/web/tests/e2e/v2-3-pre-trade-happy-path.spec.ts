@@ -309,7 +309,11 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
     // a check today depends on sibling tests in this file (the persist test
     // creates one via Prisma), so both states are legitimate here — assert the
     // rendered copy matches whichever state the component reports.
-    const status = page.locator('[data-slot="pre-trade-today-status"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/journal` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode on
+    // `toBeVisible` — and on `getAttribute` just below, which resolves the same way.
+    const status = page.locator('[data-slot="pre-trade-today-status"]:visible');
     await expect(status).toBeVisible();
     const state = await status.getAttribute('data-state');
     if (state === 'done') {
@@ -321,7 +325,14 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
       await expect(status).toContainText(/Pense à ton pré-trade/);
       await expect(status).toContainText(/pause de 30 secondes/i);
       // Anchor link to /pre-trade/new + aria-label confirming the destination.
-      await expect(page.locator('a[href="/pre-trade/new"][aria-label*="pré-trade"]')).toBeVisible();
+      // Scoped to `status` like the `done` arm above: this is the arm that actually
+      // runs (the preceding test deletes the member's checks), so leaving it on a
+      // bare `page.locator` would have left the LIVE path exposed to the same
+      // two-node stream window the widget locator was just scoped past. The
+      // aria-label filter is kept — scoping must not cost an assertion.
+      await expect(
+        status.locator('a[href="/pre-trade/new"][aria-label*="pré-trade"]'),
+      ).toBeVisible();
     }
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);

@@ -142,7 +142,14 @@ test.describe('Séances admin — "Vu par X/N" replay coverage (runtime)', () =>
       timeout: 30_000,
     });
 
-    const cell = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]`);
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/admin/*` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode.
+    // It belongs on the PARENT, not on the badge: `seance-viewers` is rendered
+    // once in source but instantiated under a double `map` (one badge per cell),
+    // so `:visible` alone would not disambiguate it — scoping by the cell does.
+    // The badge below then inherits the scope and needs nothing.
+    const cell = page.locator(`[data-seance-cell="${today}#${TEST_SLOT}"]:visible`);
     await expect(cell).toBeVisible();
 
     // The coverage badge: exactly 1 distinct viewer over the active-member N.

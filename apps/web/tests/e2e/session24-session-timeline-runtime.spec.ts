@@ -115,7 +115,14 @@ async function seedProfileWithAxes(userId: string, axes: readonly string[]): Pro
 /** Assert the timeline renders cleanly with NO horizontal overflow at `width`. */
 async function expectNoOverflow(page: Page, width: number): Promise<void> {
   await page.setViewportSize({ width, height: 900 });
-  const timeline = page.locator('[data-slot="session-timeline"]');
+  // `:visible` past the RSC stream buffer — same canon this file already states for
+  // `coaching-axis-card` below. It matters twice here: `Locator.evaluate` resolves
+  // through Playwright's selector engine and enforces strict mode itself, so the
+  // overflow probe would throw on the staged copy too. (The rule against `:visible`
+  // applies only where NATIVE CSS is parsed — i.e. `document.querySelector` reached
+  // from inside `page.evaluate`. `$eval`/`$$eval` take a Playwright selector and
+  // accept it fine, as `admin-a-traiter-disengaged.spec.ts` already relies on.)
+  const timeline = page.locator('[data-slot="session-timeline"]:visible');
   await expect(timeline).toBeVisible();
   // The 4-step grid must never push the card wider than its container.
   const overflow = await timeline.evaluate((el) => el.scrollWidth - el.clientWidth);
@@ -167,7 +174,8 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
 
     await page.goto('/dashboard');
 
-    const timeline = page.locator('[data-slot="session-timeline"]');
+    // `:visible` past the RSC stream buffer — see the canon note in this file.
+    const timeline = page.locator('[data-slot="session-timeline"]:visible');
     await expect(timeline).toBeVisible();
     await expect(timeline).toContainText(/Ta journée de trader/i);
     // The four routine steps are always present (the day's anchor).
@@ -205,7 +213,8 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
 
     await page.goto('/dashboard');
 
-    const timeline = page.locator('[data-slot="session-timeline"]');
+    // `:visible` past the RSC stream buffer — see the canon note in this file.
+    const timeline = page.locator('[data-slot="session-timeline"]:visible');
     await expect(timeline).toBeVisible();
     // The day's single trade is counted…
     await expect(timeline).toContainText(/1 trade aujourd’hui/);

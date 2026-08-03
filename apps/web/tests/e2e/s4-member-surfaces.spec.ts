@@ -306,7 +306,11 @@ test.describe('S4 — surfaces membre : parcours du trade, dérive, score → ob
     // §32/§33 « sans qu'il ait à les chercher » : the two seeded active alerts
     // surface a calm strip ON the hub, deep-linking to /verification (before, the
     // member had to navigate there to see any drift signal).
-    const signal = page.locator('[data-slot="hub-drift-signal"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/dashboard` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode on the
+    // assertions below. Only strict-mode-throwing assertions get it.
+    const signal = page.locator('[data-slot="hub-drift-signal"]:visible');
     await expect(signal).toBeVisible();
     await expect(signal).toHaveAttribute('href', '/verification');
     await expect(page.getByText('Signal de dérive', { exact: true })).toBeVisible();
@@ -333,7 +337,8 @@ test.describe('S4 — surfaces membre : parcours du trade, dérive, score → ob
 
     // ESE-4 — the constancy score is no longer a dead-end : it bridges to the
     // member's objective (cause → effet → prochain pas), pointing at /objectifs.
-    const bridge = page.locator('[data-slot="constancy-objective-bridge"]');
+    // `:visible` past the RSC stream buffer — see the note on the drift signal above.
+    const bridge = page.locator('[data-slot="constancy-objective-bridge"]:visible');
     await expect(bridge).toBeVisible();
     await expect(bridge).toHaveAttribute('href', '/objectifs');
     await expect(page.getByText('Ce que ta constance change', { exact: true })).toBeVisible();

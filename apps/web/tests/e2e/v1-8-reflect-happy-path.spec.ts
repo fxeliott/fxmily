@@ -257,7 +257,11 @@ test.describe('V1.8 REFLECT — happy-path persist/render (weekly review · refl
 
     // Timeline rendered (only present when recent.length > 0) + the
     // seeded review's lesson visible (`review/page.tsx:136,153`).
-    await expect(page.locator('[data-slot="recent-reviews"]')).toBeVisible();
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/review` and `/reflect` both ship a `loading.tsx`, so the page streams and the
+    // placed content momentarily coexists with its hidden buffer copy, tripping
+    // strict mode. Only strict-mode-throwing assertions get it.
+    await expect(page.locator('[data-slot="recent-reviews"]:visible')).toBeVisible();
     await expect(page.getByText(new RegExp(REVIEW_LESSON_MARKER))).toBeVisible();
 
     const errorOverlay = page.locator('[data-nextjs-dialog-overlay]');
@@ -282,7 +286,7 @@ test.describe('V1.8 REFLECT — happy-path persist/render (weekly review · refl
 
     // Timeline rendered + the seeded reflection's A (triggerEvent)
     // visible (`reflect/page.tsx:130,151`).
-    await expect(page.locator('[data-slot="recent-reflections"]')).toBeVisible();
+    await expect(page.locator('[data-slot="recent-reflections"]:visible')).toBeVisible();
     await expect(page.getByText(new RegExp(REFLECT_TRIGGER_MARKER))).toBeVisible();
 
     const errorOverlay = page.locator('[data-nextjs-dialog-overlay]');

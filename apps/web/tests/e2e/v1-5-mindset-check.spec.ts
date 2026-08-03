@@ -192,9 +192,17 @@ test.describe('V1.5 MindsetCheck — auth-gates + happy-path persist/render + cr
 
     await expect(page).toHaveURL(/\/mindset/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/mindset/i);
-    await expect(page.locator('[data-slot="mindset-timeline"]')).toBeVisible();
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // `/mindset` ships a `loading.tsx`, so the page streams and the placed content
+    // momentarily coexists with its hidden buffer copy, tripping strict mode.
+    await expect(page.locator('[data-slot="mindset-timeline"]:visible')).toBeVisible();
     // A complete check exists → the real dashboard renders, not the empty one.
+    // `mindset-dashboard` stays bare: its panel is loaded through
+    // `dynamic(..., { ssr: false })`, so the node is never emitted in server HTML
+    // and therefore never parked in the buffer — the locator goes 0 → 1, never 2.
     await expect(page.locator('[data-slot="mindset-dashboard"]')).toBeVisible();
+    // Bare on purpose: `toHaveCount` never trips strict mode, and `:visible` would
+    // downgrade "absent from the DOM" to "merely not visible".
     await expect(page.locator('[data-slot="mindset-dashboard-empty"]')).toHaveCount(0);
     await expect(page.getByText(EXPECTED_OVERALL).first()).toBeVisible();
 
@@ -211,8 +219,8 @@ test.describe('V1.5 MindsetCheck — auth-gates + happy-path persist/render + cr
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(/\/mindset\/new/);
-    await expect(page.locator('[data-slot="mindset-wizard"]')).toBeVisible();
-    await expect(page.locator('[data-slot="mindset-step-progress"]')).toBeVisible();
+    await expect(page.locator('[data-slot="mindset-wizard"]:visible')).toBeVisible();
+    await expect(page.locator('[data-slot="mindset-step-progress"]:visible')).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
@@ -230,7 +238,7 @@ test.describe('V1.5 MindsetCheck — auth-gates + happy-path persist/render + cr
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(new RegExp(`/admin/members/${member.id}`));
-    await expect(page.locator('[data-slot="member-mindset-checks"]')).toBeVisible();
+    await expect(page.locator('[data-slot="member-mindset-checks"]:visible')).toBeVisible();
     await expect(page.getByText(EXPECTED_OVERALL).first()).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);

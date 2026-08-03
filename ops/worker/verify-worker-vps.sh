@@ -63,9 +63,27 @@ ENV_FILE="${FXMILY_WORKER_ENV:-$WORKER_DIR/worker.env}"
   echo "worker.env not readable at $ENV_FILE" >&2
   exit 2
 }
+# Source through a CR-stripped copy, NOT directly.
+#
+# `run-batch.sh` strips the CR from every token it reads, because `worker.env` is
+# hand-edited as often as it is generated and one of the two machines that read
+# it is a WINDOWS box. This script — the switchover gate, the thing that decides
+# whether "7/7" may be ticked — sourced the file raw. So a single CR would enter
+# `FXMILY_ADMIN_TOKEN`, every pipeline would take a 401, and this gate would
+# report FAIL on all seven while the real cron path worked perfectly: the exact
+# inverse verdict, on the one script whose whole job is to be believed.
+#
+# Nothing else detects it either: the watchdog only asserts `${#val} -ge 32`, and
+# 32 + CR = 33. The class was closed on one reader out of three.
+ENV_TMP="$(mktemp)"
+trap 'rm -f "$ENV_TMP"' EXIT
+tr -d '\r' <"$ENV_FILE" >"$ENV_TMP"
+if ! cmp -s "$ENV_FILE" "$ENV_TMP"; then
+  echo "  note   : CR bytes stripped from $(basename "$ENV_FILE") while reading it" >&2
+fi
 set -a
 # shellcheck disable=SC1090
-. "$ENV_FILE"
+. "$ENV_TMP"
 set +a
 # Same bridge run-batch.sh applies: 4 of the 7 scripts read FXMILY_APP_URL.
 export FXMILY_APP_URL="${FXMILY_APP_URL:-${FXMILY_BASE_URL:-https://app.fxmilyapp.com}}"
@@ -95,7 +113,16 @@ AUTH_STATE="$(claude auth status --json 2>/dev/null | jq -r '.loggedIn // false'
 [[ -n "$AUTH_STATE" ]] || AUTH_STATE='unknown'
 
 echo "Fxmily worker — 7-pipeline dry-run verification"
-echo "  host   : $(hostname)"
+# NO `hostname` here. This banner used to print it, and it is not harmless:
+# `worker-host-sync.yml` runs this script in `verify` mode and pipes the output
+# into a GitHub Actions log, which is PUBLIC because this repository is. The
+# workflow's `redact()` only strips `http(s)://…`, so a bare host name goes
+# straight through, and GitHub masks only an EXACT match of a secret's value —
+# `secrets.HETZNER_HOST` holds the IPv4, not the short name, so nothing would
+# redact it either. A `[ -z "$CI" ]` guard would NOT work: this script runs on
+# the host over SSH, where the runner's environment does not exist.
+# The line was also pointless where it was useful: an operator running this by
+# hand is already logged into the machine it would name.
 echo "  target : $FXMILY_APP_URL"
 echo "  claude : $CLAUDE_VERSION"
 echo "  auth   : $AUTH_STATE"
@@ -130,12 +157,24 @@ for b in "${ORDER[@]}"; do
   # previous, healthy run would replay a success that did not happen now.
   STATUS_FILE="${FXMILY_WORKER_LOG_DIR:-$REPO_ROOT/ops/worker/logs}/${b}.status.json"
   SKIPPED=''
+  CAPPED='false'
   if [[ ! -r "$STATUS_FILE" ]]; then
     SKIPPED='no-status'
   elif [[ -z "$(find "$STATUS_FILE" -newermt "@$((START - 1))" 2>/dev/null)" ]]; then
     SKIPPED='stale-status'
   else
     SKIPPED="$(jq -r '.skipped // ""' "$STATUS_FILE" 2>/dev/null || echo 'unreadable-status')"
+    # A run that hit the Claude usage cap is a SUCCESS as far as cron is
+    # concerned — `run-batch.sh` halts immediately, drops a cooldown stamp and
+    # remaps exit 75 to 0 so the next ticks are benign no-ops. That remap is
+    # correct for cron and wrong for THIS script: it is the switchover gate.
+    #
+    # A capped run writes no `skipped` key and returns 0, so it fell straight
+    # through to the catch-all `PASS/empty` branch and printed "pull OK + JSON
+    # valid, no work pending" — an assertion nothing had verified, about a run
+    # that never reached the model. ADR-007's "7/7" could then be ticked on a
+    # sweep where every generator was capped.
+    CAPPED="$(jq -r '.quotaCapped // false' "$STATUS_FILE" 2>/dev/null || echo false)"
   fi
 
   if grep -q '⛔ HALT' <<<"$SECTION"; then
@@ -150,6 +189,10 @@ for b in "${ORDER[@]}"; do
     # no gate: it certifies a mute host. `no_claude_auth` is the expected value
     # before the login — which is precisely the state this script must refuse.
     printf 'FAIL/skipped   (%ss, batch did not run: %s)\n' "$ELAPSED" "$SKIPPED"
+    FAIL=$((FAIL + 1))
+  elif [[ "$CAPPED" == "true" ]]; then
+    # Not a defect — a quota window. But not a pass either: nothing was proven.
+    printf 'FAIL/quota-capped (%ss, usage cap hit: generation NOT exercised — re-run after the window reopens)\n' "$ELAPSED"
     FAIL=$((FAIL + 1))
   elif [[ -n "${PULL_ONLY[$b]:-}" ]]; then
     printf 'PASS/pull-only (%ss, token + endpoint + envelope OK; generation NOT exercised in dry-run)\n' "$ELAPSED"

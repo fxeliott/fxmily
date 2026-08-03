@@ -59,6 +59,33 @@ MANAGED_SCRIPTS=(
   "fxmily-uploads-backup /usr/local/bin/fxmily-uploads-backup 0755"
   "fxmily-restore-drill /usr/local/bin/fxmily-restore-drill 0755"
   "fxmily-autoheal /usr/local/bin/fxmily-autoheal 0755"
+  # J9 — the two AI-worker wrappers. Added for exactly the reason this table
+  # exists: they were shipped by J9 with NO path to the host at all, so #580 and
+  # #581 both patched the watchdog while the machine kept running the #579 copy.
+  # Same failure class as the tour-14 one described above, one layer down.
+  #
+  # They are referenced by /etc/cron.d/fxmily-worker, a SEPARATE file that the
+  # crontab gate below never reads — so a worker ROLLBACK (the wrapper leaves
+  # the repo, nothing is staged) is skipped harmlessly and cannot fail an app
+  # deploy. That asymmetry is deliberate.
+  #
+  # It does NOT extend to a wrapper that is staged but MALFORMED: the shebang
+  # and size checks below `fail`, like they do for every managed script, and
+  # that aborts the deploy. Kept fatal on purpose — a staged script with no
+  # shebang means the repo file is corrupt, and silently installing nothing over
+  # a corrupt payload is the kind of quiet degradation this table exists to
+  # prevent.
+  #
+  # Note what these two checks do NOT see: a syntax error. A file can carry a
+  # perfect shebang, a plausible size, and still be unparseable — this validator
+  # would install it and the 5-minute pipeline would run it. That gap is closed
+  # upstream by the `bash -n` sweep in `.github/workflows/cron-sync-check.yml`,
+  # which is where the claim belongs. An earlier version of this comment asserted
+  # CI already ran `bash -n` and shellcheck; a grep of `.github/` for either
+  # returned nothing. The gate was written after that check, and it runs `bash -n`
+  # only — shellcheck is still not installed anywhere here.
+  "fxmily-worker /usr/local/bin/fxmily-worker 0755"
+  "fxmily-worker-watchdog /usr/local/bin/fxmily-worker-watchdog 0755"
 )
 
 log() { echo "[fxmily-sync-cron] $*"; }
@@ -67,6 +94,26 @@ fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 [[ "$(id -u)" -eq 0 ]] || fail "must run as root (via sudo)."
 [[ -f "$SRC_CRONTAB" ]] || fail "staged crontab not found: $SRC_CRONTAB"
 [[ -f "$SRC_RUNNER" ]] || fail "staged runner not found: $SRC_RUNNER"
+
+# --- Am I myself out of date? -------------------------------------------------
+# This script is ROOT-PINNED: it is never in MANAGED_SCRIPTS, because it is the
+# thing that decides which paths this channel may write. Letting the deploy
+# replace it would turn a bounded grant (eight known paths) into an unbounded
+# one. That boundary stays.
+#
+# The price of keeping it is a silent gap: a NEW entry in the table below has no
+# effect until a root operator installs this file by hand, and nothing used to
+# say so. Now it does — on every deploy, in the deploy log, from the copy that
+# is actually running. Non-fatal on purpose: being out of date is a message for
+# a human, not a reason to abort an application deploy.
+SELF_STAGED="$STAGE_DIR/fxmily-sync-cron"
+if [[ -f "$SELF_STAGED" ]] && ! cmp -s "$SELF_STAGED" "$0"; then
+  log "NOTE: a DIFFERENT fxmily-sync-cron is staged at $SELF_STAGED."
+  log "      This script never installs itself (root-pinned by design), so any"
+  log "      new MANAGED_SCRIPTS entry in the staged copy is being IGNORED."
+  log "      To adopt it, as root:"
+  log "        install -o root -g root -m 0755 $SELF_STAGED $0"
+fi
 
 # --- Validate the staged crontab, line by line ---------------------------------
 # Accepted:
@@ -145,7 +192,16 @@ for spec in "${MANAGED_SCRIPTS[@]}"; do
   [[ "$sz" -lt 65536 ]] || fail "staged $name unexpectedly large ($sz bytes)."
   if ! cmp -s "$src" "$dst" 2>/dev/null; then
     [[ -f "$dst" ]] && cp -p "$dst" "${dst}.bak-${STAMP}"
-    install -o root -g root -m "$mode" "$src" "$dst"
+    # Install to a sibling, then RENAME. `install` writes the destination in
+    # place, and bash reads a script incrementally by byte offset: rewriting a
+    # file under a running interpreter makes it execute shifted content. That
+    # was a theoretical worry while this table held five occasional jobs; it
+    # stopped being theoretical when the worker wrappers joined it —
+    # `fxmily-worker verification` fires every 5 minutes with a 2-hour cap, so
+    # a run is very often in flight. `mv` on the same filesystem is rename(2):
+    # the inode a running process holds survives untouched until it exits.
+    install -o root -g root -m "$mode" "$src" "${dst}.new-${STAMP}"
+    mv -f "${dst}.new-${STAMP}" "$dst"
     log "installed $dst (backup: ${dst}.bak-${STAMP})"
     changed=1
   fi

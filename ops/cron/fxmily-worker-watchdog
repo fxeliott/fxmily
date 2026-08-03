@@ -22,7 +22,14 @@
 #                status.json because it could not always reach the CLI; here we
 #                just ask the CLI — strictly more accurate.)
 #   4. RUNS      each pipeline's `logs/<batch>.status.json` — quota cap
-#                (benign, self-resolving), real failures, stale statuses.
+#                (benign, self-resolving) and real failures.
+#                NOT staleness: this step reads the CONTENT of whatever status
+#                file is there and never looks at its age, so a three-week-old
+#                `ok:true` replays as healthy here. That is deliberate, not an
+#                oversight — "this pipeline stopped running" is exactly what the
+#                age-based heartbeat on `<pipeline>.batch.pulled` measures, from
+#                the server's own audit rows rather than from a file on this box.
+#                Duplicating it here would mean two clocks disagreeing at 2am.
 #   5. LOCK      a global lock older than 6h is a stuck holder.
 #   6. REPORT    POST /api/admin/worker-watchdog/heartbeat (X-Admin-Token).
 #
@@ -116,8 +123,19 @@ else
   # crond ignores a /etc/cron.d file that is group/other-writable, and SILENTLY
   # skips any line containing a CR (the exact ~20h outage of 2026-05-11, V1.6
   # bug #2). Both are invisible failures — check them explicitly.
-  perms="$(stat -c '%a' "$CRON_FILE" 2>/dev/null || echo '???')"
-  [[ "$perms" == "644" ]] || add_label "cron_file_perms:$perms"
+  # What crond actually refuses is a file that is group- or other-WRITABLE. It
+  # does not care about the read bits, so `600` and `640` are read perfectly.
+  # Testing `!= 644` therefore raised the same label for a fatal `664` and for a
+  # harmless `600` — one label meaning two opposite things, which is why the
+  # board classified the whole family as "hygiene" and gave it no action at all.
+  # Masking the two write bits makes the label mean exactly one thing: crond is
+  # ignoring this file, so ZERO pipeline runs. It can then be escalated.
+  perms="$(stat -c '%a' "$CRON_FILE" 2>/dev/null || echo '')"
+  if [[ -z "$perms" ]]; then
+    add_label 'cron_file_perms:unreadable'
+  elif [[ $((8#$perms & 0022)) -ne 0 ]]; then
+    add_label "cron_file_perms:$perms"
+  fi
   cr_count="$(tr -cd '\r' <"$CRON_FILE" | wc -c)"
   [[ "$cr_count" -eq 0 ]] || add_label "cron_file_crlf:$cr_count"
 

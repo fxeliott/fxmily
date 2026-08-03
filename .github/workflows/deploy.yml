@@ -166,7 +166,20 @@ jobs:
           # fxmily-sync-cron is staged for CONVENIENCE only (a root operator
           # can `install` it from the staging dir, ops/cron/README.md §update):
           # the validator never installs itself — root-pinned by design.
-          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/scripts/fxmily-autoheal'
+          # J9 follow-up — `ops/cron/fxmily-worker` + `fxmily-worker-watchdog`
+          # join the list. They were shipped by J9 with no path to the host at
+          # all: merging a wrapper fix changed the repo and nothing else, and
+          # #580 and #581 both patched the watchdog while the machine kept
+          # running the #579 copy. Staging them here + the two matching
+          # `MANAGED_SCRIPTS` rows makes every healthy deploy converge them,
+          # through the one sudo grant this user has (step 5 below).
+          #
+          # ⚠️ Takes effect only AFTER a root operator installs the updated
+          # `fxmily-sync-cron` once from the staging dir: the validator is
+          # root-pinned and never installs itself (see the note where it is
+          # staged, above). Until then, deploys keep converging the five older
+          # scripts and say nothing about these two.
+          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/cron/fxmily-worker,ops/cron/fxmily-worker-watchdog,ops/scripts/fxmily-autoheal'
           target: /home/fxmily/cron-sync
           strip_components: 2
           overwrite: true
@@ -363,6 +376,26 @@ jobs:
               # new image's crontab. Failure here fails the job loudly (the
               # app deploy itself is fine, but the operator must know the
               # cron drift persists).
+              # J9 follow-up — SAY IT when the validator on the host is older
+              # than the one just staged.
+              #
+              # `fxmily-sync-cron` is root-pinned: it is the thing that decides
+              # which paths this channel may write, so letting `fxmily` replace
+              # it would turn a bounded grant into an unbounded one. That
+              # boundary is kept — deliberately, it is not an oversight.
+              #
+              # But the cost of keeping it is a SILENT gap: until a root
+              # operator installs the new copy by hand, every change to the
+              # MANAGED_SCRIPTS table has exactly zero effect and nothing says
+              # so. That is the same silence this jalon exists to remove, so it
+              # gets the same treatment — a comparison that needs no root and
+              # runs on every deploy.
+              if [ -f /home/fxmily/cron-sync/fxmily-sync-cron ] \
+                 && [ -f /usr/local/bin/fxmily-sync-cron ] \
+                 && ! cmp -s /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron; then
+                echo "::warning title=Stale cron validator::/usr/local/bin/fxmily-sync-cron differs from the staged copy. It is root-pinned and never installs itself, so any NEW entry in its MANAGED_SCRIPTS table is being ignored. Run as root: install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron"
+              fi
+
               if [ -x /usr/local/bin/fxmily-sync-cron ]; then
                 sudo /usr/local/bin/fxmily-sync-cron
               else

@@ -28,6 +28,15 @@ on:
       - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
+      # J9 — the AI worker's own six lists (see the second step below).
+      - 'ops/cron/crontab.fxmily-worker'
+      - 'ops/cron/fxmily-worker'
+      - 'ops/cron/fxmily-worker-watchdog'
+      - 'ops/worker/run-batch.sh'
+      - 'ops/worker/verify-worker-vps.sh'
+      - 'ops/worker/install-worker-vps.sh'
+      - 'apps/web/src/lib/system/health.ts'
+      - 'scripts/check-worker-pipeline-sync.mjs'
   pull_request:
     branches: [main]
     paths:
@@ -36,6 +45,15 @@ on:
       - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
+      # J9 — the AI worker's own six lists (see the second step below).
+      - 'ops/cron/crontab.fxmily-worker'
+      - 'ops/cron/fxmily-worker'
+      - 'ops/cron/fxmily-worker-watchdog'
+      - 'ops/worker/run-batch.sh'
+      - 'ops/worker/verify-worker-vps.sh'
+      - 'ops/worker/install-worker-vps.sh'
+      - 'apps/web/src/lib/system/health.ts'
+      - 'scripts/check-worker-pipeline-sync.mjs'
   workflow_dispatch:
 
 # Cancel superseded PR runs ; never cancel a `main` run (mirrors ci.yml).
@@ -72,3 +90,63 @@ jobs:
         # Zero dependencies — the script only uses node:fs / node:path, so we
         # skip `pnpm install` entirely and run it straight off the checkout.
         run: node scripts/check-cron-crontab-sync.mjs
+
+      # J9 — the same class of drift, one layer down. The seven AI pipelines are
+      # hard-coded in SIX independent files (schedule, two allowlists, watchdog,
+      # switchover gate, installer) and nothing compared them. The two failures
+      # are asymmetric and both silent: a pipeline SCHEDULED but absent from the
+      # watchdog runs unwatched, and a pipeline WATCHED but unscheduled makes the
+      # board emit `task_missing:<name>` forever, which is how a board stops
+      # being read.
+      #
+      # The same assertions also run in the Vitest suite
+      # (apps/web/src/lib/system/worker-pipeline-sync.test.ts), which is the gate
+      # that fires on EVERY pull request. This step is the fast, narrow one: it
+      # only triggers when a worker file actually changes, and it prints which
+      # of the six lists disagrees and what that costs — which a Vitest diff
+      # does not.
+      - name: Verify the 7 worker pipelines agree across all six lists
+        run: node scripts/check-worker-pipeline-sync.mjs
+
+      # Shell syntax gate. It exists because a comment in `fxmily-sync-cron`
+      # justified keeping a fatal check by claiming "CI (bash -n, shellcheck)
+      # catches it long before here" — and a grep of `.github/` for
+      # `shellcheck|bash -n|shfmt` returned NOTHING. The claim was false on the
+      # day it was written, in the very PR that gave those scripts an automatic
+      # path to production.
+      #
+      # It matters more than syntax hygiene: `fxmily-sync-cron` validates a
+      # staged script with `head -c 3 | grep '^#!'` plus a size bound, and
+      # NEITHER sees a syntax error. Without this gate, a broken wrapper reaches
+      # /usr/local/bin and the pipeline that fires every 5 minutes runs it.
+      #
+      # `bash -n` only — shellcheck is not installed here and claiming its
+      # verdict without running it is the mistake this step was born from.
+      - name: Shell syntax — every ops script that reaches the host
+        run: |
+          set -euo pipefail
+          FAILED=0
+          FILES=$(find ops -type f \( -name '*.sh' -o -name 'fxmily-*' -o -name 'crontab.*' \) \
+                  ! -name '*.example' ! -name '*.md' ! -name 'crontab.fxmily*' | sort)
+          COUNT=0
+          for f in $FILES; do
+            head -c 3 "$f" | grep -q '^#!' || continue   # crontabs and data files
+            COUNT=$((COUNT + 1))
+            if ! bash -n "$f" 2>&1; then
+              echo "::error file=$f::bash -n failed"
+              FAILED=1
+            fi
+            if grep -q $'\r' "$f"; then
+              echo "::error file=$f::contains CR bytes — cron and bash both break on these"
+              FAILED=1
+            fi
+          done
+          # Refuse an empty sweep: a find that matches nothing would make this
+          # step green while checking zero files — the same false-proof this
+          # repo has already had to fix in install-worker-vps.sh.
+          if [ "$COUNT" -lt 8 ]; then
+            echo "::error::only $COUNT shell scripts were checked — the sweep is broken, not the repo"
+            exit 1
+          fi
+          echo "bash -n + CR check: $COUNT scripts, all clean."
+          exit "$FAILED"

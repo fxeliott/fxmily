@@ -103,6 +103,20 @@ Code session, a long session can exhaust the window and the batches go into
 cooldown — members wait, and nothing in the app explains why. Use an account
 that does nothing else.
 
+> **This is a requirement, not an observed state — and nothing here can check
+> it.** `claude auth status --json` reports whether _an_ account is logged in,
+> never which one nor what else it does; the board sees the consequence
+> (`claude_quota:capped`, then heartbeats going stale) long after the fact, and
+> reports it as a benign self-resolving pause. So a shared account does not fail
+> loudly, it fails as _members waiting_, which is the exact silence this jalon
+> exists to remove.
+>
+> Concretely: if the account used here is the same one that runs anything else on
+> a schedule, the anti-ban mitigations still hold but the capacity argument above
+> does not, and a busy day can starve the pipelines. That is a call for Eliot to
+> make and to state explicitly — it has not been recorded anywhere, and this
+> paragraph must not be read as evidence that it was.
+
 ### Re-login when the session expires
 
 There is no silent failure mode here, by design:
@@ -350,12 +364,107 @@ previous state. The uninstall deliberately **keeps** the checkout, `worker.env`,
 
 ## Routine maintenance
 
-| When                    | What                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                              |
-| after merging to `main` | `sudo -u fxmily git -C ~/worker fetch --depth 1 origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD` then re-run the installer |
-| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                     |
-| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                        |
+| When                    | What                                                                                                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                                                                                                                                                                               |
+| after merging to `main` | wrappers converge on the deploy itself. The **checkout** (`~/worker`) does not: **Actions → “Worker host sync” → `converge`** (below). Manual equivalent: `sudo -u fxmily git -C ~/worker fetch origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD`, then re-run the installer |
+| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                                                                                                                                                                      |
+| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                                                                                                                                                                         |
+
+### What a merge to `main` reaches, and what it does not
+
+Two separate things live on this host, and only one of them travels with a
+deploy:
+
+| Thing                                                        | Reached by a merge to `main`?                                                |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| the two wrappers (`fxmily-worker`, `fxmily-worker-watchdog`) | **yes** — `deploy.yml` stages them, `fxmily-sync-cron` installs them (below) |
+| `~/worker` (the checkout the batch scripts run FROM)         | **no** — nothing pushes it; `converge`, or the manual `git reset`, moves it  |
+
+**The wrappers.** `deploy.yml` scp's the ops scripts to `/home/fxmily/cron-sync`
+and then runs the one command `fxmily` may run as root
+(`sudo /usr/local/bin/fxmily-sync-cron`). That validator carries a
+`MANAGED_SCRIPTS` table and installs every entry it finds staged. J9 shipped its
+two wrappers in **neither** list, so a merged wrapper fix changed the repository
+and nothing else — PRs #580 and #581 both patched
+`fxmily-worker-watchdog` while the machine kept running the #579 copy. Two
+filenames in `deploy.yml:169` and two rows in `fxmily-sync-cron:56` close that,
+automatically, on every healthy deploy.
+
+> **One-off, root, once:** `fxmily-sync-cron` is **root-pinned — it never
+> installs itself**. The updated table only takes effect after a root operator
+> installs the new validator once:
+> `install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron`.
+> Until that is done, deploys keep converging the five older scripts and the two
+> wrappers stay behind.
+>
+> **You will not have to remember this.** Keeping the pin has a cost — a change
+> to the table does nothing until a human acts — and an unannounced cost is the
+> exact silence this jalon exists to remove. So it is announced, twice, on every
+> deploy: the deploy step compares the staged validator with the installed one
+> and raises a GitHub warning, and the validator itself prints a `NOTE:` when a
+> different copy of it is staged. The first works even while the OLD validator is
+> the one installed, which is the case that matters today.
+>
+> The pin itself is **not** an oversight to be fixed later. This script decides
+> which paths the deploy may write as root; if the deploy could replace it, a
+> bounded grant would become an unbounded one. The gesture is the price of that
+> boundary, and it is worth paying.
+>
+> How many paths the grant actually covers is a number that has already drifted
+> twice, so read it from the script rather than from this sentence:
+>
+> ```bash
+> { sed -n '/^MANAGED_SCRIPTS=(/,/^)/p' ops/cron/fxmily-sync-cron \
+>     | grep -oE '(/usr/local/bin|/etc/cron\.d)/[a-z0-9-]+'
+>   grep -E '^DST_(CRONTAB|RUNNER)=' ops/cron/fxmily-sync-cron | sed 's/.*="//;s/"//'
+> } | sort -u
+> ```
+>
+> Ten, on the day this was written.
+
+**The checkout.** `~/worker` is what `/usr/local/bin/fxmily-worker` actually
+executes. No deploy touches it. That is what the ops workflow
+[`.github/workflows/worker-host-sync.yml`](../../.github/workflows/worker-host-sync.yml)
+is for — the sibling of `sync-caddy-prod.yml`, and the only thing that can
+_measure_ this host from CI:
+
+| Mode       | Does                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `inspect`  | measures the host: each installed wrapper **byte-for-byte against what the last deploy staged**, plus the checkout's state |
+| `converge` | resets the checkout to `origin/main`, then installs the wrappers if it has the root reach to do so                         |
+| `verify`   | runs `verify-worker-vps.sh` — the 7-pipeline dry-run. Never persists                                                       |
+
+**Read the two drift messages as the two different problems they are.** Since the
+wrappers travel with the deploy, `/usr/local/bin/fxmily-worker*` and `~/worker`
+have different update paths, so `inspect` reports on them separately:
+
+| Message          | Means                                                                              | Do                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| _Wrapper drift_  | the installed wrapper is not what the last deploy staged                           | re-install `fxmily-sync-cron` as root (it never installs itself), redeploy |
+| _Stale checkout_ | `~/worker` is behind the installed wrappers — **the batch scripts run from there** | `converge`                                                                 |
+
+That distinction is not cosmetic. Comparing only against the checkout — which is
+what this section did before the wrappers joined the deploy — would report
+_"the host is not running main"_ on a host that is **exactly** at main, the first
+time a deploy lands a wrapper fix. A gate that says the opposite of the truth
+stops being read.
+
+Two things it deliberately does not do, each for a reason this repo already paid for:
+
+- **It is not scheduled.** A red-by-default watcher stops being a signal:
+  `Cron Watch` has been failing on the apex probe for days, so it can no longer
+  announce a _new_ outage. One more permanently-red run would buy nothing.
+  Run `inspect` after any PR that touches `ops/cron/fxmily-worker*`.
+- **It does not install the wrappers on its own** unless the host actually grants
+  it root. The `fxmily` sudoers entry is exactly one command with no arguments
+  (`fxmily-sync-cron`, `deploy.yml:366-376`). When the grant is absent, `converge`
+  leaves the checkout up to date, prints the one root command, and **fails** —
+  rather than reporting a convergence that did not happen.
+
+Its run logs are **public** (this repository is public), so it prints token
+_lengths_ and never values, the `.loggedIn` boolean and never the account, and
+never the `*.wrapper.log` transcripts, which contain member content.
 
 **Keep the checkout in step with the deployed app.** The batch scripts speak to
 `/api/admin/*` endpoints whose contract lives in the same commit. A checkout that

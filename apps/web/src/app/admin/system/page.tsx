@@ -807,6 +807,24 @@ function HostActionRow({ item }: { item: HostActionItem }): React.ReactElement {
         <Pill tone={tone}>{item.severity === 'blocked' ? 'À traiter' : 'À venir'}</Pill>
       </div>
       <p className="mt-1.5 text-xs leading-relaxed text-[var(--t-2)]">{item.detail}</p>
+      {/* The subjects behind a deduped family. Seven missing pipelines collapse
+          into one card on purpose — seven identical commands would be noise —
+          but without these names the card could not be acted on: the board rows
+          carry an error COUNT only, and the label path reddens faster than age,
+          so those rows are still green at the moment this card lights up. */}
+      {item.details.length > 0 ? (
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] text-[var(--t-3)]">
+          <span>Concerné{item.details.length > 1 ? 's' : ''} :</span>
+          {item.details.map((subject) => (
+            <code
+              key={subject}
+              className="rounded bg-[var(--bg-1)] px-1.5 py-0.5 font-mono text-[10px] break-all text-[var(--t-2)]"
+            >
+              {subject}
+            </code>
+          ))}
+        </p>
+      ) : null}
       <div className="mt-3 flex flex-col gap-1">
         <span className="text-[10px] font-medium tracking-wide text-[var(--t-4)] uppercase">
           Commande à exécuter

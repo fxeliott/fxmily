@@ -36,6 +36,21 @@ on:
 permissions:
   contents: read
 
+# TWO JOBS, ON PURPOSE — they watch two different machines and must fail
+# separately.
+#
+# They used to be two steps of one job, and on 2026-08-03 that cost the alarm its
+# meaning: the bare apex had been answering CF 522 every hour since at least
+# 22:10 UTC the day before, so every run showed "failure" while the heartbeat
+# step inside it was printing `HTTP 200 / ✅ Heartbeat green`. A reader glancing
+# at the run list saw an unbroken column of red and learned nothing — and a real
+# worker outage arriving during that window would have been indistinguishable
+# from the ongoing apex one. An alarm that is always on is not an alarm.
+#
+# Split, each surface owns its own red: the run list shows `Heartbeat check` and
+# `Apex redirect` as distinct checks, and one being down no longer hides the
+# other. No `needs:` between them — the apex is a Cloudflare/origin concern and
+# has never been a precondition for reading the cron board.
 jobs:
   watch:
     name: Heartbeat check
@@ -123,14 +138,17 @@ jobs:
           echo "::error title=Cron heartbeat alert::HTTP $HTTP_CODE — at least one cron is stale or never ran, and self-heal could not fix it. See body above."
           exit 1
 
-      # Tour 16 — apex probe. Every heartbeat above targets the `app.` subdomain
-      # (`APP_URL`), so the tour-12 incident where the bare apex `fxmilyapp.com`
-      # went CF 522 was INVISIBLE to this watcher. This step probes the apex
-      # directly and asserts it still redirects to the app. It is a SEPARATE step
-      # so an apex failure surfaces on its own line and cannot be masked by a
-      # green heartbeat. FAIL on 5xx (apex genuinely down); WARN (never fail) on
-      # anything that is not a 301/308 → app.fxmilyapp.com (a changed redirect
-      # shape is worth a look but not an outage).
+  # Tour 16 — apex probe. Every heartbeat above targets the `app.` subdomain
+  # (`APP_URL`), so the tour-12 incident where the bare apex `fxmilyapp.com`
+  # went CF 522 was INVISIBLE to this watcher. This job probes the apex directly
+  # and asserts it still redirects to the app. FAIL on 5xx (apex genuinely down);
+  # WARN (never fail) on anything that is not a 301/308 → app.fxmilyapp.com (a
+  # changed redirect shape is worth a look but not an outage).
+  apex:
+    name: Apex redirect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
       - name: Probe bare apex redirect (fxmilyapp.com)
         run: |
           set +e

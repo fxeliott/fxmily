@@ -106,6 +106,21 @@ if [[ -f "$ENV_FILE" ]]; then
     [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[1]}"
     val="${BASH_REMATCH[2]}"
+    # Strip a trailing CR *first*, then the quotes — that order is the whole
+    # point. In `KEY="value"\r` the CR sits AFTER the closing quote, so removing
+    # quotes first leaves `value"\r` and the quote never comes off either.
+    #
+    # WHY THIS MATTERS. `worker.env` is hand-edited at least as often as it is
+    # generated, and one of the two machines that reads this file is a WINDOWS
+    # box — so a CRLF line ending is the expected accident, not an exotic one. A
+    # surviving CR rides into `X-Admin-Token: <token>\r`, every pipeline gets a
+    # 401 forever, and nothing names the cause: the watchdog measures the token's
+    # LENGTH (33 ≥ 32 ⇒ silent) and the installer's own check does the same.
+    #
+    # The watchdog's `unwrap()` already stripped both, in this order, and its
+    # comment stated that this file did too. It did not. Rather than downgrade
+    # the comment to match the code, the code now matches the comment.
+    val="${val%$'\r'}"
     # strip optional surrounding quotes
     val="${val%\"}"; val="${val#\"}"
     val="${val%\'}"; val="${val#\'}"

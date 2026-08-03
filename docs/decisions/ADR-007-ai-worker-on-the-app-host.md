@@ -165,8 +165,26 @@ se resserrent sur la cadence réelle, et un pipeline mort **atteint un humain
 tout seul**, par le même canal qu'un cron mort.
 
 Pourquoi pas Healthchecks.io en premier : créer un compte tiers n'est pas une
-action que je prends seul, et le canal `health → cron-watch → issue GitHub`
-existe, est gratuit, et tourne déjà toutes les heures en production. Les URLs
+action que je prends seul, et un canal gratuit tourne déjà toutes les heures en
+production.
+
+> **Correction 2026-08-03 — ce canal n'est pas celui écrit ici.** Cette phrase
+> disait `health → cron-watch → issue GitHub`. Vérifié : `gh repo view --json
+hasIssuesEnabled` retourne `false`, et un grep de `cron-watch.yml` ne trouve
+> **aucune** création d'issue. Le canal réel est `health → cron-watch → run en
+échec → notification GitHub par e-mail`. Il existe et il est gratuit, mais il
+> est plus fragile que ce que ce paragraphe laissait croire : il ne laisse aucune
+> trace assignable, il se noie dans les autres rouges de l'onglet Actions — c'est
+> exactement ce qui s'est passé le 2026-08-03, l'apex répondant CF 522 toutes les
+> heures pendant que le heartbeat, lui, était vert — et une notification e-mail
+> se désactive d'un clic sans que personne ne s'en aperçoive.
+>
+> Ce que ça change : le refus de Healthchecks.io tient toujours (compte tiers =
+> décision d'Eliot), mais il ne peut plus s'appuyer sur « un pipeline mort
+> atteint un humain tout seul » comme sur un fait acquis. Le « Done quand » #3 du
+> jalon reste **ouvert** tant qu'une alerte n'a pas été observée de bout en bout.
+
+Les URLs
 Healthchecks.io sont donc **câblées et inertes** (une par pipeline, vides par
 défaut) : Eliot les colle quand il veut une alerte qui survit même à une app
 tombée.
@@ -218,3 +236,158 @@ tick est un skip propre et documenté — jamais un échec silencieux.
 | Cap de quota qui martèle un compte limité                  | Halte immédiate à la détection + stamp de cooldown + skip bénin des ticks suivants (porté tel quel du PC)                                               |
 | Le worker sature l'hôte de l'app                           | `nice`/`ionice` + plafond 2 h + verrou global ; escalade = VPS dédié, décision d'Eliot                                                                  |
 | Fausse alarme pendant la fenêtre d'observation             | Le watchdog serveur rapporte `claude_auth:observation_pending` (informatif) et non `claude_auth:logged_out` (rouge) tant que `FXMILY_WORKER_DRY_RUN=1`  |
+
+## Addendum 2026-08-03 — ce que le jalon avait créé sans le voir
+
+Trois passes de revue en contexte frais ont fermé les défauts que J9 s'était
+lui-même infligés (#580, #581). Une quatrième, menée depuis deux angles opposés,
+en a trouvé un cinquième et un structurel. Consignés ici parce qu'ils changent
+la façon de maintenir ce worker, pas seulement son code.
+
+### D7 — Les wrappers n'avaient aucun canal vers l'hôte
+
+_État constaté **avant** le correctif décrit plus bas._ Le `scp` de `deploy.yml`
+envoyait une liste **explicite de huit fichiers**. Les deux wrappers que ce jalon
+a créés — `ops/cron/fxmily-worker` et `ops/cron/fxmily-worker-watchdog` — n'en
+faisaient pas partie, et le checkout `~/worker` non plus. Merger un correctif de
+wrapper changeait donc le dépôt et **rien d'autre**, sans qu'aucune porte ne le
+dise.
+
+Depuis, cette liste en compte **dix** (les deux wrappers ont été ajoutés). Elle
+vit sur la ligne `source:` du step `Sync cron + ops scripts` — pas de numéro de
+ligne ici, les précédents pointaient déjà vers un commentaire et non vers la
+liste.
+
+Ce n'est pas théorique : #580 et #581 ont tous deux modifié le watchdog, et
+l'hôte a continué de faire tourner la version de #579.
+
+C'est la **troisième occurrence** de la même classe de panne dans ce dépôt
+(tour 14 : `docker-compose.prod.yml`, volume uploads perdu ; 2026-07-29 :
+`ops/caddy/Caddyfile`, d'où `sync-caddy-prod.yml`).
+
+**Correction — le canal automatique existait déjà.** La première rédaction de ce
+D7 concluait à un manque de canal et construisait un workflow ops. Une revue
+finale en contexte frais a montré que la conclusion était fausse d'un cran :
+`deploy.yml` copie les scripts ops vers `/home/fxmily/cron-sync` **puis lance
+`sudo /usr/local/bin/fxmily-sync-cron`** — précisément l'unique commande que
+l'utilisateur `fxmily` a le droit d'exécuter en root — et ce validateur porte
+une table générique `MANAGED_SCRIPTS`. Le défaut n'était pas l'absence de canal :
+c'était que J9 avait livré ses deux wrappers **dans aucune des deux listes**.
+Deux noms de fichier (`deploy.yml:169`) et deux lignes (`fxmily-sync-cron:56`)
+les font converger **automatiquement à chaque déploiement sain**, sans geste.
+
+Un point à connaître : `fxmily-sync-cron` est **root-pinned et ne s'installe
+jamais lui-même**. La table mise à jour ne prend donc effet qu'après une
+installation root ponctuelle du nouveau validateur depuis le répertoire de
+staging. Tant qu'elle n'a pas eu lieu, les déploiements continuent de converger
+les cinq scripts d'avant et ne disent rien des deux wrappers.
+
+Reste `.github/workflows/worker-host-sync.yml`, frère de `sync-caddy-prod.yml`,
+qui garde une utilité distincte du déploiement : il **mesure** l'hôte depuis CI.
+`inspect` compare chaque wrapper installé **octet à octet** avec le checkout —
+c'est exactement ce qui aurait attrapé la dérive #580/#581 le jour même ;
+`converge` remet `~/worker` sur `origin/main` (que **rien** ne pousse : aucun
+déploiement ne touche ce checkout, alors que c'est lui que les wrappers
+exécutent) puis installe si l'hôte lui en donne le droit ; `verify` lance le
+balayage 7 pipelines.
+
+Il n'est **délibérément pas planifié** : `Cron Watch` est rouge en permanence sur
+la sonde de l'apex depuis des jours et ne peut donc plus annoncer une panne
+_nouvelle_. Un second veilleur rouge par défaut n'achèterait rien.
+
+### D8 — Sept familles de labels critiques sur huit n'avaient aucune remédiation
+
+`SERVER_CRITICAL_LABELS` escalade alors huit familles en rouge. `LABEL_HOST_ACTIONS`
+comptait **trois** clés, en égalité stricte — mais une seule de ces trois
+(`claude_auth:logged_out`) appartenait aux huit familles critiques ; les deux
+autres (`claude_auth:observation_pending`, `claude_quota:capped`) n'y sont pas.
+D'où **sept** familles sans remédiation, et non huit moins trois : la
+soustraction naïve donne cinq et c'est l'erreur que ce paragraphe induisait.
+`task_missing:onboarding`
+rougissait bien la ligne (#580 avait appris les préfixes à `isCriticalLabel`)
+puis tombait dans `if (!remediation) continue` : la carte « Actions hôte »
+affichait alors _« le watchdog du worker ne tourne plus, réinstalle »_ — le
+diagnostic exactement inverse, énoncé avec assurance, sur un hôte dont le
+watchdog était vivant et disait vrai.
+
+Corrigé par une résolution exacte-puis-famille qui reprend la règle ancrée sur
+`:` de `isCriticalLabel` — c'est le séparateur qui empêche
+`batch_failed_observation:*`, émis à **chaque** tick d'une fenêtre d'observation
+saine, d'être capté par la famille bloquante `batch_failed`.
+
+### D9 — Les sept pipelines vivaient dans six listes qui ne se parlaient pas
+
+Le nom des sept pipelines est codé en dur dans six fichiers, en trois langages
+(planification, deux listes blanches, watchdog, porte de bascule, installeur).
+Rien ne les comparait ; `check-cron-crontab-sync.mjs` fait ce travail pour les
+routes `/api/cron/*` de l'app et ne contient pas le mot « worker ».
+
+Les deux pannes sont asymétriques et toutes deux silencieuses : **planifié mais
+non surveillé** (le pipeline tourne, et le jour où il meurt rien ne le dit — la
+cécité même que ce jalon existe pour supprimer) et **surveillé mais non
+planifié** (`task_missing:<nom>` à chaque tick, pour toujours, donc un tableau
+rouge en permanence que plus personne ne lit).
+
+`scripts/check-worker-pipeline-sync.mjs` tient les six listes à l'égalité stricte
+et vérifie que chaque pipeline a une entrée sur le tableau. Ajouter un huitième
+pipeline demande six éditions correctes ; c'est désormais une porte, plus une
+discipline.
+
+La vérification du tableau est volontairement la plus faible qui ne peut pas
+donner de faux positif — la chaîne d'action doit **apparaître** dans le fichier —
+mais elle apparaît désormais **dans du code** : les commentaires sont retirés
+avant la recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'` suffirait
+à faire verdir la porte sur un tableau qui n'a pas cette entrée. Les blocs
+`/* … */` sont suivis par un drapeau d'état et non par la forme des lignes : une
+première version ne retirait que les lignes commençant par `//`, `*` ou `/*`, ce
+qui laissait le **corps** d'un bloc entièrement cherchable — démontré, pas
+supposé, par un commentaire de deux lignes qui faisait passer la porte sur un
+tableau vide. Vérifié dans l'autre sens aussi : sur les 1 860 lignes de
+`health.ts`, le retrait n'enlève **aucune** ligne de code.
+
+### D10 — « Aucun secret dans le dépôt » était vrai, et ne se vérifiait qu'à la main
+
+Le cinquième critère « Done quand » de J9 a été prouvé à la main : `.gitignore:32`
+ignore `ops/worker/worker.env`, aucun `worker.env` n'est suivi, aucun jeton
+littéral, seules des IP de documentation RFC 5737. Une vérification manuelle
+prouve l'état du jour où elle est faite et rien après : le dépôt est **public**,
+et il suffit du prochain contributeur qui colle un vrai jeton dans
+`worker.env.example` « pour montrer la forme ».
+
+Le critère a donc désormais une porte
+(`apps/web/src/lib/system/worker-secrets-hygiene.test.ts`) : la ligne
+d'ignorance existe, aucune clé de type jeton n'a de valeur dans l'exemple, et
+aucun fichier de la surface worker n'assigne de littéral long à une clé de
+secret — sous trois formes de collage (`CLÉ=valeur`, `clé: valeur` YAML, et
+l'en-tête HTTP d'un `curl -H`), casse indifférente. Le balayage énumère les
+fichiers **sur le disque** plutôt qu'en dur, pour qu'un script ajouté demain dans
+`ops/worker/` soit couvert le jour où il arrive — et un test refuse qu'une liste
+vide passe pour une preuve, la faute même que l'installeur de ce jalon avait dû
+corriger.
+
+**Ce qu'elle ne prouve pas, et pourquoi c'est écrit ici.** Sa première version
+s'appelait « le dépôt ne livre aucun secret worker ». Elle ne prouvait pas ça, et
+une revue a montré en une minute par où passer (jeton dans un en-tête `curl`,
+clé en minuscules, `AWS_ACCESS_KEY_ID`, hash commençant par `$`). Trois de ces
+angles sont maintenant couverts, les autres non, et le libellé de la porte
+n'énonce plus que ce qu'elle mesure : **aucun littéral long sous une clé de type
+secret, sur une liste de fichiers nommée**. Un scanner de secrets à l'échelle du
+dépôt est un autre outil, avec un autre budget de faux positifs — sa place est au
+pre-commit, pas ici. Sur un dépôt public, une porte dont le nom promet plus que
+sa preuve finit par servir d'argument pour ne pas regarder.
+
+Deux réglages viennent de ce que la porte a trouvé **sur elle-même** au premier
+lancement : `PING_URL` n'est pas ancré en fin de clé (les sept vraies clés sont
+`HEALTHCHECK_PING_URL_WORKER_*`, le marqueur est au milieu — ancré, il ne matchait
+aucune des sept clés pour lesquelles il avait été ajouté), et les valeurs de
+remplacement sont reconnues par **préfixe** (`CRON_SECRET=changeme_openssl_rand_hex_24_BYTES_REQUIRED`
+fait 43 caractères et se lisait comme un vrai secret ; une porte qui crie au loup
+sur le placeholder documenté est une porte qu'on coupe dans la semaine).
+
+### Ce que la revue a REFUTÉ
+
+Un relecteur a remonté en BLOQUANT que rien ne crée `/var/log/fxmily` avec les
+droits `fxmily`, ce qui ferait échouer silencieusement toute redirection de
+sortie de batch. Mesuré : `ops/scripts/setup-host.sh:91-92` fait exactement ça.
+Le grep qui fondait le finding portait sur six fichiers dont `setup-host.sh` était
+absent — un négatif **scopé** présenté comme global. Aucune modification.

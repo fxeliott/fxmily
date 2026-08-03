@@ -290,7 +290,7 @@ finale en contexte frais a montré que la conclusion était fausse d'un cran :
 l'utilisateur `fxmily` a le droit d'exécuter en root — et ce validateur porte
 une table générique `MANAGED_SCRIPTS`. Le défaut n'était pas l'absence de canal :
 c'était que J9 avait livré ses deux wrappers **dans aucune des deux listes**.
-Deux noms de fichier (`deploy.yml:169`) et deux lignes (`fxmily-sync-cron:56`)
+Deux noms de fichier (la liste `source:` du scp dans `deploy.yml`) et deux lignes (`fxmily-sync-cron:56`)
 les font converger **automatiquement à chaque déploiement sain**, sans geste.
 
 Un point à connaître : `fxmily-sync-cron` est **root-pinned et ne s'installe

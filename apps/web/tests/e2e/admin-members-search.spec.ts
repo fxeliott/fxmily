@@ -66,8 +66,8 @@ test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
-    const alphaRow = `main a[href$="/admin/members/${alpha.id}"]`;
-    const bravoRow = `main a[href$="/admin/members/${bravo.id}"]`;
+    const alphaRow = `main a[href$="/admin/members/${alpha.id}"]:visible`;
+    const bravoRow = `main a[href$="/admin/members/${bravo.id}"]:visible`;
 
     // Unfiltered: both seeded members are reachable.
     await page.goto('/admin/members');

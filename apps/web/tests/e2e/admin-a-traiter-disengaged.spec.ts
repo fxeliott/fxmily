@@ -52,7 +52,7 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
  * sections that may also deep-link members can never pollute the result.
  */
 async function disengagedMemberIdsInOrder(page: Page): Promise<string[]> {
-  return page.$$eval(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]`, (anchors) =>
+  return page.$$eval(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`, (anchors) =>
     anchors
       .map((a) => a.getAttribute('href') ?? '')
       .map((href) => href.split('/admin/members/')[1] ?? '')
@@ -117,12 +117,26 @@ test.describe('J6 scope 2 — /admin/a-traiter : membres en décrochage (preuve 
     await page.goto('/admin/a-traiter');
 
     // pass/fail #2: both disengaged members surface with a deep link to their fiche.
-    await expect(page.locator(`main a[href$="/admin/members/${neverSeen.id}"]`)).toBeVisible();
-    await expect(page.locator(`main a[href$="/admin/members/${longAbsent.id}"]`)).toBeVisible();
+    // `:visible` scopes to the live node only: during RSC streaming the row can
+    // momentarily exist twice (the hidden Suspense-stream buffer copy + the placed
+    // node), which trips strict mode. Measured here: `/admin/*` has a `loading.tsx`,
+    // so the page streams, and the buffered copy carries its OWN `<main>` — two
+    // `<main>` coexist mid-stream and the staged anchor sits under a `div[hidden]`.
+    // The app mounts each row exactly once; the filter makes the assertion robust
+    // to the streaming window, not lenient about a dup. Scoping to the section
+    // instead does NOT help — the buffered copy carries the same aria-label.
+    await expect(
+      page.locator(`main a[href$="/admin/members/${neverSeen.id}"]:visible`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`main a[href$="/admin/members/${longAbsent.id}"]:visible`),
+    ).toBeVisible();
 
     // The rows belong to the disengaged section (unique aria-label suffix), not to
     // another triage section that happens to link a member.
-    await expect(page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]`)).toHaveCount(2);
+    await expect(
+      page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`),
+    ).toHaveCount(2);
 
     // NULLS FIRST: the never-seen member (null lastSeenAt) renders BEFORE the
     // long-absent one (non-null lastSeenAt) in DOM order.
@@ -190,7 +204,7 @@ test.describe('J6 scope 2 — curseur nullable au bord NULL (26 membres, paginat
     // --- Page 1: full page of 25 disengaged rows. ---
     await page.goto('/admin/a-traiter');
     await expect(
-      page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]`).first(),
+      page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`).first(),
     ).toBeVisible();
 
     const page1All = await disengagedMemberIdsInOrder(page);
@@ -199,13 +213,13 @@ test.describe('J6 scope 2 — curseur nullable au bord NULL (26 membres, paginat
 
     // The disengaged "Voir plus" link carries the real cursor (?dm=<id>). Only the
     // disengaged section emits `dm=`, so this uniquely targets its next-page link.
-    const moreHref = await page.locator('main a[href*="dm="]').first().getAttribute('href');
+    const moreHref = await page.locator('main a[href*="dm="]:visible').first().getAttribute('href');
     expect(moreHref, 'disengaged section must offer a Voir plus cursor link').toBeTruthy();
 
     // --- Page 2: follow the real cursor URL across the null boundary. ---
     await page.goto(moreHref as string);
     await expect(
-      page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]`).first(),
+      page.locator(`main a[aria-label$="${DISENGAGED_LABEL_SUFFIX}"]:visible`).first(),
     ).toBeVisible();
 
     const page2All = await disengagedMemberIdsInOrder(page);

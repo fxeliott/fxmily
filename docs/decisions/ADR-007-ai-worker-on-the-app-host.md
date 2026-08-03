@@ -239,11 +239,33 @@ l'hôte a continué de faire tourner la version de #579.
 
 C'est la **troisième occurrence** de la même classe de panne dans ce dépôt
 (tour 14 : `docker-compose.prod.yml`, volume uploads perdu ; 2026-07-29 :
-`ops/caddy/Caddyfile`, d'où `sync-caddy-prod.yml`). D'où
-`.github/workflows/worker-host-sync.yml`, son frère : `inspect` compare chaque
-wrapper installé **octet à octet** avec le checkout, `converge` remet le checkout
-sur `origin/main` puis installe si l'hôte lui en donne le droit, `verify` lance
-le balayage 7 pipelines.
+`ops/caddy/Caddyfile`, d'où `sync-caddy-prod.yml`).
+
+**Correction — le canal automatique existait déjà.** La première rédaction de ce
+D7 concluait à un manque de canal et construisait un workflow ops. Une revue
+finale en contexte frais a montré que la conclusion était fausse d'un cran :
+`deploy.yml` copie les scripts ops vers `/home/fxmily/cron-sync` **puis lance
+`sudo /usr/local/bin/fxmily-sync-cron`** — précisément l'unique commande que
+l'utilisateur `fxmily` a le droit d'exécuter en root — et ce validateur porte
+une table générique `MANAGED_SCRIPTS`. Le défaut n'était pas l'absence de canal :
+c'était que J9 avait livré ses deux wrappers **dans aucune des deux listes**.
+Deux noms de fichier (`deploy.yml:169`) et deux lignes (`fxmily-sync-cron:56`)
+les font converger **automatiquement à chaque déploiement sain**, sans geste.
+
+Un point à connaître : `fxmily-sync-cron` est **root-pinned et ne s'installe
+jamais lui-même**. La table mise à jour ne prend donc effet qu'après une
+installation root ponctuelle du nouveau validateur depuis le répertoire de
+staging. Tant qu'elle n'a pas eu lieu, les déploiements continuent de converger
+les cinq scripts d'avant et ne disent rien des deux wrappers.
+
+Reste `.github/workflows/worker-host-sync.yml`, frère de `sync-caddy-prod.yml`,
+qui garde une utilité distincte du déploiement : il **mesure** l'hôte depuis CI.
+`inspect` compare chaque wrapper installé **octet à octet** avec le checkout —
+c'est exactement ce qui aurait attrapé la dérive #580/#581 le jour même ;
+`converge` remet `~/worker` sur `origin/main` (que **rien** ne pousse : aucun
+déploiement ne touche ce checkout, alors que c'est lui que les wrappers
+exécutent) puis installe si l'hôte lui en donne le droit ; `verify` lance le
+balayage 7 pipelines.
 
 Il n'est **délibérément pas planifié** : `Cron Watch` est rouge en permanence sur
 la sonde de l'apex depuis des jours et ne peut donc plus annoncer une panne
@@ -281,6 +303,30 @@ rouge en permanence que plus personne ne lit).
 et vérifie que chaque pipeline a une entrée sur le tableau. Ajouter un huitième
 pipeline demande six éditions correctes ; c'est désormais une porte, plus une
 discipline.
+
+La vérification du tableau est volontairement la plus faible qui ne peut pas
+donner de faux positif — la chaîne d'action doit **apparaître** dans le fichier —
+mais elle apparaît désormais **dans du code** : les lignes de commentaire sont
+retirées avant la recherche, sans quoi un `// TODO: câbler 'seance.batch.pulled'`
+suffirait à faire verdir la porte sur un tableau qui n'a pas cette entrée.
+
+### D10 — « Aucun secret dans le dépôt » était vrai, et ne se vérifiait qu'à la main
+
+Le cinquième critère « Done quand » de J9 a été prouvé à la main : `.gitignore:32`
+ignore `ops/worker/worker.env`, aucun `worker.env` n'est suivi, aucun jeton
+littéral, seules des IP de documentation RFC 5737. Une vérification manuelle
+prouve l'état du jour où elle est faite et rien après : le dépôt est **public**,
+et il suffit du prochain contributeur qui colle un vrai jeton dans
+`worker.env.example` « pour montrer la forme ».
+
+Le critère a donc désormais sa porte
+(`apps/web/src/lib/system/worker-secrets-hygiene.test.ts`) : la ligne
+d'ignorance existe, aucune clé de type jeton n'a de valeur dans l'exemple, et
+aucun fichier de la surface worker n'assigne de littéral long à une clé de
+secret. Le balayage énumère les fichiers **sur le disque** plutôt qu'en dur, pour
+qu'un script ajouté demain dans `ops/worker/` soit couvert le jour où il arrive —
+et un quatrième test refuse qu'une liste vide passe pour une preuve, la faute
+même que l'installeur de ce jalon avait dû corriger.
 
 ### Ce que la revue a REFUTÉ
 

@@ -301,7 +301,13 @@ jobs:
               warn "and print the single root command to run. Expected: the sudoers grant is"
               warn "limited to fxmily-sync-cron with no arguments."
             fi
-            sudo -n -l 2>/dev/null | redact | sed 's/^/  /' || true
+            # NOT `sudo -n -l`. Its output opens with "Matching Defaults entries
+            # for fxmily on <hostname>:" — it prints the machine's name, in a log
+            # that is PUBLIC because this repository is. GitHub only masks an
+            # EXACT match of a secret's value, and `secrets.HETZNER_HOST` holds
+            # the address, not the short hostname, so nothing would redact it.
+            # The boolean above answers the only question this section asks, and
+            # the grant itself is already documented at deploy.yml:361-367.
             echo "::endgroup::"
 
             echo "::group::H · Timeline (last 25 ticks, redacted)"

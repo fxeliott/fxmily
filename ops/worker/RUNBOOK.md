@@ -350,34 +350,56 @@ previous state. The uninstall deliberately **keeps** the checkout, `worker.env`,
 
 ## Routine maintenance
 
-| When                    | What                                                                                                                                                                                                              |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                                                                                               |
-| after merging to `main` | **Actions → “Worker host sync” → `converge`** (below). Manual equivalent: `sudo -u fxmily git -C ~/worker fetch origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD`, then re-run the installer |
-| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                                                                                      |
-| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                                                                                         |
+| When                    | What                                                                                                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| after a token rotation  | `sudo bash ~/worker/ops/worker/install-worker-vps.sh --refresh-env`                                                                                                                                                                                                                               |
+| after merging to `main` | wrappers converge on the deploy itself. The **checkout** (`~/worker`) does not: **Actions → “Worker host sync” → `converge`** (below). Manual equivalent: `sudo -u fxmily git -C ~/worker fetch origin main && sudo -u fxmily git -C ~/worker reset --hard FETCH_HEAD`, then re-run the installer |
+| Claude CLI update       | `sudo -u fxmily -H npm install -g @anthropic-ai/claude-code`                                                                                                                                                                                                                                      |
+| logs                    | rotated weekly, 8 kept (`/etc/logrotate.d/fxmily-worker`) — nothing to do                                                                                                                                                                                                                         |
 
-### ⚠️ Merging to `main` does NOT reach this host
+### What a merge to `main` reaches, and what it does not
 
-`deploy.yml` rolls the app image and scp's **eight** files to the host
-(`deploy.yml:169`: `crontab.fxmily`, `fxmily-cron`, the three backups, the
-restore drill, `fxmily-sync-cron`, `fxmily-autoheal`). The worker's own pair —
-`ops/cron/fxmily-worker` and `ops/cron/fxmily-worker-watchdog` — is **not** in
-that list, and neither is this checkout. So a merged fix to a wrapper is live in
-the repo, absent from the machine, and nothing said so.
+Two separate things live on this host, and only one of them travels with a
+deploy:
 
-That is not hypothetical: PRs #580 and #581 both changed
-`fxmily-worker-watchdog`, and the host kept running the #579 version.
+| Thing                                                        | Reached by a merge to `main`?                                                |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| the two wrappers (`fxmily-worker`, `fxmily-worker-watchdog`) | **yes** — `deploy.yml` stages them, `fxmily-sync-cron` installs them (below) |
+| `~/worker` (the checkout the batch scripts run FROM)         | **no** — nothing pushes it; `converge`, or the manual `git reset`, moves it  |
 
-The channel that closes it is the ops workflow
-[`.github/workflows/worker-host-sync.yml`](../../.github/workflows/worker-host-sync.yml),
-the sibling of `sync-caddy-prod.yml`:
+**The wrappers.** `deploy.yml` scp's the ops scripts to `/home/fxmily/cron-sync`
+and then runs the one command `fxmily` may run as root
+(`sudo /usr/local/bin/fxmily-sync-cron`). That validator carries a
+`MANAGED_SCRIPTS` table and installs every entry it finds staged. J9 shipped its
+two wrappers in **neither** list, so a merged wrapper fix changed the repository
+and nothing else — PRs #580 and #581 both patched
+`fxmily-worker-watchdog` while the machine kept running the #579 copy. Two
+filenames in `deploy.yml:169` and two rows in `fxmily-sync-cron:56` close that,
+automatically, on every healthy deploy.
+
+> **One-off, root, once:** `fxmily-sync-cron` is **root-pinned — it never
+> installs itself**. The updated table only takes effect after a root operator
+> installs the new validator once:
+> `install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron`.
+> Until that is done, deploys keep converging the five older scripts and say
+> nothing about the two wrappers.
+
+**The checkout.** `~/worker` is what `/usr/local/bin/fxmily-worker` actually
+executes. No deploy touches it. That is what the ops workflow
+[`.github/workflows/worker-host-sync.yml`](../../.github/workflows/worker-host-sync.yml)
+is for — the sibling of `sync-caddy-prod.yml`, and the only thing that can
+_measure_ this host from CI:
 
 | Mode       | Does                                                                                                  |
 | ---------- | ----------------------------------------------------------------------------------------------------- |
 | `inspect`  | measures the host and **compares each installed wrapper byte-for-byte with the checkout**. Read-only. |
 | `converge` | resets the checkout to `origin/main`, then installs the wrappers if it has the root reach to do so.   |
 | `verify`   | runs `verify-worker-vps.sh` — the 7-pipeline dry-run. Never persists.                                 |
+
+`inspect` stays useful after the deploy path is wired: it is the only report
+that says whether the machine matches the repo, and the wrapper comparison it
+prints is exactly what would have caught the #580/#581 drift on the day it
+happened.
 
 Two things it deliberately does not do, each for a reason this repo already paid for:
 

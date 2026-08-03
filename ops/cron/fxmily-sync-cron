@@ -59,6 +59,18 @@ MANAGED_SCRIPTS=(
   "fxmily-uploads-backup /usr/local/bin/fxmily-uploads-backup 0755"
   "fxmily-restore-drill /usr/local/bin/fxmily-restore-drill 0755"
   "fxmily-autoheal /usr/local/bin/fxmily-autoheal 0755"
+  # J9 — the two AI-worker wrappers. Added for exactly the reason this table
+  # exists: they were shipped by J9 with NO path to the host at all, so #580 and
+  # #581 both patched the watchdog while the machine kept running the #579 copy.
+  # Same failure class as the tour-14 one described above, one layer down.
+  #
+  # They are referenced by /etc/cron.d/fxmily-worker, a SEPARATE file that the
+  # crontab gate below never reads — so a missing wrapper will not fail a deploy
+  # the way a missing app binary does. That asymmetry is deliberate (a worker
+  # rollback must never be able to fail an app deploy), and it is why the
+  # `worker-host-sync.yml` inspector exists alongside this line.
+  "fxmily-worker /usr/local/bin/fxmily-worker 0755"
+  "fxmily-worker-watchdog /usr/local/bin/fxmily-worker-watchdog 0755"
 )
 
 log() { echo "[fxmily-sync-cron] $*"; }

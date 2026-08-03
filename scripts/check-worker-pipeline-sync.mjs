@@ -50,7 +50,9 @@
 //     arrays out of it would be brittle, and a drift guard that cries wolf is
 //     worth less than none. So the board is checked with the weakest claim that
 //     cannot false-positive: every pipeline's action string must APPEAR in the
-//     file. That catches "a pipeline the server runs has no board entry at all"
+//     file, in CODE — comment-only lines are stripped first, otherwise a comment
+//     naming a pipeline would satisfy the guard while the board has no such
+//     entry. That catches "a pipeline the server runs has no board entry at all"
 //     and does not pretend to catch which profile it landed in.
 //
 // READ-ONLY. It never SSHes, never installs, never touches the host. It reads
@@ -202,6 +204,27 @@ export function parseInstallerScripts(body) {
 }
 
 /**
+ * Drop comment-only lines from a TypeScript source before searching it.
+ *
+ * Without this, the board check below is satisfied by a COMMENT that happens to
+ * name a pipeline's action — the one channel by which this guard can go green on
+ * a board that has no such entry. A comment is not a remediation: it renders
+ * nothing on `/admin/system`. Only whole-line comments are dropped, so a real
+ * entry followed by a trailing `// note` still counts.
+ * @param {string} body
+ * @returns {string}
+ */
+export function stripCommentLines(body) {
+  return body
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+    })
+    .join('\n');
+}
+
+/**
  * Pure comparison core. No I/O.
  * @param {{
  *   crontab: string[], wrapper: string[], runBatch: string[],
@@ -248,11 +271,13 @@ export function diffWorkerPipelines({
     if (missing.length > 0 || extra.length > 0) mismatches.push({ source, missing, extra });
   }
 
-  // Weakest claim that cannot false-positive: the action string must appear.
+  // Weakest claim that cannot false-positive: the action string must appear in
+  // CODE. Comment lines are stripped first — see stripCommentLines.
+  const boardCode = boardBody ? stripCommentLines(boardBody) : '';
   const missingFromBoard = boardBody
     ? reference.filter((p) => {
         const action = ACTION_FOR[p];
-        return !action || !boardBody.includes(`'${action}'`);
+        return !action || !boardCode.includes(`'${action}'`);
       })
     : [];
 

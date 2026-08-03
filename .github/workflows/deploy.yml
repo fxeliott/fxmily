@@ -166,7 +166,14 @@ jobs:
           # fxmily-sync-cron is staged for CONVENIENCE only (a root operator
           # can `install` it from the staging dir, ops/cron/README.md §update):
           # the validator never installs itself — root-pinned by design.
-          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/scripts/fxmily-autoheal'
+          # J9 follow-up — `ops/cron/fxmily-worker` + `fxmily-worker-watchdog`
+          # join the list. They were shipped by J9 with no path to the host at
+          # all: merging a wrapper fix changed the repo and nothing else, and
+          # #580 and #581 both patched the watchdog while the machine kept
+          # running the #579 copy. Staging them here + the two matching
+          # `MANAGED_SCRIPTS` rows makes every healthy deploy converge them,
+          # through the one sudo grant this user has (step 5 below).
+          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/cron/fxmily-worker,ops/cron/fxmily-worker-watchdog,ops/scripts/fxmily-autoheal'
           target: /home/fxmily/cron-sync
           strip_components: 2
           overwrite: true

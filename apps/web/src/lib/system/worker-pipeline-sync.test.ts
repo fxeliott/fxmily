@@ -201,6 +201,33 @@ describe('diffWorkerPipelines — one mutation at a time, each must go red', () 
     expect(r.ok).toBe(false);
     expect(r.emptySources).toContain('ops/worker/run-batch.sh (allowlist)');
   });
+
+  it('a board where the missing pipeline is named only in a COMMENT', () => {
+    // The one channel by which this guard could go green on a board that has no
+    // such entry: `boardBody.includes()` is a text search, and a comment is
+    // text. A comment renders nothing on /admin/system, so it must not count.
+    const input = healthyInput();
+    input.boardBody = [
+      ...CANONICAL_ORDER.filter((p) => p !== 'seances').map((p) => `action: '${actionFor[p]}',`),
+      `  // TODO: wire '${actionFor.seances}' here once the board is refactored`,
+      `   * see also '${actionFor.seances}' in the worker crontab`,
+    ].join('\n');
+
+    const r = diffWorkerPipelines(input);
+    expect(r.ok).toBe(false);
+    expect(r.missingFromBoard).toEqual(['seances']);
+  });
+
+  it('still counts an entry followed by a trailing comment', () => {
+    // Only WHOLE-line comments are dropped. Stripping any line containing `//`
+    // would silently blind the scan to real entries that carry a note.
+    const input = healthyInput();
+    input.boardBody = CANONICAL_ORDER.map(
+      (p) => `action: '${actionFor[p]}', // heartbeat emitted by the worker`,
+    ).join('\n');
+
+    expect(diffWorkerPipelines(input).ok).toBe(true);
+  });
 });
 
 describe('the LIVE repository', () => {

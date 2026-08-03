@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  PC_WATCHDOG_VERSION,
+  SERVER_WATCHDOG_VERSION_LIVE,
+  SERVER_WATCHDOG_VERSION_OBSERVING,
+} from './watchdog-versions.fixture';
+
 const auditGroupByMock = vi.fn<(...args: unknown[]) => unknown>();
 const auditFindManyMock = vi.fn<(...args: unknown[]) => unknown>();
 const userCountMock = vi.fn<(...args: unknown[]) => unknown>();
@@ -2279,37 +2285,44 @@ describe('buildHostActionsReport', () => {
    * to `pwsh`.
    */
   it('resolves a label command from the emitting watchdog, not from WORKER_HOST', () => {
-    const serverReported = buildHostActionsReport(
-      cronReport([]),
-      workerReport([
-        entry({
-          action: 'worker.watchdog.heartbeat',
-          status: 'red',
-          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
-          ageMs: 20 * MIN,
-          errorLabels: ['cron_file_crlf:60'],
-          watchdogVersion: 'v4-obs',
-        }),
-      ]),
-    ).items[0]!;
-    expect(serverReported.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
-    expect(serverReported.reference).toBe('ops/worker/RUNBOOK.md');
+    const commandFor = (watchdogVersion: string) =>
+      buildHostActionsReport(
+        cronReport([]),
+        workerReport([
+          entry({
+            action: 'worker.watchdog.heartbeat',
+            status: 'red',
+            lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+            ageMs: 20 * MIN,
+            errorLabels: ['cron_file_crlf:60'],
+            watchdogVersion,
+          }),
+        ]),
+      ).items[0]!;
 
-    const pcReported = buildHostActionsReport(
-      cronReport([]),
-      workerReport([
-        entry({
-          action: 'worker.watchdog.heartbeat',
-          status: 'red',
-          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
-          ageMs: 20 * MIN,
-          errorLabels: ['cron_file_crlf:60'],
-          watchdogVersion: 'v4',
-        }),
-      ]),
-    ).items[0]!;
-    expect(pcReported.command).toBe('pwsh -File ops/worker/install-worker.ps1');
-    expect(pcReported.reference).toBe('ops/worker/README.md');
+    // Server, observation window on: `j9-1.0` + `-srv` + `-obs`.
+    const obs = commandFor(SERVER_WATCHDOG_VERSION_OBSERVING);
+    expect(obs.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
+    expect(obs.reference).toBe('ops/worker/RUNBOOK.md');
+
+    // Server, observation window OFF. This is the case an `-obs`-only
+    // discriminator gets WRONG: the day DRY_RUN flips to 0, `-obs` disappears
+    // while `WORKER_HOST` is still `pc` for one more step of the switchover, so
+    // the card would go back to printing a PowerShell command for a Linux fault
+    // — during the only window where a real generation failure can happen.
+    const live = commandFor(SERVER_WATCHDOG_VERSION_LIVE);
+    expect(live.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
+    expect(live.reference).toBe('ops/worker/RUNBOOK.md');
+
+    // The Windows watchdog. Its version string shares no marker with the server's.
+    const pc = commandFor(PC_WATCHDOG_VERSION);
+    expect(pc.command).toBe('pwsh -File ops/worker/install-worker.ps1');
+    expect(pc.reference).toBe('ops/worker/README.md');
+
+    // A heartbeat that predates versioning: no marker, so it reads as the PC —
+    // which is what `WORKER_HOST` says today, i.e. the safe default.
+    const legacy = commandFor('');
+    expect(legacy.command).toBe('pwsh -File ops/worker/install-worker.ps1');
   });
 
   /**

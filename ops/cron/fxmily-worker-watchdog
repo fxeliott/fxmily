@@ -131,7 +131,12 @@ else
   # Masking the two write bits makes the label mean exactly one thing: crond is
   # ignoring this file, so ZERO pipeline runs. It can then be escalated.
   perms="$(stat -c '%a' "$CRON_FILE" 2>/dev/null || echo '')"
-  if [[ -z "$perms" ]]; then
+  # Validate BEFORE the arithmetic. `$((8#$perms))` on anything that is not a
+  # run of octal digits is a bash FATAL ("value too great for base"), and with
+  # `set -uo pipefail` (no `-e`) that aborts the arithmetic silently and skips
+  # the label entirely — fail-OPEN, where the old `!= 644` test was fail-closed.
+  # A reader that cannot classify must say so, not stay quiet.
+  if [[ ! "$perms" =~ ^[0-7]+$ ]]; then
     add_label 'cron_file_perms:unreadable'
   elif [[ $((8#$perms & 0022)) -ne 0 ]]; then
     add_label "cron_file_perms:$perms"
@@ -245,6 +250,20 @@ fi
 # TWO watchdogs write to it (the PC's and this one), so the version string
 # carries the discriminator: whoever reads the audit metadata can tell which
 # host wrote the row, and whether it was still in observation. ≤20 chars (Zod).
+#
+# TWO MARKERS, because they answer TWO questions and only one of them was asked.
+#   `-srv` = WHICH MACHINE. Unconditional. The board resolves a remediation
+#            command from it, and a command is machine-specific.
+#   `-obs` = WHICH MODE. Conditional. It says nothing about the host.
+#
+# They were conflated, and the gap was real: the switchover flips DRY_RUN to 0
+# on THIS machine (step 1) and `WORKER_HOST` to `server` in the app (step 3), in
+# that order, with a `docker compose restart web` between them. Between those two
+# gestures this watchdog emitted a bare `j9-1.0` while the board still read
+# `WORKER_HOST=pc` — so a Linux fault reported here produced a PowerShell command
+# aimed at the PC. Exactly the defect the `-obs` reader was added to remove,
+# surviving in the one window where the server has just started persisting.
+WATCHDOG_VERSION="${WATCHDOG_VERSION}-srv"
 [[ "$OBSERVATION" == "true" ]] && WATCHDOG_VERSION="${WATCHDOG_VERSION}-obs"
 
 PAYLOAD="$(jq -nc \

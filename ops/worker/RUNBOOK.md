@@ -412,16 +412,21 @@ automatically, on every healthy deploy.
 > boundary, and it is worth paying.
 >
 > How many paths the grant actually covers is a number that has already drifted
-> twice, so read it from the script rather than from this sentence:
+> three times, so read it from the script rather than from this sentence. Note the
+> `sed 's/#.*//'` — without it this command counts paths that appear only inside
+> comments, which is exactly how the previous version of this block reported one
+> path too many:
 >
 > ```bash
-> { sed -n '/^MANAGED_SCRIPTS=(/,/^)/p' ops/cron/fxmily-sync-cron \
+> { sed -n '/^MANAGED_SCRIPTS=(/,/^)/p' ops/cron/fxmily-sync-cron | sed 's/#.*//' \
 >     | grep -oE '(/usr/local/bin|/etc/cron\.d)/[a-z0-9-]+'
 >   grep -E '^DST_(CRONTAB|RUNNER)=' ops/cron/fxmily-sync-cron | sed 's/.*="//;s/"//'
 > } | sort -u
 > ```
 >
-> Ten, on the day this was written.
+> Nine, on the day this was written. `/etc/cron.d/fxmily-worker` is discussed in a
+> comment inside that block but is **not** written by this validator — the worker
+> crontab is installed by `install-worker-vps.sh`, outside the deploy grant.
 
 **The checkout.** `~/worker` is what `/usr/local/bin/fxmily-worker` actually
 executes. No deploy touches it. That is what the ops workflow

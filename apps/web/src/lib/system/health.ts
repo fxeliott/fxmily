@@ -1232,12 +1232,19 @@ const HOST_ACTION_REMEDIATION: Record<
  * printing nothing".
  *
  * The discriminator already exists and was already persisted; nothing read it.
- * `ops/cron/fxmily-worker-watchdog` suffixes its version with `-obs` in
- * observation mode and says why, verbatim: "whoever reads the audit metadata
- * can tell which host wrote the row". `-obs` is emitted by the server and only
- * by the server; once the flip happens the suffix disappears AND `WORKER_HOST`
- * becomes `server`, so the two agree again. That leaves no window where the
- * emitter is unknown.
+ * `ops/cron/fxmily-worker-watchdog` marks the version string it posts, and says
+ * why, verbatim: "whoever reads the audit metadata can tell which host wrote the
+ * row".
+ *
+ * WHICH MARKER, and why the obvious one was WRONG. The first reader here matched
+ * `-obs`, reasoning that only the server runs in observation. True — and
+ * irrelevant, because `-obs` answers "which MODE", not "which MACHINE". The
+ * switchover flips DRY_RUN to 0 on the host (step 1) and `WORKER_HOST` to
+ * `server` in the app (step 3), in that order. Between the two the server posts
+ * a BARE version while the board still reads `pc`: the wrong-machine command
+ * came straight back, in the window where the server has just begun to persist
+ * and its faults finally matter. The emitter now carries `-srv`
+ * unconditionally, and that is what identifies the machine.
  */
 type LabelCommandKind = 'install' | 'login' | 'server-login';
 
@@ -1261,11 +1268,28 @@ function resolveLabelCommand(
   };
 }
 
-/** True when this heartbeat row was written by the SERVER watchdog running in
- *  its observation window — the one state where `WORKER_HOST` disagrees with
- *  the machine that reported the fault. */
+/**
+ * True when this heartbeat row was written by the SERVER watchdog — the states
+ * where `WORKER_HOST` can disagree with the machine that reported the fault.
+ *
+ * Three branches, and each one has to be there:
+ *   `-srv`  the marker the emitter now sets unconditionally. THE answer.
+ *   `-obs`  the observation marker, which the emitter also still sets. Kept
+ *           because a host running the previous script emits `-obs` and nothing
+ *           else while in dry-run.
+ *   `j9-`   the version constant of the server watchdog itself. This is the
+ *           branch that covers the host TODAY: `~/worker` only converges when
+ *           `worker-host-sync converge` runs, so a host can post `j9-1.0` — no
+ *           `-srv`, no `-obs` — for as long as that gesture is pending. The PC
+ *           watchdog posts a bare semver (`1.1.0`, `ops/worker/watchdog.ps1`),
+ *           so the prefix does not collide.
+ *
+ * Removable once every host posts `-srv`, which `worker-host-sync inspect`
+ * can show. Until then, deleting it re-opens the defect on the live machine.
+ */
 function labelEmittedByServer(watchdogVersion: string | null): boolean {
-  return (watchdogVersion ?? '').endsWith('-obs');
+  const v = watchdogVersion ?? '';
+  return v.includes('-srv') || v.endsWith('-obs') || v.startsWith('j9-');
 }
 
 const LABEL_HOST_ACTIONS: Record<
@@ -1479,6 +1503,17 @@ export function buildHostActionsReport(
       // `onboarding`. Kept even on the first label of a family, so the card can
       // say WHICH subjects it covers instead of pointing at a table that cannot
       // answer (see `HostActionItem.details`).
+      const emittedByServer = labelEmittedByServer(entry.watchdogVersion);
+      // A fault the SERVER reports while the PC is still master is not an
+      // incident: the server is in dry-run, it serves nobody, and the PC is
+      // generating normally. Marking it `blocked` printed "À traiter" for a
+      // machine no member depends on yet — and it did so next to a board row
+      // that stays amber, because the age/criticality profile is still the PC
+      // one while `WORKER_HOST=pc`. That mismatch is the same class of lie as
+      // the wrong-machine command: two halves of the board reading two
+      // different notions of "who is live". Both now read the emitter.
+      const severity: HostActionSeverity =
+        emittedByServer && !isWorkerOnServer() ? 'pending' : remediation.severity;
       const subject = label.slice(resolved.key.length + 1).trim();
       const key = `label:${resolved.key}`;
       const existing = labelItems.get(key);
@@ -1496,17 +1531,14 @@ export function buildHostActionsReport(
         detail: remediation.detail,
         // Resolved from the watchdog that REPORTED this label, not from
         // `WORKER_HOST` — the two disagree for the whole observation window.
-        ...resolveLabelCommand(
-          remediation.commandKind,
-          labelEmittedByServer(entry.watchdogVersion),
-        ),
+        ...resolveLabelCommand(remediation.commandKind, emittedByServer),
         // NOT `entry.lastRanAt`. That is the watchdog's last beat — a signal
         // open for three weeks would have rendered "Ouvert depuis il y a 6
         // minutes", rejuvenating on every tick. Nothing in the heartbeat records
         // when a label first appeared, so the honest answer is to say nothing:
         // the row renders no "since" line rather than a fresh-looking lie.
         sinceIso: null,
-        severity: remediation.severity,
+        severity,
         details: subject ? [subject] : [],
       });
     }

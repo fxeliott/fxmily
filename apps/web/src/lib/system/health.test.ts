@@ -2339,6 +2339,12 @@ describe('buildHostActionsReport', () => {
       workerReport([]),
     ).items[0]!;
     expect(hostCron.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
+    // And it stays an INCIDENT. The `pending` downgrade exists for one reason —
+    // the worker is in dry-run and serves nobody while `WORKER_HOST=pc`. The
+    // host's own crons are not in dry-run: a corrupted schedule there is live
+    // production breakage. Provenance must decide the machine WITHOUT deciding
+    // that the fault is hypothetical.
+    expect(hostCron.severity).toBe('blocked');
 
     // A heartbeat that predates versioning: no marker, so it reads as the PC —
     // which is what `WORKER_HOST` says today, i.e. the safe default.

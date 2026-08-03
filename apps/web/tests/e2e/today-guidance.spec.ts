@@ -215,7 +215,13 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/dashboard/);
 
-    const panel = page.locator('[data-slot="today-guidance"]');
+    // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
+    // /dashboard ships a `loading.tsx`, so during streaming React parks the
+    // placed content in a hidden buffer copy and the panel momentarily exists
+    // twice — strict mode then throws before any visibility check runs. The
+    // app mounts it exactly once; this is robustness to the streaming window,
+    // not leniency about a duplicate.
+    const panel = page.locator('[data-slot="today-guidance"]:visible');
     await expect(panel).toBeVisible();
 
     // TODAY-extraction proof: the unique marker block is surfaced in the panel.
@@ -255,7 +261,8 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
     await loginAs(page, request, memberNoCal.email, memberNoCal.password);
 
     await page.goto('/dashboard');
-    const panel = page.locator('[data-slot="today-guidance"]');
+    // `:visible` past the RSC stream buffer — see the note above.
+    const panel = page.locator('[data-slot="today-guidance"]:visible');
     await expect(panel).toBeVisible();
     // No calendar yet → the calm "pas encore organisée" framing (the questionnaire
     // CTA lives in CalendarStatusWidget below, not duplicated in the panel).

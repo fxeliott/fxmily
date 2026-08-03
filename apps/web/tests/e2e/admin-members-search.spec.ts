@@ -66,8 +66,19 @@ test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
+    // `:visible` past the RSC stream buffer, for the assertions that THROW in
+    // strict mode (`toBeVisible`): during streaming the row can momentarily
+    // exist twice — the hidden buffer copy plus the placed node.
     const alphaRow = `main a[href$="/admin/members/${alpha.id}"]:visible`;
     const bravoRow = `main a[href$="/admin/members/${bravo.id}"]:visible`;
+    // …but NOT for the DOM-absence check below. `toHaveCount` is the one
+    // assertion that never trips strict mode, so `:visible` buys nothing there —
+    // and it would silently downgrade "gone from the DOM" to "not visible",
+    // which is precisely the distinction this spec exists to prove (see the
+    // docblock: server-filtered, not just client-hidden). A later regression
+    // that rendered the full cohort and CSS-hid the non-matching rows would then
+    // go green through the one guard meant to catch it.
+    const bravoRowAnywhere = `main a[href$="/admin/members/${bravo.id}"]`;
 
     // Unfiltered: both seeded members are reachable.
     await page.goto('/admin/members');
@@ -78,7 +89,7 @@ test.describe('S7 — Espace Admin : recherche annuaire membres', () => {
     // filter: Bravo's row is GONE from the DOM, not merely hidden).
     await page.goto('/admin/members?q=Alphawolf');
     await expect(page.locator(alphaRow)).toBeVisible();
-    await expect(page.locator(bravoRow)).toHaveCount(0);
+    await expect(page.locator(bravoRowAnywhere)).toHaveCount(0);
     await expect(page.getByText(/Résultats pour/)).toBeVisible();
 
     // Clear restores the full cohort.

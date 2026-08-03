@@ -22,7 +22,14 @@
 #                status.json because it could not always reach the CLI; here we
 #                just ask the CLI — strictly more accurate.)
 #   4. RUNS      each pipeline's `logs/<batch>.status.json` — quota cap
-#                (benign, self-resolving), real failures, stale statuses.
+#                (benign, self-resolving) and real failures.
+#                NOT staleness: this step reads the CONTENT of whatever status
+#                file is there and never looks at its age, so a three-week-old
+#                `ok:true` replays as healthy here. That is deliberate, not an
+#                oversight — "this pipeline stopped running" is exactly what the
+#                age-based heartbeat on `<pipeline>.batch.pulled` measures, from
+#                the server's own audit rows rather than from a file on this box.
+#                Duplicating it here would mean two clocks disagreeing at 2am.
 #   5. LOCK      a global lock older than 6h is a stuck holder.
 #   6. REPORT    POST /api/admin/worker-watchdog/heartbeat (X-Admin-Token).
 #

@@ -130,12 +130,24 @@ for b in "${ORDER[@]}"; do
   # previous, healthy run would replay a success that did not happen now.
   STATUS_FILE="${FXMILY_WORKER_LOG_DIR:-$REPO_ROOT/ops/worker/logs}/${b}.status.json"
   SKIPPED=''
+  CAPPED='false'
   if [[ ! -r "$STATUS_FILE" ]]; then
     SKIPPED='no-status'
   elif [[ -z "$(find "$STATUS_FILE" -newermt "@$((START - 1))" 2>/dev/null)" ]]; then
     SKIPPED='stale-status'
   else
     SKIPPED="$(jq -r '.skipped // ""' "$STATUS_FILE" 2>/dev/null || echo 'unreadable-status')"
+    # A run that hit the Claude usage cap is a SUCCESS as far as cron is
+    # concerned — `run-batch.sh` halts immediately, drops a cooldown stamp and
+    # remaps exit 75 to 0 so the next ticks are benign no-ops. That remap is
+    # correct for cron and wrong for THIS script: it is the switchover gate.
+    #
+    # A capped run writes no `skipped` key and returns 0, so it fell straight
+    # through to the catch-all `PASS/empty` branch and printed "pull OK + JSON
+    # valid, no work pending" — an assertion nothing had verified, about a run
+    # that never reached the model. ADR-007's "7/7" could then be ticked on a
+    # sweep where every generator was capped.
+    CAPPED="$(jq -r '.quotaCapped // false' "$STATUS_FILE" 2>/dev/null || echo false)"
   fi
 
   if grep -q '⛔ HALT' <<<"$SECTION"; then
@@ -150,6 +162,10 @@ for b in "${ORDER[@]}"; do
     # no gate: it certifies a mute host. `no_claude_auth` is the expected value
     # before the login — which is precisely the state this script must refuse.
     printf 'FAIL/skipped   (%ss, batch did not run: %s)\n' "$ELAPSED" "$SKIPPED"
+    FAIL=$((FAIL + 1))
+  elif [[ "$CAPPED" == "true" ]]; then
+    # Not a defect — a quota window. But not a pass either: nothing was proven.
+    printf 'FAIL/quota-capped (%ss, usage cap hit: generation NOT exercised — re-run after the window reopens)\n' "$ELAPSED"
     FAIL=$((FAIL + 1))
   elif [[ -n "${PULL_ONLY[$b]:-}" ]]; then
     printf 'PASS/pull-only (%ss, token + endpoint + envelope OK; generation NOT exercised in dry-run)\n' "$ELAPSED"

@@ -28,6 +28,15 @@ on:
       - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
+      # J9 — the AI worker's own six lists (see the second step below).
+      - 'ops/cron/crontab.fxmily-worker'
+      - 'ops/cron/fxmily-worker'
+      - 'ops/cron/fxmily-worker-watchdog'
+      - 'ops/worker/run-batch.sh'
+      - 'ops/worker/verify-worker-vps.sh'
+      - 'ops/worker/install-worker-vps.sh'
+      - 'apps/web/src/lib/system/health.ts'
+      - 'scripts/check-worker-pipeline-sync.mjs'
   pull_request:
     branches: [main]
     paths:
@@ -36,6 +45,15 @@ on:
       - 'ops/cron/fxmily-cron'
       - 'scripts/check-cron-crontab-sync.mjs'
       - '.github/workflows/cron-sync-check.yml'
+      # J9 — the AI worker's own six lists (see the second step below).
+      - 'ops/cron/crontab.fxmily-worker'
+      - 'ops/cron/fxmily-worker'
+      - 'ops/cron/fxmily-worker-watchdog'
+      - 'ops/worker/run-batch.sh'
+      - 'ops/worker/verify-worker-vps.sh'
+      - 'ops/worker/install-worker-vps.sh'
+      - 'apps/web/src/lib/system/health.ts'
+      - 'scripts/check-worker-pipeline-sync.mjs'
   workflow_dispatch:
 
 # Cancel superseded PR runs ; never cancel a `main` run (mirrors ci.yml).
@@ -72,3 +90,20 @@ jobs:
         # Zero dependencies — the script only uses node:fs / node:path, so we
         # skip `pnpm install` entirely and run it straight off the checkout.
         run: node scripts/check-cron-crontab-sync.mjs
+
+      # J9 — the same class of drift, one layer down. The seven AI pipelines are
+      # hard-coded in SIX independent files (schedule, two allowlists, watchdog,
+      # switchover gate, installer) and nothing compared them. The two failures
+      # are asymmetric and both silent: a pipeline SCHEDULED but absent from the
+      # watchdog runs unwatched, and a pipeline WATCHED but unscheduled makes the
+      # board emit `task_missing:<name>` forever, which is how a board stops
+      # being read.
+      #
+      # The same assertions also run in the Vitest suite
+      # (apps/web/src/lib/system/worker-pipeline-sync.test.ts), which is the gate
+      # that fires on EVERY pull request. This step is the fast, narrow one: it
+      # only triggers when a worker file actually changes, and it prints which
+      # of the six lists disagrees and what that costs — which a Vitest diff
+      # does not.
+      - name: Verify the 7 worker pipelines agree across all six lists
+        run: node scripts/check-worker-pipeline-sync.mjs

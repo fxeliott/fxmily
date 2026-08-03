@@ -1203,7 +1203,108 @@ const LABEL_HOST_ACTIONS: Record<
     // Benign + self-resolving (cooldown then next quota window) → informational.
     severity: 'pending',
   },
+
+  // ── J9 follow-up — the seven families that had NO entry at all ─────────────
+  //
+  // `SERVER_CRITICAL_LABELS` escalates eight families to red. Exactly ONE of
+  // them (`claude_auth:logged_out`) had a remediation above; the other seven
+  // fell through `if (!remediation) continue`, so `supersededActions` was never
+  // populated and `toHostAction` emitted the AGE-based action instead. On a host
+  // whose watchdog is alive and correctly reporting `task_missing:onboarding`,
+  // the board therefore printed "le watchdog du worker ne tourne plus →
+  // réinstalle" — a confident diagnosis of the opposite problem.
+  //
+  // This is the #580 defect class (exact-equality vs `famille:détail`) in the
+  // one place #580 did not touch: `isCriticalLabel` was taught prefixes, this
+  // map was not. The keys below are FAMILIES, resolved by
+  // `resolveLabelHostAction` with the same `:`-anchored rule.
+  task_missing: {
+    label: 'Worker · un pipeline n’est plus planifié',
+    detail:
+      "Au moins un des 7 pipelines IA n'a plus de ligne dans la planification de la machine worker : il ne tourne plus du tout, et son heartbeat finira par vieillir. Le tableau ci-dessus nomme lequel. Réinstaller reconverge le fichier de planification sans toucher aux tâches de l'app.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  batch_failed: {
+    label: 'Worker · un batch tourne mais ne génère rien',
+    detail:
+      "Un pipeline s'est exécuté, a bien parlé à la prod (son heartbeat est donc VERT) puis a échoué à générer. C'est le seul mode de panne que l'âge ne peut pas voir. Regarde le transcript du batch nommé ci-dessus avant de relancer.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  cron_file_missing: {
+    label: 'Worker · la planification a disparu',
+    detail:
+      'Le fichier de planification du worker est absent de la machine : aucun des 7 pipelines ne tourne. Réinstaller le recrée à l’identique.',
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  cron_file_crlf: {
+    label: 'Worker · planification corrompue (fins de ligne)',
+    detail:
+      "Le fichier de planification contient des retours chariot Windows. Le planificateur saute ces lignes SANS rien écrire dans les logs : c'est la panne muette de ~20 h du 2026-05-11. Réinstaller nettoie le fichier et le prouve.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  claude_bin_missing: {
+    label: 'Worker · l’outil Claude est introuvable',
+    detail:
+      "Le binaire `claude` n'est pas accessible à l'utilisateur du worker : aucun batch ne peut générer. Réinstaller le repose dans son espace utilisateur.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  config_missing: {
+    label: 'Worker · configuration absente',
+    detail:
+      "Le fichier de configuration du worker (jetons d'accès) est absent : chaque batch échoue à s'authentifier auprès de la prod. Réinstaller le régénère depuis la configuration de l'app.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  lock_stale: {
+    label: 'Worker · un verrou est resté bloqué',
+    detail:
+      "Le verrou qui garantit un seul batch à la fois est détenu depuis plus de 6 h : plus aucun pipeline ne démarre. Un batch s'est probablement arrêté sans libérer sa place.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
+  token_short: {
+    label: 'Worker · un jeton d’accès est invalide',
+    detail:
+      "Un des jetons du worker est trop court pour être valide : le pipeline concerné se fera refuser par la prod à chaque tick. Réinstaller re-copie les jetons depuis la configuration de l'app.",
+    command: WORKER_INSTALL_COMMAND,
+    reference: WORKER_REFERENCE,
+    severity: 'blocked',
+  },
 };
+
+/**
+ * Resolve a watchdog label to its remediation, exact match first, then FAMILY.
+ *
+ * Same `:`-anchored rule as {@link isCriticalLabel}, and for the same reason:
+ * the separator is what stops `batch_failed_observation:weekly:1` from being
+ * captured by the `batch_failed` family. A naive `label.split(':')[0]` would
+ * NOT protect that — `'batch_failed_observation'` is its own family — but a
+ * naive `startsWith('batch_failed')` WOULD wrongly match it, and would surface
+ * a blocking "un batch ne génère rien" card for every tick of a perfectly
+ * normal observation window.
+ */
+function resolveLabelHostAction(
+  label: string,
+): { key: string; action: (typeof LABEL_HOST_ACTIONS)[string] } | null {
+  const exact = LABEL_HOST_ACTIONS[label];
+  if (exact) return { key: label, action: exact };
+  for (const [family, action] of Object.entries(LABEL_HOST_ACTIONS)) {
+    if (label.startsWith(`${family}:`)) return { key: family, action };
+  }
+  return null;
+}
 
 /**
  * Map a heartbeat entry to a host action WHEN it is host-actionable and in a
@@ -1267,13 +1368,18 @@ export function buildHostActionsReport(
     // account outage that may already be resolved. Mirrors the escalation gate.
     if (!criticalLabelLive(entry.ageMs, entry.periodMs)) continue;
     for (const label of entry.errorLabels ?? []) {
-      const remediation = LABEL_HOST_ACTIONS[label];
-      if (!remediation) continue;
+      const resolved = resolveLabelHostAction(label);
+      if (!resolved) continue;
+      const remediation = resolved.action;
       supersededActions.add(entry.action);
-      if (seenLabels.has(label)) continue;
-      seenLabels.add(label);
+      // Dedup on the RESOLVED key, not the raw label: seven pipelines missing
+      // from the schedule emit seven distinct `task_missing:<name>` labels, and
+      // seven identical cards telling you to run the same command is noise, not
+      // diagnosis. The board's per-pipeline rows already name which ones.
+      if (seenLabels.has(resolved.key)) continue;
+      seenLabels.add(resolved.key);
       labelItems.push({
-        key: `label:${label}`,
+        key: `label:${resolved.key}`,
         label: remediation.label,
         detail: remediation.detail,
         command: remediation.command,

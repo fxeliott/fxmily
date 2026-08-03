@@ -2324,3 +2324,148 @@ describe('buildHostActionsReport', () => {
     expect(statusItem?.severity).toBe('blocked');
   });
 });
+
+/**
+ * J9 follow-up — the seven critical families that had NO remediation entry.
+ *
+ * `SERVER_CRITICAL_LABELS` escalates eight families to red. Only ONE of them
+ * (`claude_auth:logged_out`) had an entry in `LABEL_HOST_ACTIONS`; the other
+ * seven hit `if (!remediation) continue`, so `supersededActions` was never
+ * populated and the board fell back to the AGE-based action — telling the
+ * operator to reinstall a watchdog that was alive and correctly reporting.
+ *
+ * Every `it()` below is a MUTATION: revert the fix and it goes red. That is the
+ * point — this repo has already shipped one guard that stayed green while the
+ * thing it guarded was dead (#580), and one test that passed while the login
+ * command was wrong.
+ */
+describe('buildHostActionsReport — label families (J9 follow-up)', () => {
+  const familyCases: ReadonlyArray<[label: string, expectedKey: string]> = [
+    ['task_missing:onboarding', 'label:task_missing'],
+    ['batch_failed:weekly:1', 'label:batch_failed'],
+    ['cron_file_crlf:3', 'label:cron_file_crlf'],
+    ['config_missing:worker.env', 'label:config_missing'],
+    ['token_short:FXMILY_ADMIN_TOKEN', 'label:token_short'],
+  ];
+
+  it.each(familyCases)(
+    'resolves the `famille:détail` label %s to a real remediation',
+    (label, expectedKey) => {
+      const report = buildHostActionsReport(
+        cronReport([]),
+        workerReport([
+          entry({
+            action: 'worker.watchdog.heartbeat',
+            status: 'red',
+            ageMs: 20 * MIN, // fresh heartbeat: the watchdog is ALIVE
+            errorLabels: [label],
+          }),
+        ]),
+      );
+      const item = report.items.find((i) => i.key === expectedKey);
+      expect(item).toBeDefined();
+      expect(item?.severity).toBe('blocked');
+    },
+  );
+
+  /** The regression itself: the board used to print the OPPOSITE diagnosis. */
+  it('no longer tells the operator to reinstall a watchdog that is alive and reporting', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          ageMs: 20 * MIN,
+          errorLabels: ['task_missing:onboarding'],
+        }),
+      ]),
+    );
+    // The age-based action for this very entry must be SUPERSEDED…
+    expect(report.items.find((i) => i.key === 'worker.watchdog.heartbeat')).toBeUndefined();
+    // …by the one that names the actual fault.
+    expect(report.items.find((i) => i.key === 'label:task_missing')).toBeDefined();
+  });
+
+  /** Bare families (no `:détail`) must still resolve by exact match. */
+  it.each(['cron_file_missing', 'claude_bin_missing', 'lock_stale'])(
+    'resolves the bare family label %s',
+    (label) => {
+      const report = buildHostActionsReport(
+        cronReport([]),
+        workerReport([
+          entry({
+            action: 'worker.watchdog.heartbeat',
+            status: 'red',
+            ageMs: 20 * MIN,
+            errorLabels: [label],
+          }),
+        ]),
+      );
+      expect(report.items.find((i) => i.key === `label:${label}`)).toBeDefined();
+    },
+  );
+
+  /**
+   * THE guard. `batch_failed_observation:*` is emitted on EVERY tick of a
+   * healthy observation window (nobody is signed in yet, by design). A prefix
+   * match without the `:` anchor would capture it as `batch_failed` and paint a
+   * blocking card through the whole planned migration.
+   */
+  it('does NOT capture batch_failed_observation as the blocking batch_failed family', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'amber',
+          ageMs: 20 * MIN,
+          errorLabels: ['batch_failed_observation:weekly:1'],
+        }),
+      ]),
+    );
+    expect(report.items.find((i) => i.key === 'label:batch_failed')).toBeUndefined();
+  });
+
+  /** Exact keys must win over families — observation_pending is informational. */
+  it('keeps claude_auth:observation_pending on its own exact, non-blocking entry', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'amber',
+          ageMs: 20 * MIN,
+          errorLabels: ['claude_auth:observation_pending'],
+        }),
+      ]),
+    );
+    const item = report.items.find((i) => i.key === 'label:claude_auth:observation_pending');
+    expect(item).toBeDefined();
+    expect(item?.severity).not.toBe('blocked');
+  });
+
+  /** Seven missing pipelines = one card, not seven copies of the same command. */
+  it('collapses seven task_missing labels into a single action', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          ageMs: 20 * MIN,
+          errorLabels: [
+            'task_missing:onboarding',
+            'task_missing:verification',
+            'task_missing:seances',
+            'task_missing:calendar',
+            'task_missing:weekly',
+            'task_missing:monthly',
+            'task_missing:profile',
+          ],
+        }),
+      ]),
+    );
+    expect(report.items.filter((i) => i.key === 'label:task_missing')).toHaveLength(1);
+  });
+});

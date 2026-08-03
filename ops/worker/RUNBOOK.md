@@ -394,8 +394,20 @@ automatically, on every healthy deploy.
 >
 > The pin itself is **not** an oversight to be fixed later. This script decides
 > which paths the deploy may write as root; if the deploy could replace it, a
-> bounded grant (eight known paths) would become an unbounded one. The gesture is
-> the price of that boundary, and it is worth paying.
+> bounded grant would become an unbounded one. The gesture is the price of that
+> boundary, and it is worth paying.
+>
+> How many paths the grant actually covers is a number that has already drifted
+> twice, so read it from the script rather than from this sentence:
+>
+> ```bash
+> { sed -n '/^MANAGED_SCRIPTS=(/,/^)/p' ops/cron/fxmily-sync-cron \
+>     | grep -oE '(/usr/local/bin|/etc/cron\.d)/[a-z0-9-]+'
+>   grep -E '^DST_(CRONTAB|RUNNER)=' ops/cron/fxmily-sync-cron | sed 's/.*="//;s/"//'
+> } | sort -u
+> ```
+>
+> Ten, on the day this was written.
 
 **The checkout.** `~/worker` is what `/usr/local/bin/fxmily-worker` actually
 executes. No deploy touches it. That is what the ops workflow

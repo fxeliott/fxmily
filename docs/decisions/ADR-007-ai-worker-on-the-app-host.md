@@ -165,8 +165,26 @@ se resserrent sur la cadence réelle, et un pipeline mort **atteint un humain
 tout seul**, par le même canal qu'un cron mort.
 
 Pourquoi pas Healthchecks.io en premier : créer un compte tiers n'est pas une
-action que je prends seul, et le canal `health → cron-watch → issue GitHub`
-existe, est gratuit, et tourne déjà toutes les heures en production. Les URLs
+action que je prends seul, et un canal gratuit tourne déjà toutes les heures en
+production.
+
+> **Correction 2026-08-03 — ce canal n'est pas celui écrit ici.** Cette phrase
+> disait `health → cron-watch → issue GitHub`. Vérifié : `gh repo view --json
+hasIssuesEnabled` retourne `false`, et un grep de `cron-watch.yml` ne trouve
+> **aucune** création d'issue. Le canal réel est `health → cron-watch → run en
+échec → notification GitHub par e-mail`. Il existe et il est gratuit, mais il
+> est plus fragile que ce que ce paragraphe laissait croire : il ne laisse aucune
+> trace assignable, il se noie dans les autres rouges de l'onglet Actions — c'est
+> exactement ce qui s'est passé le 2026-08-03, l'apex répondant CF 522 toutes les
+> heures pendant que le heartbeat, lui, était vert — et une notification e-mail
+> se désactive d'un clic sans que personne ne s'en aperçoive.
+>
+> Ce que ça change : le refus de Healthchecks.io tient toujours (compte tiers =
+> décision d'Eliot), mais il ne peut plus s'appuyer sur « un pipeline mort
+> atteint un humain tout seul » comme sur un fait acquis. Le « Done quand » #3 du
+> jalon reste **ouvert** tant qu'une alerte n'a pas été observée de bout en bout.
+
+Les URLs
 Healthchecks.io sont donc **câblées et inertes** (une par pipeline, vides par
 défaut) : Eliot les colle quand il veut une alerte qui survit même à une app
 tombée.
@@ -228,11 +246,17 @@ la façon de maintenir ce worker, pas seulement son code.
 
 ### D7 — Les wrappers n'avaient aucun canal vers l'hôte
 
-`deploy.yml:169` envoie une liste **explicite de huit fichiers**. Les deux
-wrappers que ce jalon a créés — `ops/cron/fxmily-worker` et
-`ops/cron/fxmily-worker-watchdog` — n'en font pas partie, et le checkout `~/worker`
-non plus. Merger un correctif de wrapper changeait donc le dépôt et **rien
-d'autre**, sans qu'aucune porte ne le dise.
+_État constaté **avant** le correctif décrit plus bas._ Le `scp` de `deploy.yml`
+envoyait une liste **explicite de huit fichiers**. Les deux wrappers que ce jalon
+a créés — `ops/cron/fxmily-worker` et `ops/cron/fxmily-worker-watchdog` — n'en
+faisaient pas partie, et le checkout `~/worker` non plus. Merger un correctif de
+wrapper changeait donc le dépôt et **rien d'autre**, sans qu'aucune porte ne le
+dise.
+
+Depuis, cette liste en compte **dix** (les deux wrappers ont été ajoutés). Elle
+vit sur la ligne `source:` du step `Sync cron + ops scripts` — pas de numéro de
+ligne ici, les précédents pointaient déjà vers un commentaire et non vers la
+liste.
 
 Ce n'est pas théorique : #580 et #581 ont tous deux modifié le watchdog, et
 l'hôte a continué de faire tourner la version de #579.
@@ -273,8 +297,13 @@ _nouvelle_. Un second veilleur rouge par défaut n'achèterait rien.
 
 ### D8 — Sept familles de labels critiques sur huit n'avaient aucune remédiation
 
-`SERVER_CRITICAL_LABELS` escalade huit familles en rouge ; `LABEL_HOST_ACTIONS`
-n'en couvrait que **trois**, en égalité stricte. `task_missing:onboarding`
+`SERVER_CRITICAL_LABELS` escalade alors huit familles en rouge. `LABEL_HOST_ACTIONS`
+comptait **trois** clés, en égalité stricte — mais une seule de ces trois
+(`claude_auth:logged_out`) appartenait aux huit familles critiques ; les deux
+autres (`claude_auth:observation_pending`, `claude_quota:capped`) n'y sont pas.
+D'où **sept** familles sans remédiation, et non huit moins trois : la
+soustraction naïve donne cinq et c'est l'erreur que ce paragraphe induisait.
+`task_missing:onboarding`
 rougissait bien la ligne (#580 avait appris les préfixes à `isCriticalLabel`)
 puis tombait dans `if (!remediation) continue` : la carte « Actions hôte »
 affichait alors _« le watchdog du worker ne tourne plus, réinstalle »_ — le

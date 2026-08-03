@@ -2252,7 +2252,167 @@ describe('buildHostActionsReport', () => {
     expect(item.key).toBe('label:claude_auth:logged_out');
     expect(item.severity).toBe('blocked');
     expect(item.command).toBe('claude login');
-    expect(item.sinceIso).toBe('2026-07-10T11:40:00Z'); // allow-absolute-date opaque-fixture
+    // A label action carries NO "since". This assertion used to demand
+    // `lastRanAt`, and that was the bug: `lastRanAt` is the watchdog's last
+    // BEAT, not the instant the account went out. The card renders it under
+    // "Ouvert depuis", so a logout three weeks old displayed "il y a 20
+    // minutes" and got younger on every tick. Nothing in a heartbeat records
+    // when a label first appeared, so the row must say nothing rather than
+    // something false.
+    expect(item.sinceIso).toBeNull();
+  });
+
+  /**
+   * J9 — the command must follow the watchdog that REPORTED the fault, not
+   * `WORKER_HOST`.
+   *
+   * These two cases differ by one field: `watchdogVersion`. During the whole
+   * observation window `WORKER_HOST` stays `pc` by construction (the flip is the
+   * last step of the switchover) while the SERVER watchdog already reports on
+   * the shared heartbeat slot — so a server-side fault used to print a
+   * PowerShell command that reinstalls the scheduled tasks of the machine
+   * currently serving members. The `-obs` suffix is the discriminator the
+   * watchdog script already writes, and says so verbatim in its own comment.
+   *
+   * This suite runs with `WORKER_HOST` unset, i.e. the exact `pc` profile where
+   * the bug was reachable: delete the emitter check and the first case reverts
+   * to `pwsh`.
+   */
+  it('resolves a label command from the emitting watchdog, not from WORKER_HOST', () => {
+    const serverReported = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['cron_file_crlf:60'],
+          watchdogVersion: 'v4-obs',
+        }),
+      ]),
+    ).items[0]!;
+    expect(serverReported.command).toBe('sudo bash ops/worker/install-worker-vps.sh');
+    expect(serverReported.reference).toBe('ops/worker/RUNBOOK.md');
+
+    const pcReported = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['cron_file_crlf:60'],
+          watchdogVersion: 'v4',
+        }),
+      ]),
+    ).items[0]!;
+    expect(pcReported.command).toBe('pwsh -File ops/worker/install-worker.ps1');
+    expect(pcReported.reference).toBe('ops/worker/README.md');
+  });
+
+  /**
+   * J9 — seven missing pipelines still collapse into ONE card, but that card
+   * now NAMES them.
+   *
+   * The dedup key is the FAMILY, so the seven `:<name>` suffixes were dropped.
+   * The card's own text said "the table above names which one" — and it does
+   * not: the board rows render an error COUNT, and the label path fires faster
+   * than age, so all eight rows are still green when this card appears. The
+   * only surviving copy of the names was a psql query away.
+   */
+  it('names every subject behind a deduped family', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: [
+            'task_missing:onboarding',
+            'task_missing:verification',
+            'task_missing:seances',
+            'task_missing:calendar',
+            'task_missing:weekly',
+            'task_missing:monthly',
+            'task_missing:profile',
+          ],
+        }),
+      ]),
+    );
+    expect(report.items).toHaveLength(1);
+    const item = report.items[0]!;
+    expect(item.key).toBe('label:task_missing');
+    expect(item.details).toEqual([
+      'onboarding',
+      'verification',
+      'seances',
+      'calendar',
+      'weekly',
+      'monthly',
+      'profile',
+    ]);
+    // And the copy no longer sends the operator to a table that cannot answer.
+    expect(item.detail).not.toContain('tableau ci-dessus');
+  });
+
+  /**
+   * J9 — a label action outranks a status action of equal severity.
+   *
+   * `Array.prototype.sort` is stable, so concatenation order decides ties. With
+   * `[...statusItems, ...labelItems]` a late backup heartbeat sorted ABOVE
+   * `claude_auth:logged_out` — the one card meaning "the AI is mute for every
+   * member" pushed under a chore. The rationale comment claimed the opposite
+   * ordering for years; this pins the code to the comment.
+   */
+  it('ranks label-derived actions above status-derived ones at equal severity', () => {
+    const report = buildHostActionsReport(
+      cronReport([
+        entry({ action: 'cron.backup.heartbeat', status: 'red', ageMs: 40 * 60 * 60 * 1000 }),
+      ]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['claude_auth:logged_out'],
+        }),
+      ]),
+    );
+    expect(report.items.map((i) => i.key)).toEqual([
+      'label:claude_auth:logged_out',
+      'cron.backup.heartbeat',
+    ]);
+  });
+
+  /**
+   * J9 — `cron_file_perms` is an outage, not hygiene.
+   *
+   * crond refuses a group/other-writable file in `/etc/cron.d` and logs nothing,
+   * so zero pipelines run — the same outcome as `cron_file_crlf`. It produced no
+   * card at all, and the section pill read "À jour" on a mute machine.
+   */
+  it('raises a blocked action when the scheduler refuses the cron file', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['cron_file_perms:664'],
+        }),
+      ]),
+    );
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0]!.key).toBe('label:cron_file_perms');
+    expect(report.items[0]!.severity).toBe('blocked');
+    expect(report.items[0]!.details).toEqual(['664']);
   });
 
   /** A capped Claude quota is benign/self-resolving → informational (pending). */

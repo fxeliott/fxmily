@@ -72,9 +72,18 @@ MANAGED_SCRIPTS=(
   # It does NOT extend to a wrapper that is staged but MALFORMED: the shebang
   # and size checks below `fail`, like they do for every managed script, and
   # that aborts the deploy. Kept fatal on purpose — a staged script with no
-  # shebang means the repo file is corrupt, which CI (`bash -n`, shellcheck)
-  # catches long before here, and silently installing nothing over a corrupt
-  # payload is the kind of quiet degradation this table exists to prevent.
+  # shebang means the repo file is corrupt, and silently installing nothing over
+  # a corrupt payload is the kind of quiet degradation this table exists to
+  # prevent.
+  #
+  # Note what these two checks do NOT see: a syntax error. A file can carry a
+  # perfect shebang, a plausible size, and still be unparseable — this validator
+  # would install it and the 5-minute pipeline would run it. That gap is closed
+  # upstream by the `bash -n` sweep in `.github/workflows/cron-sync-check.yml`,
+  # which is where the claim belongs. An earlier version of this comment asserted
+  # CI already ran `bash -n` and shellcheck; a grep of `.github/` for either
+  # returned nothing. The gate was written after that check, and it runs `bash -n`
+  # only — shellcheck is still not installed anywhere here.
   "fxmily-worker /usr/local/bin/fxmily-worker 0755"
   "fxmily-worker-watchdog /usr/local/bin/fxmily-worker-watchdog 0755"
 )

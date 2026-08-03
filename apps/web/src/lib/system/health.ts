@@ -425,6 +425,14 @@ export interface HeartbeatHealthEntry<A extends string = string> {
    */
   errorLabels: string[];
   /**
+   * J9 — `metadata.watchdogVersion` of the latest run, or null when the row
+   * carries none (every heartbeat other than the watchdog's, and older watchdog
+   * rows). The suffix `-obs` identifies the SERVER watchdog in its observation
+   * window; see {@link labelEmittedByServer} for why the board cannot resolve a
+   * remediation command without it.
+   */
+  watchdogVersion: string | null;
+  /**
    * True for window-bounded schedules — the UI hides the age/tolerance bar
    * (meaningless between windows) and shows the window note instead.
    */
@@ -521,6 +529,9 @@ async function buildHeartbeatReport<A extends string>(
   // the LABELS distinguish them, and only the labels can drive a red escalation
   // + an actionable host command. Read them in the same pass, at zero extra I/O.
   const errorLabelsByAction = new Map<string, string[]>();
+  // J9 — read in the same pass, same reason: it is the only field that says
+  // WHICH machine wrote the row while both watchdogs share one heartbeat slot.
+  const watchdogVersionByAction = new Map<string, string>();
   if (lastRanByAction.size > 0) {
     const latestRows = await db.auditLog.findMany({
       where: {
@@ -535,6 +546,7 @@ async function buildHeartbeatReport<A extends string>(
       const meta = row.metadata as {
         errors?: unknown;
         errorLabels?: unknown;
+        watchdogVersion?: unknown;
         emailOutcome?: unknown;
         emailsFailed?: unknown;
         failed?: unknown;
@@ -581,6 +593,13 @@ async function buildHeartbeatReport<A extends string>(
         const labels = meta.errorLabels.filter((l): l is string => typeof l === 'string');
         const prev = errorLabelsByAction.get(row.action) ?? [];
         errorLabelsByAction.set(row.action, [...prev, ...labels]);
+      }
+      // Same defensive posture: `metadata` is `Json`, never trust its shape. If
+      // two rows share the max timestamp (both watchdogs beating in the same
+      // second during the doublon), the LAST one read wins — either is a truthful
+      // answer to "who reported this", and the labels are unioned anyway.
+      if (meta && typeof meta.watchdogVersion === 'string' && meta.watchdogVersion.length > 0) {
+        watchdogVersionByAction.set(row.action, meta.watchdogVersion);
       }
     }
   }
@@ -655,6 +674,7 @@ async function buildHeartbeatReport<A extends string>(
       status,
       errorCount,
       errorLabels,
+      watchdogVersion: watchdogVersionByAction.get(expectation.action) ?? null,
       windowed: Boolean(expectation.windowedScheduleParis),
       firstRunDeadline: status === 'pending' ? firstRunDeadline : null,
     };
@@ -948,20 +968,33 @@ const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
  *                         2026-05-11 and left no trace anywhere.
  *   - `claude_bin_missing` / `config_missing`  the runtime cannot even start.
  *   - `lock_stale`        one wedged lock starves all seven pipelines.
+ *   - `cron_file_perms`   crond REFUSES a group/other-writable file in
+ *                         `/etc/cron.d` and says nothing. Same outcome as
+ *                         `cron_file_crlf`: the schedule exists and no line of
+ *                         it runs. It sat outside this list as "hygiene" because
+ *                         the watchdog flagged any mode `!= 644`, which lumped a
+ *                         fatal `664` in with a perfectly readable `600`; the
+ *                         emitter now masks the two write bits, so the label
+ *                         means one thing and can be escalated.
+ *   - `token_short`       a token the prod will reject on every tick: that
+ *                         pipeline is down NOW. Age would find it ~4h later, and
+ *                         the board already prints a `blocked` card for it — not
+ *                         escalating here left that card next to a green row.
  *
  * Deliberately NOT here: `claude_quota:capped` (benign, self-resolving via the
- * cooldown — and if it lasts, the pull heartbeats go stale and red on age),
- * `token_short` and `cron_file_perms` (hygiene, not outage).
+ * cooldown — and if it lasts, the pull heartbeats go stale and red on age).
  */
 const SERVER_CRITICAL_LABELS = [
   'claude_auth:logged_out',
   'batch_failed',
   'cron_file_missing',
   'cron_file_crlf',
+  'cron_file_perms',
   'task_missing',
   'claude_bin_missing',
   'config_missing',
   'lock_stale',
+  'token_short',
 ] as const;
 
 const WORKER_SERVER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] =
@@ -1099,6 +1132,21 @@ export interface HostActionItem {
   command: string;
   /** Where the command is documented (repo-relative path). */
   reference: string;
+  /**
+   * J9 — the concrete subjects behind a deduped family, verbatim from the label
+   * suffix (`task_missing:onboarding` → `onboarding`). Empty for actions that
+   * name nothing beyond themselves.
+   *
+   * Without this the card was unanswerable. Seven missing pipelines dedup to ONE
+   * card by design (seven identical commands is noise), and the dedup key is the
+   * FAMILY — so the names were dropped. The card then said "the table above names
+   * which one", but the table renders `errorCount` only, and by construction the
+   * label path fires FASTER than age: at the moment the card lights up, all eight
+   * rows are still green. The only remaining copy of the name was
+   * `audit_logs.metadata.errorLabels` — a psql session away, on a page whose
+   * promise is the exact command to run.
+   */
+  details: string[];
   /** ISO instant since when the signal has been open (last run, or the expected
    *  first-run deadline for a never_ran with an `expectedSince`), or null. */
   sinceIso: string | null;
@@ -1108,14 +1156,23 @@ export interface HostActionItem {
 // J9 — the remediation command depends on WHERE the worker runs. Printing
 // `pwsh -File ops/worker/install-worker.ps1` to an operator whose worker moved
 // to the server would be worse than printing nothing: it is a command that
-// looks authoritative and fixes the wrong machine. Resolved once at module load
-// (env is fixed for the process lifetime).
-const WORKER_INSTALL_COMMAND = isWorkerOnServer()
-  ? 'sudo bash ops/worker/install-worker-vps.sh'
-  : 'pwsh -File ops/worker/install-worker.ps1';
+// looks authoritative and fixes the wrong machine.
+const SERVER_INSTALL_COMMAND = 'sudo bash ops/worker/install-worker-vps.sh';
+const PC_INSTALL_COMMAND = 'pwsh -File ops/worker/install-worker.ps1';
 const SERVER_LOGIN_COMMAND = 'sudo -u fxmily -H claude auth login --claudeai';
-const WORKER_LOGIN_COMMAND = isWorkerOnServer() ? SERVER_LOGIN_COMMAND : 'claude login';
-const WORKER_REFERENCE = isWorkerOnServer() ? 'ops/worker/RUNBOOK.md' : 'ops/worker/README.md';
+const PC_LOGIN_COMMAND = 'claude login';
+const SERVER_REFERENCE = 'ops/worker/RUNBOOK.md';
+const PC_REFERENCE = 'ops/worker/README.md';
+
+// Resolved once at module load from `WORKER_HOST` (env is fixed for the process
+// lifetime). This is the right basis for AGE-derived actions, where nothing
+// tells us which machine went silent: during the doublon both watchdogs write
+// the same slot, so a stale slot means the PC one is down too — and the PC is
+// master until the flip, so its command is the honest one.
+//
+// It is the WRONG basis for LABEL-derived actions: see `resolveLabelCommand`.
+const WORKER_INSTALL_COMMAND = isWorkerOnServer() ? SERVER_INSTALL_COMMAND : PC_INSTALL_COMMAND;
+const WORKER_REFERENCE = isWorkerOnServer() ? SERVER_REFERENCE : PC_REFERENCE;
 
 /** Per-action remediation metadata for the host-actionable heartbeats. */
 const HOST_ACTION_REMEDIATION: Record<
@@ -1157,13 +1214,66 @@ const HOST_ACTION_REMEDIATION: Record<
  * age/count classification, fixable in one command — so they get a first-class
  * host action derived straight from the label.
  */
+/**
+ * WHICH machine a label's remediation targets — resolved at emit time, not at
+ * module load.
+ *
+ * `install` / `login` follow the host that ACTUALLY reported the label;
+ * `server-login` is pinned to the server whoever asks.
+ *
+ * Why this is not `WORKER_HOST`. During the whole observation window
+ * `WORKER_HOST` stays `pc` BY CONSTRUCTION — the flip is the last step of the
+ * switchover, not the first (`ops/worker/RUNBOOK.md`). Meanwhile the SERVER
+ * watchdog is already reporting on the same heartbeat slot. So a server-side
+ * `cron_file_crlf` produced a card reading "planification corrompue" next to
+ * `pwsh -File ops/worker/install-worker.ps1` — a command that reinstalls the
+ * scheduled tasks of the machine currently serving members, to fix a fault on
+ * the other one. The exact failure this file's own comment calls "worse than
+ * printing nothing".
+ *
+ * The discriminator already exists and was already persisted; nothing read it.
+ * `ops/cron/fxmily-worker-watchdog` suffixes its version with `-obs` in
+ * observation mode and says why, verbatim: "whoever reads the audit metadata
+ * can tell which host wrote the row". `-obs` is emitted by the server and only
+ * by the server; once the flip happens the suffix disappears AND `WORKER_HOST`
+ * becomes `server`, so the two agree again. That leaves no window where the
+ * emitter is unknown.
+ */
+type LabelCommandKind = 'install' | 'login' | 'server-login';
+
+function resolveLabelCommand(
+  kind: LabelCommandKind,
+  emittedByServer: boolean,
+): { command: string; reference: string } {
+  if (kind === 'server-login') {
+    return { command: SERVER_LOGIN_COMMAND, reference: SERVER_REFERENCE };
+  }
+  const onServer = emittedByServer || isWorkerOnServer();
+  return {
+    command: onServer
+      ? kind === 'install'
+        ? SERVER_INSTALL_COMMAND
+        : SERVER_LOGIN_COMMAND
+      : kind === 'install'
+        ? PC_INSTALL_COMMAND
+        : PC_LOGIN_COMMAND,
+    reference: onServer ? SERVER_REFERENCE : PC_REFERENCE,
+  };
+}
+
+/** True when this heartbeat row was written by the SERVER watchdog running in
+ *  its observation window — the one state where `WORKER_HOST` disagrees with
+ *  the machine that reported the fault. */
+function labelEmittedByServer(watchdogVersion: string | null): boolean {
+  return (watchdogVersion ?? '').endsWith('-obs');
+}
+
 const LABEL_HOST_ACTIONS: Record<
   string,
   {
     label: string;
     detail: string;
-    command: string;
-    reference: string;
+    commandKind: LabelCommandKind;
     severity: HostActionSeverity;
   }
 > = {
@@ -1171,8 +1281,7 @@ const LABEL_HOST_ACTIONS: Record<
     label: 'Worker · aucun compte Claude connecté',
     detail:
       "Aucun compte Claude n'est connecté sur la machine worker : les batchs IA (profils, digests, calendriers, vérifications) ne génèrent plus rien. Reconnecte le compte, la génération reprend au tick suivant sans rien perdre (les membres en attente sont repris automatiquement).",
-    command: WORKER_LOGIN_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'login',
     // A logged-out account = the AI is fully mute = a real incident to fix now.
     severity: 'blocked',
   },
@@ -1183,23 +1292,17 @@ const LABEL_HOST_ACTIONS: Record<
     label: 'Worker · serveur pas encore connecté (bascule en cours)',
     detail:
       "Le worker serveur tourne en observation (dry-run) et aucun compte Claude n'y est encore connecté. Le PC reste maître et génère normalement : rien n'est en attente côté membre. Connecte le compte dédié quand tu veux passer la main au serveur.",
-    // NOT `WORKER_LOGIN_COMMAND`. That constant follows `WORKER_HOST`, which is
-    // still `pc` during the observation window BY CONSTRUCTION — the flip to
-    // `server` is the LAST step of the switchover, not the first. So the
-    // host-aware constant would print `claude login` here and send the operator
-    // to log in on the PC, which is already logged in, while the server stays
-    // mute. This label is emitted by the SERVER watchdog only; its command is
-    // a server command, always.
-    command: SERVER_LOGIN_COMMAND,
-    reference: 'ops/worker/RUNBOOK.md',
+    // Pinned to the server, not host-resolved. This label is emitted by the
+    // SERVER watchdog only and only before its login — so even the `-obs`
+    // discriminator is redundant here: its command is a server command, always.
+    commandKind: 'server-login',
     severity: 'pending',
   },
   'claude_quota:capped': {
     label: 'Worker · quota Claude atteint',
     detail:
       'Le compte Claude du worker a atteint son quota : les batchs sont en pause et reprennent seuls à la prochaine fenêtre. Pour relancer tout de suite, connecte un autre compte (rotation).',
-    command: WORKER_LOGIN_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'login',
     // Benign + self-resolving (cooldown then next quota window) → informational.
     severity: 'pending',
   },
@@ -1221,65 +1324,64 @@ const LABEL_HOST_ACTIONS: Record<
   task_missing: {
     label: 'Worker · un pipeline n’est plus planifié',
     detail:
-      "Au moins un des 7 pipelines IA n'a plus de ligne dans la planification de la machine worker : il ne tourne plus du tout, et son heartbeat finira par vieillir. Le tableau ci-dessus nomme lequel. Réinstaller reconverge le fichier de planification sans toucher aux tâches de l'app.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+      "Au moins un des pipelines IA n'a plus de ligne dans la planification de la machine worker : il ne tourne plus du tout, et son heartbeat finira par vieillir. Réinstaller reconverge le fichier de planification sans toucher aux tâches de l'app.",
+    commandKind: 'install',
     severity: 'blocked',
   },
   batch_failed: {
     label: 'Worker · un batch tourne mais ne génère rien',
     detail:
-      "Un pipeline s'est exécuté, a bien parlé à la prod (son heartbeat est donc VERT) puis a échoué à générer. C'est le seul mode de panne que l'âge ne peut pas voir. Regarde le transcript du batch nommé ci-dessus avant de relancer.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+      "Un pipeline s'est exécuté, a bien parlé à la prod (son heartbeat est donc VERT) puis a échoué à générer. C'est le seul mode de panne que l'âge ne peut pas voir. Regarde le transcript du batch concerné avant de relancer.",
+    commandKind: 'install',
     severity: 'blocked',
   },
   cron_file_missing: {
     label: 'Worker · la planification a disparu',
     detail:
       'Le fichier de planification du worker est absent de la machine : aucun des 7 pipelines ne tourne. Réinstaller le recrée à l’identique.',
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
     severity: 'blocked',
   },
   cron_file_crlf: {
     label: 'Worker · planification corrompue (fins de ligne)',
     detail:
       "Le fichier de planification contient des retours chariot Windows. Le planificateur saute ces lignes SANS rien écrire dans les logs : c'est la panne muette de ~20 h du 2026-05-11. Réinstaller nettoie le fichier et le prouve.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
     severity: 'blocked',
   },
   claude_bin_missing: {
     label: 'Worker · l’outil Claude est introuvable',
     detail:
       "Le binaire `claude` n'est pas accessible à l'utilisateur du worker : aucun batch ne peut générer. Réinstaller le repose dans son espace utilisateur.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
     severity: 'blocked',
   },
   config_missing: {
     label: 'Worker · configuration absente',
     detail:
       "Le fichier de configuration du worker (jetons d'accès) est absent : chaque batch échoue à s'authentifier auprès de la prod. Réinstaller le régénère depuis la configuration de l'app.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
     severity: 'blocked',
   },
   lock_stale: {
     label: 'Worker · un verrou est resté bloqué',
     detail:
       "Le verrou qui garantit un seul batch à la fois est détenu depuis plus de 6 h : plus aucun pipeline ne démarre. Un batch s'est probablement arrêté sans libérer sa place.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
+    severity: 'blocked',
+  },
+  cron_file_perms: {
+    label: 'Worker · planification ignorée (permissions)',
+    detail:
+      "Le fichier de planification du worker est modifiable par le groupe ou par tous : le planificateur REFUSE de le lire et ne l'écrit nulle part. Aucun des pipelines ne tourne, exactement comme une planification absente. Réinstaller repose le fichier avec les bons droits.",
+    commandKind: 'install',
     severity: 'blocked',
   },
   token_short: {
     label: 'Worker · un jeton d’accès est invalide',
     detail:
       "Un des jetons du worker est trop court pour être valide : le pipeline concerné se fera refuser par la prod à chaque tick. Réinstaller re-copie les jetons depuis la configuration de l'app.",
-    command: WORKER_INSTALL_COMMAND,
-    reference: WORKER_REFERENCE,
+    commandKind: 'install',
     severity: 'blocked',
   },
 };
@@ -1330,6 +1432,8 @@ function toHostAction(entry: HeartbeatHealthEntry): HostActionItem | null {
     reference: remediation.reference,
     sinceIso,
     severity,
+    // An age-derived action names exactly one heartbeat: itself.
+    details: [],
   };
 }
 
@@ -1357,8 +1461,7 @@ export function buildHostActionsReport(
   // reporting the label), only the Claude account is out. So a label action
   // SUPERSEDES its entry's status action. One action per distinct label, deduped
   // (the same machine-wide state can be raised on several pipelines' status.json).
-  const labelItems: HostActionItem[] = [];
-  const seenLabels = new Set<string>();
+  const labelItems = new Map<string, HostActionItem>();
   const supersededActions = new Set<string>();
   for (const entry of allEntries) {
     // A STALE label (heartbeat older than 3 periods) is not a live machine-wide
@@ -1372,20 +1475,39 @@ export function buildHostActionsReport(
       if (!resolved) continue;
       const remediation = resolved.action;
       supersededActions.add(entry.action);
+      // The suffix, when the label carries one: `task_missing:onboarding` names
+      // `onboarding`. Kept even on the first label of a family, so the card can
+      // say WHICH subjects it covers instead of pointing at a table that cannot
+      // answer (see `HostActionItem.details`).
+      const subject = label.slice(resolved.key.length + 1).trim();
+      const key = `label:${resolved.key}`;
+      const existing = labelItems.get(key);
       // Dedup on the RESOLVED key, not the raw label: seven pipelines missing
       // from the schedule emit seven distinct `task_missing:<name>` labels, and
       // seven identical cards telling you to run the same command is noise, not
-      // diagnosis. The board's per-pipeline rows already name which ones.
-      if (seenLabels.has(resolved.key)) continue;
-      seenLabels.add(resolved.key);
-      labelItems.push({
-        key: `label:${resolved.key}`,
+      // diagnosis. One card — which now carries the seven names.
+      if (existing) {
+        if (subject && !existing.details.includes(subject)) existing.details.push(subject);
+        continue;
+      }
+      labelItems.set(key, {
+        key,
         label: remediation.label,
         detail: remediation.detail,
-        command: remediation.command,
-        reference: remediation.reference,
-        sinceIso: entry.lastRanAt ?? null,
+        // Resolved from the watchdog that REPORTED this label, not from
+        // `WORKER_HOST` — the two disagree for the whole observation window.
+        ...resolveLabelCommand(
+          remediation.commandKind,
+          labelEmittedByServer(entry.watchdogVersion),
+        ),
+        // NOT `entry.lastRanAt`. That is the watchdog's last beat — a signal
+        // open for three weeks would have rendered "Ouvert depuis il y a 6
+        // minutes", rejuvenating on every tick. Nothing in the heartbeat records
+        // when a label first appeared, so the honest answer is to say nothing:
+        // the row renders no "since" line rather than a fresh-looking lie.
+        sinceIso: null,
         severity: remediation.severity,
+        details: subject ? [subject] : [],
       });
     }
   }
@@ -1397,7 +1519,14 @@ export function buildHostActionsReport(
     .map(toHostAction)
     .filter((item): item is HostActionItem => item !== null);
 
-  const items = [...statusItems, ...labelItems].sort((a, b) => {
+  // Label items FIRST, then status items — the order the comment above promises
+  // and the code did not deliver. `Array.prototype.sort` is stable, so a sort on
+  // severity alone preserves the input order inside each severity band: with
+  // `[...statusItems, ...labelItems]` a late backup heartbeat outranked
+  // `claude_auth:logged_out`, i.e. the single card meaning "the AI is mute for
+  // every member" was pushed below it. Concatenating the other way round makes
+  // the stable sort do exactly what the rationale says.
+  const items = [...labelItems.values(), ...statusItems].sort((a, b) => {
     // blocked (0) before pending (1).
     const rank = (s: HostActionSeverity) => (s === 'blocked' ? 0 : 1);
     return rank(a.severity) - rank(b.severity);

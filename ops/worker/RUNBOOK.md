@@ -103,6 +103,20 @@ Code session, a long session can exhaust the window and the batches go into
 cooldown — members wait, and nothing in the app explains why. Use an account
 that does nothing else.
 
+> **This is a requirement, not an observed state — and nothing here can check
+> it.** `claude auth status --json` reports whether _an_ account is logged in,
+> never which one nor what else it does; the board sees the consequence
+> (`claude_quota:capped`, then heartbeats going stale) long after the fact, and
+> reports it as a benign self-resolving pause. So a shared account does not fail
+> loudly, it fails as _members waiting_, which is the exact silence this jalon
+> exists to remove.
+>
+> Concretely: if the account used here is the same one that runs anything else on
+> a schedule, the anti-ban mitigations still hold but the capacity argument above
+> does not, and a busy day can starve the pipelines. That is a call for Eliot to
+> make and to state explicitly — it has not been recorded anywhere, and this
+> paragraph must not be read as evidence that it was.
+
 ### Re-login when the session expires
 
 There is no silent failure mode here, by design:

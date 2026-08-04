@@ -65,6 +65,15 @@ if [[ -r /etc/fxmily/cron.env ]]; then
   # shellcheck disable=SC1091
   source /etc/fxmily/cron.env
 fi
+# Identical to the wrapper's, and it HAS to be. These two readers already cost
+# this jalon one incident by disagreeing on the default (`:-1` here vs `:-0`
+# there) — the watchdog then called a healthy host logged out. A CR stripped in
+# one reader and not the other reproduces that class exactly: the wrapper would
+# run in observation while the watchdog reported on a production host.
+# `:-` first for the same reason as there: `set -u` is active and the key is
+# legitimately absent on a fresh host.
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN:-}"
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN%$'\r'}"
 WATCHDOG_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
 mkdir -p "$(dirname "$WATCHDOG_LOG")" 2>/dev/null || true
 

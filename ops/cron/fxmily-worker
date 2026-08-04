@@ -45,6 +45,29 @@ if [[ -r /etc/fxmily/cron.env ]]; then
   # shellcheck disable=SC1091
   source /etc/fxmily/cron.env
 fi
+# Strip a trailing CR from the switchover key, and do it in BOTH readers.
+#
+# `worker.env` is CR-hardened where run-batch.sh parses it, because the file is
+# authored from a Windows machine. `cron.env` is `source`d raw, and it carries
+# the ONE key that decides whether this host writes to production. A trailing
+# \r makes `"1\r" == "1"` false, so `FXMILY_WORKER_DRY_RUN=1` — someone
+# deliberately asking for observation — silently means production instead: the
+# server starts persisting while the PC is still master. Two masters, two
+# quotas, member-facing writes from an unvalidated machine, from an invisible
+# byte.
+#
+# The failure is asymmetric on purpose: a CR can only ever turn observation ON
+# into observation OFF, never the reverse, because the default is `1`. That is
+# the single most dangerous direction, and it is the one an invisible byte took.
+#
+# `:-` FIRST, and not as a style choice: this file runs under `set -u`, and the
+# key is legitimately ABSENT on a fresh, restored or rebuilt host — the very case
+# the paragraph below is about. Stripping the CR without the guard turned a
+# missing key into `unbound variable`, i.e. a wrapper that dies before it can log
+# anything. Semantically neutral: every reader below uses `${…:-1}`, which treats
+# empty and unset alike, so the default stays observation.
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN:-}"
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN%$'\r'}"
 WORKER_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
 mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
 

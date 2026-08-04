@@ -66,8 +66,26 @@ fi
 # missing key into `unbound variable`, i.e. a wrapper that dies before it can log
 # anything. Semantically neutral: every reader below uses `${…:-1}`, which treats
 # empty and unset alike, so the default stays observation.
-FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN:-}"
-FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN%$'\r'}"
+# The corruption is a property of the FILE, not of one key. Cleaning only
+# FXMILY_WORKER_DRY_RUN left WORKER_LOG free to carry the same CR and point at
+# `worker.log\r` — a path that exists, that nothing complains about, and that is
+# NOT the one the RUNBOOK tells the operator to tail. Every refusal `die()` writes
+# would land in a file nobody reads, which is the exact failure this wrapper was
+# hardened against. Blanks matter for the same reason a CR does, and the
+# asymmetry argument does not extend to them: `FXMILY_WORKER_DRY_RUN="1 "` — an
+# operator ASKING for observation — compared unequal to `1` and wrote to
+# production. `run-batch.sh` already strips both on a value from this same class
+# of Windows-authored file; two readers must not hold two standards.
+_norm() { # $1 = variable NAME. Strips every CR, then leading/trailing blanks.
+  local _v="${!1:-}"
+  _v="${_v//$'\r'/}"
+  _v="${_v#"${_v%%[![:space:]]*}"}"
+  _v="${_v%"${_v##*[![:space:]]}"}"
+  printf -v "$1" '%s' "$_v"
+}
+for _k in FXMILY_WORKER_DRY_RUN FXMILY_WORKER_REPO FXMILY_WORKER_TIMEOUT WORKER_LOG; do
+  _norm "$_k"
+done
 WORKER_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
 mkdir -p "$(dirname "$WORKER_LOG")" 2>/dev/null || true
 

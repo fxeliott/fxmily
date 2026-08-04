@@ -581,6 +581,22 @@ core_note_success() {
   return 0
 }
 
+# Record a member REJECTED BEFORE any claude call — a malformed pseudonymLabel
+# or userId in the pulled envelope. Without this, such a member was invisible to
+# the verdict: the pipelines only bumped a local `errored` counter, so a cohort
+# rejected 100% at the gate reached `core_run_exit_code` with BOTH totals at 0
+# and fell through to `echo 0`. A green board on what the pipelines themselves
+# label « possible compromise ».
+#
+# Why it must NOT touch CORE_CONSECUTIVE_FAILURES: that counter feeds the
+# breaker (`core_should_halt`), whose job is to stop hammering a sick claude.
+# No claude call happened here, so halting would be the wrong reflex — a
+# malformed envelope is not a reason to abandon the members that follow.
+core_note_precall_rejection() {
+  CORE_TOTAL_FAILURES=$((CORE_TOTAL_FAILURES + 1))
+  return 0
+}
+
 # Should the batch HALT now? True (0) when a rate/usage limit was detected
 # (stop immediately — never hammer a limited account) OR the consecutive-failure
 # breaker tripped. False (1) otherwise. Prints the reason to stderr on halt.

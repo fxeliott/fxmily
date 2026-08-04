@@ -165,6 +165,7 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   FILE_EXT=$(jq -r --argjson idx "$i" '.entries[$idx].fileExt' "$ENVELOPE_FILE")
 
   if ! core_validate_user_id "$USER_ID"; then
+    core_note_precall_rejection
     echo "[verification-batch] SKIP malformed userId for proof $PROOF_ID" >&2
     continue
   fi

@@ -240,6 +240,53 @@ core_invoke_claude_print "$PROMPT_FILE" "$RESP" >/dev/null 2>&1
 check_eq "invoke records CORE_LAST_RESPONSE_FILE" "$RESP" "$CORE_LAST_RESPONSE_FILE"
 
 # ---------------------------------------------------------------------------
+echo "[10] core_run_exit_code — a run that generated NOTHING must not exit 0"
+# Measured 2026-08-04: before exit 76, every non-cap failure returned 0, so
+# run-batch.sh wrote ok=true, the watchdog's `batch_failed` guard (which keys on
+# `ok != true AND code != 0 AND code != 75`) never fired, and the envelope pull
+# that precedes generation kept the age heartbeat green. A pipeline that failed
+# on EVERY member therefore reported a fully green board.
+core_reset_failure_state
+check_eq "fresh run (nothing attempted) → 0" "0" "$(core_run_exit_code)"
+
+# Total failure, WITHOUT tripping the consecutive breaker. A cohort of three
+# members that all fail never reaches a breaker of 4 — and used to exit 0.
+#
+# The breaker is set EXPLICITLY here. Earlier sections of this bench mutate
+# `FXMILY_MAX_CONSECUTIVE_FAILURES` at top level and leave it at 1, so a section
+# that assumed the 4 default would be asserting against ambient state rather than
+# a known one — which is exactly how this assertion failed first time round.
+FXMILY_MAX_CONSECUTIVE_FAILURES=99
+core_reset_failure_state
+: >"$ERRORS_LOG"
+CORE_LAST_RESPONSE_FILE=""
+core_note_failure; core_note_failure; core_note_failure
+check_eq "3 failures, 0 successes, breaker NOT tripped → 76" "76" "$(core_run_exit_code)"
+check_eq "  …and the breaker really was not tripped" "1" "$(core_should_halt 2>/dev/null; echo $?)"
+
+# One success is enough to make the run a partial success, not a mute one.
+core_reset_failure_state
+core_note_failure; core_note_failure; core_note_success
+check_eq "2 failures + 1 success → 0 (partial run is not mute)" "0" "$(core_run_exit_code)"
+
+# Order must not matter: the success latch is a total, not a streak.
+core_reset_failure_state
+core_note_success; core_note_failure; core_note_failure; core_note_failure; core_note_failure
+check_eq "success FIRST then 4 failures → 0" "0" "$(core_run_exit_code)"
+
+# A usage cap still wins: 75 carries the cooldown semantics, 76 does not.
+core_reset_failure_state
+printf 'You have hit your session limit\n' >"$ERRORS_LOG"
+core_note_failure
+check_eq "capped run with 0 successes → 75, not 76" "75" "$(core_run_exit_code)"
+
+# reset clears the totals, so a stale count can never bleed into the next run.
+core_reset_failure_state
+check_eq "reset clears CORE_TOTAL_FAILURES" "0" "$CORE_TOTAL_FAILURES"
+check_eq "reset clears CORE_TOTAL_SUCCESSES" "0" "$CORE_TOTAL_SUCCESSES"
+: >"$ERRORS_LOG"
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "===================================================="
 echo "core anti-ban tests: $PASS passed, $FAIL failed"

@@ -202,7 +202,12 @@ jq -s --arg ms "$MONTH_START" --arg me "$MONTH_END" \
 
 if [ "$DRY_RUN" = "true" ]; then
   echo "[3/3] --dry-run : skipping persist. Results saved at $RESULTS_FILE"
-  exit 0
+  # `core_run_exit_code`, not a bare 0: this early exit precedes the run's only
+  # other call to it, so a bare 0 discarded BOTH outcome signals for the whole
+  # observation window — a usage cap never reached 75 (no cooldown stamp, so the
+  # anti-ban pause never engaged) and a run that failed on every member never
+  # reached 76 (green board, nothing produced). Measured 2026-08-04.
+  exit "$(core_run_exit_code)"
 fi
 
 if [ "$generated" -eq 0 ]; then

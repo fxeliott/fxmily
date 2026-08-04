@@ -100,6 +100,13 @@ FXMILY_CLAUDE_TIMEOUT_S="${FXMILY_CLAUDE_TIMEOUT_S:-900}"
 # --- Runtime state (module globals, reset per run by core_reset_failure_state) -
 CORE_CONSECUTIVE_FAILURES=0
 CORE_RATE_LIMITED=0
+# Per-run TOTALS (not the consecutive counter above, which a single success
+# resets). They exist to answer one question the consecutive counter cannot:
+# "did this run generate ANYTHING at all?" See core_run_exit_code for why that
+# question is the difference between a red board and a mute pipeline nobody
+# notices.
+CORE_TOTAL_SUCCESSES=0
+CORE_TOTAL_FAILURES=0
 CORE_TIMEOUT_WARNED=0
 # Byte offset in $ERRORS_LOG captured just before each `claude --print` call, so
 # core_classify_failure inspects ONLY the current member's stderr (the log is
@@ -504,6 +511,8 @@ core_jittered_sleep() {
 core_reset_failure_state() {
   CORE_CONSECUTIVE_FAILURES=0
   CORE_RATE_LIMITED=0
+  CORE_TOTAL_SUCCESSES=0
+  CORE_TOTAL_FAILURES=0
   CORE_ERRLOG_MARK=0
   CORE_LAST_RESPONSE_FILE=""
 }
@@ -555,6 +564,7 @@ $(tail -c 4000 "$CORE_LAST_RESPONSE_FILE" 2>/dev/null || true)"
 # set it stays set for the run). Always returns 0 (safe under `set -e`).
 core_note_failure() {
   CORE_CONSECUTIVE_FAILURES=$((CORE_CONSECUTIVE_FAILURES + 1))
+  CORE_TOTAL_FAILURES=$((CORE_TOTAL_FAILURES + 1))
   local kind
   kind=$(core_classify_failure)
   if [ "$kind" = "rate_limited" ]; then
@@ -567,6 +577,7 @@ core_note_failure() {
 # isolated blip between two successes never accumulates toward the breaker.
 core_note_success() {
   CORE_CONSECUTIVE_FAILURES=0
+  CORE_TOTAL_SUCCESSES=$((CORE_TOTAL_SUCCESSES + 1))
   return 0
 }
 
@@ -592,13 +603,49 @@ core_should_halt() {
 # run-batch.sh turns into an inter-tick cooldown so the worker stops hammering a
 # capped account — otherwise 0. Called at the very end of each pipeline (past the
 # partial persist) so a rate-limit halt never discards work already done and
-# never masks a persist failure (those keep their own non-zero exit). A run that
-# tripped only the consecutive-failure breaker (generic, not a usage limit)
-# stays 0 here : it already surfaces via the per-member error slugs + logs and
-# does not warrant a machine-wide cooldown.
+# never masks a persist failure (those keep their own non-zero exit).
+#
+# Echoes 76 when the run produced ZERO successful members while at least one
+# member failed — a TOTAL generation failure that is not a usage cap.
+#
+# WHY 76 EXISTS (measured 2026-08-04, not theorised). Before it, every failure
+# that was not a usage cap returned 0, and the chain that follows made that
+# silence complete:
+#
+#   1. this function returns 0                     (generic failure)
+#   2. run-batch.sh computes `ok` as "exit is 0 or 75"        → ok=true
+#   3. the watchdog raises `batch_failed` only when
+#      `ok != true AND code != 0 AND code != 75`              → no label
+#   4. the pipeline had already PULLED its envelope before the first
+#      `claude --print`, so `<pipeline>.batch.pulled` is fresh → age green
+#
+# Result: a pipeline where every single member failed — broken Claude auth, prod
+# answering 5xx, DNS down — reported a GREEN board and no label at all. That is
+# precisely the state `batch_failed` was created to catch; the watchdog's own
+# comment calls it "the single most important signal the board has […] age can
+# never catch that — only this label can". The label could not fire, because the
+# exit code it keys on was 0.
+#
+# The predicate is deliberately "no success AT ALL", not "any failure": a single
+# member failing among thirty is a blip that belongs in the logs, and escalating
+# it would make the board noisy, which is how a board stops being read. Zero
+# successes with at least one failure is unambiguous — nothing was produced.
+#
+# 76 and not 75: 75 means "come back next quota window" and run-batch.sh turns
+# it into a machine-wide cooldown AND remaps it to 0 for the scheduler. A total
+# failure warrants neither — it must reach the scheduler and the board as the
+# genuine failure it is, which is what this file's own contract already said:
+# "A genuine batch failure keeps its non-zero code so the scheduler + board
+# still flag it."
+#
+# The consecutive-failure breaker is NOT the trigger. It halts at 4 in a row, so
+# a cohort of three members failing all three never trips it — and used to exit
+# 0 just the same. Counting totals catches the small cohort too.
 core_run_exit_code() {
   if [ "${CORE_RATE_LIMITED:-0}" -eq 1 ]; then
     echo 75
+  elif [ "${CORE_TOTAL_SUCCESSES:-0}" -eq 0 ] && [ "${CORE_TOTAL_FAILURES:-0}" -gt 0 ]; then
+    echo 76
   else
     echo 0
   fi

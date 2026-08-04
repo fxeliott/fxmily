@@ -32,7 +32,7 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.9.14"
+    "turbo": "^2.10.8"
   },
   "_comment_overrides": "Chaque override porte une BORNE HAUTE, et c'est une correction du 2026-07-31 : un plancher nu (>=X) autorise pnpm a franchir une majeure sans qu'aucun signal ne le dise. Ce n'est pas theorique — c'est exactement ce qui a casse ESLint la veille (brace-expansion@^1: >=1.1.16 a tire une version dont minimatch@3.1.5 n'attend plus l'API, 'TypeError: expand is not a function'). Un override existe pour ecarter un avis de securite precis, pas pour ouvrir une porte de mise a jour permanente ; la borne haute rend le franchissement de majeure explicite et relu.",
   "pnpm": {

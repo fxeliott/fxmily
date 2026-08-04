@@ -223,21 +223,41 @@ test.describe('S4 — surfaces membre : parcours du trade, dérive, score → ob
 
     // The consolidated arc block (single heading, was three dispersed cards +
     // a separate notes block). Now unifies émotion + capture + débrief (§33 #2).
+    // `/journal` embarque un `loading.tsx` : la page streame, et le contenu placé
+    // coexiste un instant avec sa copie parquée dans le `<div hidden>` du buffer
+    // RSC. `getByRole` n'est PAS concerné (un sous-arbre `hidden` est retiré de
+    // l'arbre d'accessibilité, donc les moteurs de rôle ne matchent jamais la
+    // copie) — mais `getByText` est un moteur texte : il matche les DEUX copies
+    // et fait lever le mode strict. `:visible` n'est pas utilisable ici, ce n'est
+    // pas un sélecteur CSS pour ce moteur ; `.filter({ visible: true })` l'est.
+    // Ce composant n'expose aucun `data-slot`, donc pas de parent à scoper.
     await expect(page.getByRole('heading', { name: 'Le parcours de ce trade' })).toBeVisible();
-    await expect(page.getByText('Avant', { exact: true })).toBeVisible();
-    await expect(page.getByText('Pendant', { exact: true })).toBeVisible();
-    await expect(page.getByText('Après', { exact: true })).toBeVisible();
+    await expect(page.getByText('Avant', { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(
+      page.getByText('Pendant', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Après', { exact: true }).filter({ visible: true })).toBeVisible();
 
     // The three declared moments render their FR emotion labels, in order.
-    await expect(page.getByText('Calme', { exact: true })).toBeVisible();
-    await expect(page.getByText('Anxiété', { exact: true })).toBeVisible();
-    await expect(page.getByText('Frustration', { exact: true })).toBeVisible();
+    await expect(page.getByText('Calme', { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(
+      page.getByText('Anxiété', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Frustration', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
 
     // The written moments are now split + labelled INSIDE the arc (E2-2), no
     // longer fused in one bottom « Notes » block.
-    await expect(page.getByText('Avant le trade', { exact: true })).toBeVisible();
-    await expect(page.getByText('Débrief', { exact: true })).toBeVisible();
-    await expect(page.getByText('TP touché, plan tenu, je reste process.')).toBeVisible();
+    await expect(
+      page.getByText('Avant le trade', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Débrief', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('TP touché, plan tenu, je reste process.').filter({ visible: true }),
+    ).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
@@ -313,7 +333,10 @@ test.describe('S4 — surfaces membre : parcours du trade, dérive, score → ob
     const signal = page.locator('[data-slot="hub-drift-signal"]:visible');
     await expect(signal).toBeVisible();
     await expect(signal).toHaveAttribute('href', '/verification');
-    await expect(page.getByText('Signal de dérive', { exact: true })).toBeVisible();
+    // Chaîné sur `signal` plutôt que filtré : l'eyebrow est un descendant du
+    // Link déjà scopé `:visible`, donc le parent suffit à écarter la copie
+    // buffer — et `page.getByText(…)` nu résolvait 2 nœuds pendant le stream.
+    await expect(signal.getByText('Signal de dérive', { exact: true })).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);

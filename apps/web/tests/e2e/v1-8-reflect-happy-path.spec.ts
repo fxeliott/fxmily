@@ -261,8 +261,12 @@ test.describe('V1.8 REFLECT — happy-path persist/render (weekly review · refl
     // `/review` and `/reflect` both ship a `loading.tsx`, so the page streams and the
     // placed content momentarily coexists with its hidden buffer copy, tripping
     // strict mode. Only strict-mode-throwing assertions get it.
-    await expect(page.locator('[data-slot="recent-reviews"]:visible')).toBeVisible();
-    await expect(page.getByText(new RegExp(REVIEW_LESSON_MARKER))).toBeVisible();
+    // La leçon est rendue DANS un <li> de cette timeline : on chaîne sur le
+    // parent déjà scopé. `getByText` est un moteur texte — contrairement à
+    // `:visible`, il matche aussi la copie parquée dans le buffer du stream.
+    const recentReviews = page.locator('[data-slot="recent-reviews"]:visible');
+    await expect(recentReviews).toBeVisible();
+    await expect(recentReviews.getByText(new RegExp(REVIEW_LESSON_MARKER))).toBeVisible();
 
     const errorOverlay = page.locator('[data-nextjs-dialog-overlay]');
     await expect(errorOverlay).toHaveCount(0);
@@ -286,8 +290,10 @@ test.describe('V1.8 REFLECT — happy-path persist/render (weekly review · refl
 
     // Timeline rendered + the seeded reflection's A (triggerEvent)
     // visible (`reflect/page.tsx:130,151`).
-    await expect(page.locator('[data-slot="recent-reflections"]:visible')).toBeVisible();
-    await expect(page.getByText(new RegExp(REFLECT_TRIGGER_MARKER))).toBeVisible();
+    // Idem : le déclencheur est rendu dans un <li> de la timeline.
+    const recentReflections = page.locator('[data-slot="recent-reflections"]:visible');
+    await expect(recentReflections).toBeVisible();
+    await expect(recentReflections.getByText(new RegExp(REFLECT_TRIGGER_MARKER))).toBeVisible();
 
     const errorOverlay = page.locator('[data-nextjs-dialog-overlay]');
     await expect(errorOverlay).toHaveCount(0);

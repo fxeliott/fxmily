@@ -191,8 +191,12 @@ test.describe('V1.3 TrainingDebrief — auth-gates + happy-path persist/render',
     // `:visible` past the RSC stream buffer (canon, cf. session24/session25):
     // `/training` ships a `loading.tsx`, so the page streams and the placed content
     // momentarily coexists with its hidden buffer copy, tripping strict mode.
-    await expect(page.locator('[data-slot="training-debrief-timeline"]:visible')).toBeVisible();
-    await expect(page.getByText(new RegExp(TD_MARKER))).toBeVisible();
+    // Le marqueur est rendu DANS un <li> de cette timeline : on chaîne sur le
+    // parent déjà scopé plutôt que d'ajouter un filtre — `getByText` est un
+    // moteur texte, il matche la copie buffer que `:visible` n'écarte pas ici.
+    const timeline = page.locator('[data-slot="training-debrief-timeline"]:visible');
+    await expect(timeline).toBeVisible();
+    await expect(timeline.getByText(new RegExp(TD_MARKER))).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
@@ -241,8 +245,10 @@ test.describe('V1.3 TrainingDebrief — auth-gates + happy-path persist/render',
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(new RegExp(`/admin/members/${member.id}`));
-    await expect(page.locator('[data-slot="member-training-debriefs"]:visible')).toBeVisible();
-    await expect(page.getByText(new RegExp(TD_MARKER))).toBeVisible();
+    // Idem : le marqueur vit dans un <li> du panneau, on chaîne sur le parent.
+    const panel = page.locator('[data-slot="member-training-debriefs"]:visible');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText(new RegExp(TD_MARKER))).toBeVisible();
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });

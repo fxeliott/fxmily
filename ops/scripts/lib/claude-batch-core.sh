@@ -641,9 +641,25 @@ core_should_halt() {
 # The consecutive-failure breaker is NOT the trigger. It halts at 4 in a row, so
 # a cohort of three members failing all three never trips it — and used to exit
 # 0 just the same. Counting totals catches the small cohort too.
+# OPTIONAL ARGUMENT — the number of results this run is actually delivering.
+# Pass it at a call site reached only AFTER something has been persisted; a
+# positive value suppresses 76.
+#
+# It exists for `--resume`, the recovery path. A resumed run reuses results a
+# previous run already generated, so it can legitimately persist real work while
+# this run's own model-call successes are zero. Measured: one reused calendar
+# persisted, one new member failing, exit 76 — a card reading "a batch runs and
+# generates nothing" over a run that had just delivered a calendar. Getting the
+# recovery path wrong is worse than the bug it recovers from.
+#
+# Omit it, and the predicate is unchanged. The "nothing to persist" gates must
+# omit it: nothing was delivered there, which is exactly the 76 case.
 core_run_exit_code() {
+  local produced="${1:-0}"
   if [ "${CORE_RATE_LIMITED:-0}" -eq 1 ]; then
     echo 75
+  elif [ "$produced" -gt 0 ] 2>/dev/null; then
+    echo 0
   elif [ "${CORE_TOTAL_SUCCESSES:-0}" -eq 0 ] && [ "${CORE_TOTAL_FAILURES:-0}" -gt 0 ]; then
     echo 76
   else

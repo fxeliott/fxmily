@@ -264,6 +264,19 @@ EXPECTED_ACCOUNT_SHA256="${FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256:-}"
 # both sides makes the comparison agree with how mail addresses actually behave.
 EXPECTED_ACCOUNT_SHA256="$(printf '%s' "$EXPECTED_ACCOUNT_SHA256" | tr -d '\r' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 if [[ -n "$EXPECTED_ACCOUNT_SHA256" ]]; then
+  # Validate the CONFIGURED value before comparing anything against it. Without
+  # this, `changeme` — or the raw output of `sha256sum`, which carries a trailing
+  # ` -` — is simply "a value that does not match", so every tick reported "the
+  # signed-in account is NOT the dedicated one" and the board printed "reconnect
+  # the dedicated account": a remediation that can never fix a typo. Same fault
+  # as telling an operator to reinstall the machine that is working.
+  if [[ ! "$EXPECTED_ACCOUNT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "[worker] $BATCH — SKIP: FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256 is not a 64-character hex digest, so no account can ever match it. Fix worker.env (see worker.env.example). Skipping (benign)."
+    write_skip_status "account_guard_misconfigured" ",
+  \"authOk\": true,
+  \"authMethod\": \"${AUTH_METHOD:-}\""
+    exit 0
+  fi
   ACTUAL_ACCOUNT_SHA256=""
   if [[ -n "$ACCOUNT_EMAIL" ]]; then
     if command -v sha256sum >/dev/null 2>&1; then

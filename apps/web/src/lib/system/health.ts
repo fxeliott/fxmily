@@ -1342,6 +1342,13 @@ const LABEL_HOST_ACTIONS: Record<
     commandKind: 'login',
     severity: 'blocked',
   },
+  'claude_account:misconfigured': {
+    label: 'Worker · vérification de compte mal configurée',
+    detail:
+      "La valeur de vérification du compte dédié n'est pas une empreinte valide : aucun compte ne peut lui correspondre, donc tous les batchs se mettent en pause. Ce n'est pas le compte qui est en cause, c'est la valeur recopiée dans la configuration du worker. Corrige-la ou retire-la.",
+    commandKind: 'install',
+    severity: 'blocked',
+  },
   'claude_account:unverifiable': {
     label: 'Worker · compte Claude non identifiable',
     detail:

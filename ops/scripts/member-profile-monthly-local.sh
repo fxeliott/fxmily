@@ -211,8 +211,13 @@ if [ "$DRY_RUN" = "true" ]; then
 fi
 
 if [ "$generated" -eq 0 ]; then
-  echo "[3/3] No snapshots to persist (all errored). Exit 0."
-  exit 0
+  echo "[3/3] No snapshots to persist (all errored)."
+  # THE production-path door, and the one that matters. "Nothing to persist
+  # because everything errored" IS the total failure exit 76 exists to report —
+  # returning 0 here made the fix above live only inside `--dry-run`, i.e. only
+  # where the watchdog deliberately downgrades it. It also swallowed 75, so a
+  # usage cap left no cooldown stamp and the next tick re-hit a capped account.
+  exit "$(core_run_exit_code)"
 fi
 
 echo "[3/3] Persisting $generated re-profiling snapshots to $APP_URL..."
@@ -233,4 +238,11 @@ echo "  claude errors  : $BATCH_DIR/claude-errors.log"
 
 # Volet B — surface a rate/usage-limit halt to the worker as exit 75 (benign
 # cooldown) even though the partial persist above succeeded. 0 otherwise.
-exit "$(core_run_exit_code)"
+#
+# The `1` is the "produced" count, and it is not decorative. Reaching this line
+# means the run got PAST the "nothing to persist" gate above, so it delivered
+# real work. Without it, a `--resume` run that reuses a prior result and hits one
+# new failure has zero model-call successes of its own and would exit 76 — a
+# "this batch generates nothing" card over a run that just persisted. Breaking
+# the recovery path is worse than the fault it recovers from.
+exit "$(core_run_exit_code 1)"

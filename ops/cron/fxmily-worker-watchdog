@@ -219,10 +219,21 @@ for p in "${PIPELINES[@]}"; do
     case "$skipped" in
       account_unexpected)
         # The signed-in account is not the one this worker is dedicated to.
-        # Critical even in observation: it is not a planned state, and the whole
-        # point of the guard is that a shared account otherwise fails as
-        # "members waiting" with every indicator green.
+        # Severity is decided by the BOARD, not here, and it depends on which
+        # host owns generation: informational while the PC is still master (a
+        # server-side account fault holds up nobody), blocking once the server
+        # owns it. An earlier version of this comment claimed "critical even in
+        # observation" — that contradicted `health.ts`, which downgrades any
+        # label emitted by an observing server to `pending`, exactly as it does
+        # for `claude_auth:observation_pending`.
         add_label 'claude_account:unexpected'
+        ACCOUNT_SEEN=true
+        ;;
+      account_guard_misconfigured)
+        # The configured digest is not a digest. Distinct from `unexpected` on
+        # purpose: telling the operator to reconnect the account would send them
+        # to fix the one thing that is not broken.
+        add_label 'claude_account:misconfigured'
         ACCOUNT_SEEN=true
         ;;
       account_unverifiable)

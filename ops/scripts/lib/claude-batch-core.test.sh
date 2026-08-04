@@ -280,6 +280,27 @@ printf 'You have hit your session limit\n' >"$ERRORS_LOG"
 core_note_failure
 check_eq "capped run with 0 successes → 75, not 76" "75" "$(core_run_exit_code)"
 
+# The `produced` argument — the --resume recovery path. A resumed run reuses a
+# prior result and can legitimately persist real work with ZERO model-call
+# successes of its own. Without the argument it exits 76 and the board reads
+# "this batch generates nothing" over a run that just delivered.
+core_reset_failure_state
+: >"$ERRORS_LOG"
+CORE_LAST_RESPONSE_FILE=""
+core_note_failure
+check_eq "0 succès + 1 échec, rien de produit → 76" "76" "$(core_run_exit_code)"
+check_eq "  …mais 1 résultat livré (resume) → 0" "0" "$(core_run_exit_code 1)"
+# The argument must NOT be able to hide a usage cap: 75 carries the cooldown.
+core_reset_failure_state
+printf 'You have hit your session limit\n' >"$ERRORS_LOG"
+core_note_failure
+check_eq "cap + résultat livré → 75, l'argument ne masque pas le cap" "75" "$(core_run_exit_code 1)"
+# A non-numeric or absent argument must degrade to the previous behaviour.
+core_reset_failure_state
+: >"$ERRORS_LOG"
+core_note_failure
+check_eq "argument vide → comportement inchangé (76)" "76" "$(core_run_exit_code '')"
+
 # reset clears the totals, so a stale count can never bleed into the next run.
 core_reset_failure_state
 check_eq "reset clears CORE_TOTAL_FAILURES" "0" "$CORE_TOTAL_FAILURES"

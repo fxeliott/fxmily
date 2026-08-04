@@ -308,6 +308,54 @@ check_eq "reset clears CORE_TOTAL_SUCCESSES" "0" "$CORE_TOTAL_SUCCESSES"
 : >"$ERRORS_LOG"
 
 # ---------------------------------------------------------------------------
+# Pre-call rejections must reach the verdict.
+#
+# A member rejected BEFORE any claude call (malformed pseudonymLabel or userId)
+# used to bump only a pipeline-local `errored` counter. `core_run_exit_code`
+# then saw BOTH totals at 0 and returned 0 — so a cohort rejected 100% at the
+# gate, on what the pipelines themselves label « possible compromise », exited
+# green with an `ok:true` status.json and no watchdog label.
+core_reset_failure_state
+: >"$ERRORS_LOG"
+core_note_precall_rejection
+core_note_precall_rejection
+check_eq "rejets pré-appel seuls, rien livré → 76" "76" "$(core_run_exit_code)"
+check_eq "rejets pré-appel comptés dans les échecs totaux" "2" "$CORE_TOTAL_FAILURES"
+
+# The breaker must stay a *claude*-failure streak: a malformed envelope is no
+# reason to abandon the members that follow. Set the threshold explicitly — an
+# earlier section leaves it at 1 globally, and an ambient value would make this
+# assertion measure the wrong thing.
+FXMILY_MAX_CONSECUTIVE_FAILURES=1
+check_eq "rejets pré-appel ne déclenchent PAS le disjoncteur" \
+  "1" "$(core_should_halt >/dev/null 2>&1; echo $?)"
+
+# A rejection alongside a delivered result is not a run failure.
+core_reset_failure_state
+: >"$ERRORS_LOG"
+core_note_precall_rejection
+core_note_success
+check_eq "1 rejet + 1 résultat livré → 0" "0" "$(core_run_exit_code 1)"
+
+# Structural guard. The bug above was not that one site forgot to count — it was
+# that NO site could. Now that the core knows how, a future rejection branch that
+# forgets the call would silently re-open the exact same hole. This turns that
+# omission from invisible into red.
+_ops_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+_mismatch=""
+for _f in "$_ops_dir"/*-local.sh; do
+  [ -f "$_f" ] || continue
+  _b=$(grep -cE 'if ! core_validate_(pseudonym|user_id)' "$_f" || true)
+  _c=$(grep -cE '^[[:space:]]*core_note_precall_rejection[[:space:]]*$' "$_f" || true)
+  [ "$_b" = "$_c" ] || _mismatch="$_mismatch $(basename "$_f"):branches=$_b,compteurs=$_c"
+done
+check_eq "chaque branche de rejet pré-appel compte son membre" "" "$_mismatch"
+
+core_reset_failure_state
+: >"$ERRORS_LOG"
+FXMILY_MAX_CONSECUTIVE_FAILURES=99
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "===================================================="
 echo "core anti-ban tests: $PASS passed, $FAIL failed"

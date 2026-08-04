@@ -257,13 +257,19 @@ fi
 # A HASH, not the address. `worker.env` is mirrored onto a public-repo host whose
 # Actions logs are public, and §21.5 treats the account address as personal data.
 # The hash is compared, never the value, and neither is ever printed.
-EXPECTED_ACCOUNT_SHA256="${FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256:-}"
+EXPECTED_ACCOUNT_RAW="${FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256:-}"
 # Strip CR and surrounding blanks, then lower-case. The CR is not hypothetical:
 # `worker.env` is authored and edited from a Windows machine, and a surviving
 # \r has already cost this project a whole class of silent 401s. Lower-casing
 # both sides makes the comparison agree with how mail addresses actually behave.
-EXPECTED_ACCOUNT_SHA256="$(printf '%s' "$EXPECTED_ACCOUNT_SHA256" | tr -d '\r' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-if [[ -n "$EXPECTED_ACCOUNT_SHA256" ]]; then
+EXPECTED_ACCOUNT_SHA256="$(printf '%s' "$EXPECTED_ACCOUNT_RAW" | tr -d '\r' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+# Gate on the RAW value, never the normalised one. Normalising first made a
+# blanks-only value collapse to empty and take the opt-out branch below: the
+# guard disarmed itself, silently, and the batch ran against whichever account
+# happened to be signed in. A guard that fails OPEN on a malformed value is
+# worse than no guard, because the board reports it as verified. Blanks now
+# fall through to the hex check and are refused as misconfigured.
+if [[ -n "$EXPECTED_ACCOUNT_RAW" ]]; then
   # Validate the CONFIGURED value before comparing anything against it. Without
   # this, `changeme` — or the raw output of `sha256sum`, which carries a trailing
   # ` -` — is simply "a value that does not match", so every tick reported "the

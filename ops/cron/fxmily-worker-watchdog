@@ -72,8 +72,21 @@ fi
 # run in observation while the watchdog reported on a production host.
 # `:-` first for the same reason as there: `set -u` is active and the key is
 # legitimately absent on a fresh host.
-FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN:-}"
-FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN%$'\r'}"
+# Same reasoning as `fxmily-worker`: the CR is a property of the file, not of one
+# key, and blanks flip the same door. A CR surviving on FXMILY_WORKER_LOG_DIR or
+# FXMILY_WORKER_CRON_FILE would make this watchdog read a directory that does not
+# exist and report every pipeline missing — a red board for an invisible byte.
+_norm() { # $1 = variable NAME. Strips every CR, then leading/trailing blanks.
+  local _v="${!1:-}"
+  _v="${_v//$'\r'/}"
+  _v="${_v#"${_v%%[![:space:]]*}"}"
+  _v="${_v%"${_v##*[![:space:]]}"}"
+  printf -v "$1" '%s' "$_v"
+}
+for _k in FXMILY_WORKER_DRY_RUN FXMILY_BASE_URL FXMILY_WORKER_CRON_FILE \
+          FXMILY_WORKER_LOCK_DIR FXMILY_WORKER_LOG_DIR FXMILY_WORKER_REPO WORKER_LOG; do
+  _norm "$_k"
+done
 WATCHDOG_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
 mkdir -p "$(dirname "$WATCHDOG_LOG")" 2>/dev/null || true
 

@@ -123,12 +123,14 @@ for idx in $ENTRY_INDICES; do
   HAS_ACTIVITY=$(jq -r --argjson idx "$idx" '.entries[$idx].hasActivity' "$ENVELOPE_FILE")
 
   if ! core_validate_pseudonym "$PSEUDO" "$PSEUDONYM_REGEX"; then
+    core_note_precall_rejection
     errored=$((errored + 1))
     echo "  [$i/$ENTRY_COUNT] SKIP (invalid pseudonymLabel format — possible compromise) : '${PSEUDO:0:32}'"
     core_append_error "$USER_ID" "invalid_pseudonym_format"
     continue
   fi
   if ! core_validate_user_id "$USER_ID"; then
+    core_note_precall_rejection
     errored=$((errored + 1))
     echo "  [$i/$ENTRY_COUNT] SKIP (invalid userId format) : '${USER_ID:0:32}'"
     continue

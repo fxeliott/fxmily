@@ -1524,6 +1524,64 @@ describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () 
   });
 
   /**
+   * Why this matters : `'claude_account'` in SERVER_CRITICAL_LABELS is the ONLY
+   * thing that turns "the worker is signed into an account it was not dedicated
+   * to" into an incident. That skip is benign BY DESIGN — exit 0, `ok:true`,
+   * envelope never pulled — so age, ok and exitCode all stay green while nothing
+   * is generated for anybody.
+   *
+   * The sibling assertions in the host-actions suite run with `WORKER_HOST`
+   * unset, where the observation-window downgrade turns the card `pending`. They
+   * therefore could not see the escalation at all, and a fresh-context review
+   * proved it by mutation: removing `'claude_account'` from the critical set, or
+   * flipping the three `blocked` severities to `pending`, left the whole file
+   * green. Measured, not supposed. This test pins the escalation itself, on the
+   * profile where it is the operator's only signal.
+   */
+  it('escalates a wrong-account skip to red and to a blocking card once the worker IS the server', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport, buildHostActionsReport: serverActions } =
+      await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['claude_account:unexpected'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    expect(report.entries.find((e) => e.action === 'worker.watchdog.heartbeat')?.status).toBe(
+      'red',
+    );
+
+    // …and the operator gets a BLOCKING card pointing at the account. The
+    // observation-window downgrade must not apply here: the server IS master, so
+    // "nothing is generated" is an outage, not a planned quiet period.
+    const card = serverActions(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['claude_account:unexpected'],
+          watchdogVersion: SERVER_WATCHDOG_VERSION_LIVE,
+        }),
+      ]),
+    ).items[0]!;
+    expect(card.severity).toBe('blocked');
+    expect(card.command).toBe('sudo -u fxmily -H claude auth login --claudeai');
+  });
+
+  /**
    * Why this matters : séances is the only entry J9 ADDED, and the 4h reasoning
    * that shaped every inherited tolerance was never applied to it. Its ticks are
    * 30 min apart and the default flips red after 2 missed ones — ~1h35 — while
@@ -2322,12 +2380,16 @@ describe('buildHostActionsReport', () => {
         expect(item.sinceIso).toBeNull();
       }
 
-      // NOT ASSERTED HERE, and saying so rather than implying coverage: the
-      // `blocked` severity once `WORKER_HOST=server`. `env.WORKER_HOST` is
-      // parsed ONCE at module load, so it needs the separate re-import harness
-      // of the "J9 server profile" suite above. What this loop does prove is the
-      // part that was actually broken — that the three labels resolve to a card
-      // at all, which they did not before they had remediation entries.
+      // NOT ASSERTED HERE: the `blocked` severity once `WORKER_HOST=server`.
+      // `env.WORKER_HOST` is parsed ONCE at module load, so it needs the
+      // re-import harness of the "J9 server profile" suite above — where that
+      // escalation IS now pinned, by `escalates a wrong-account skip to red and
+      // to a blocking card`. An earlier version of this comment named that
+      // harness as the reason the test could not be written; it is in this same
+      // file, and the omission left the entire red path deletable with every
+      // test still green. What this loop proves is the complementary half: on
+      // the PC profile the three labels resolve to a card at all, which they did
+      // not before they had remediation entries.
     }
   });
 

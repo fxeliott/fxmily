@@ -204,6 +204,7 @@ Variables CSS dans `src/app/globals.css` : tokens privés (`:root` sombre + `.li
   - `tests/e2e/recompute-scores.spec.ts` (J6) — cron `/api/cron/recompute-scores` 401/503/405 public surface.
   - Le full happy-path member (login → create → close → list / login → checkin → streak++) attend le helper de seed Postgres (cross-jalon).
 - Postgres réel attendu (testcontainers ou compose dédié `docker-compose.test.yml` à wirer plus tard).
+- **Base jetable pour reproduire un bug : `bash ops/scripts/db-tmp.sh create <slug>`**, jamais à la main. Elle s'appellera `fxmily_tmp_<slug>` et `drop --all --yes` les efface toutes d'un geste — la base de dev `fxmily` ne peut pas être ciblée. `doctor` signale celles créées hors convention. Sans ça elles s'accumulent : 15 bases orphelines / 155 Mo au 2026-08-04.
 - Mock storage : pas besoin — `LocalStorageAdapter` écrit dans `<UPLOADS_DIR>` qu'on peut router vers un répertoire temporaire dans les tests E2E.
 - Mock Resend : pour J1+ le fallback `console.log` du wrapper suffit.
 

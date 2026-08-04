@@ -118,3 +118,9 @@ prompt fxmily/
 apps/web/.cisim-scripts/
 apps/web/.measure-*.mjs
 apps/web/warm.mjs
+
+# Journal de session Claude (.claude/state/progress.md). Le reste de .claude/
+# est versionné volontairement (commands/, launch.json) : on n'ignore que
+# l'état de session, qui contient des chemins de machine locale et n'a rien
+# à faire dans un dépôt public.
+.claude/state/

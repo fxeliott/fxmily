@@ -103,19 +103,34 @@ Code session, a long session can exhaust the window and the batches go into
 cooldown — members wait, and nothing in the app explains why. Use an account
 that does nothing else.
 
-> **This is a requirement, not an observed state — and nothing here can check
-> it.** `claude auth status --json` reports whether _an_ account is logged in,
-> never which one nor what else it does; the board sees the consequence
-> (`claude_quota:capped`, then heartbeats going stale) long after the fact, and
-> reports it as a benign self-resolving pause. So a shared account does not fail
-> loudly, it fails as _members waiting_, which is the exact silence this jalon
-> exists to remove.
+> **This paragraph used to say the requirement could not be checked. That was
+> wrong, and it was wrong about a fact this repo could have measured at any
+> time.** It read: "`claude auth status --json` reports whether _an_ account is
+> logged in, never which one nor what else it does". Measured 2026-08-04: a
+> subscription session returns `email`, `orgName` and `subscriptionType` — and
+> `run-batch.sh` had **always** read `.email` and recorded it in `status.json`.
+> The identity was captured all along; nothing ever compared it to anything.
 >
-> Concretely: if the account used here is the same one that runs anything else on
-> a schedule, the anti-ban mitigations still hold but the capacity argument above
-> does not, and a busy day can starve the pipelines. That is a call for Eliot to
-> make and to state explicitly — it has not been recorded anywhere, and this
-> paragraph must not be read as evidence that it was.
+> It is now checkable, and opt-in. Set `FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256`
+> in `worker.env` to the sha256 of the lower-cased address of the dedicated
+> account:
+>
+> ```bash
+> printf '%s' 'the-account@example.com' | tr '[:upper:]' '[:lower:]' | sha256sum | cut -d' ' -f1
+> ```
+>
+> A mismatch skips the tick — benign, idempotent, nothing lost — and raises
+> `claude_account:unexpected`, which the board escalates to red with the login
+> command. Skipping beats running: a skipped tick is recovered by the next one,
+> whereas quota spent on the wrong account is not. A session that carries no
+> address at all (an environment-variable token returns neither `email` nor
+> `subscriptionType`) raises `claude_account:unverifiable` rather than passing
+> quietly.
+>
+> **What is still NOT checkable**: what else that account does. The guard proves
+> the worker runs on the account you named; it cannot prove that account is idle
+> elsewhere. Sharing it remains a call for Eliot to make and to state — and one
+> the anti-ban mitigations survive, while the capacity argument above does not.
 
 ### Re-login when the session expires
 

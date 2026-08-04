@@ -986,6 +986,12 @@ const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
  */
 const SERVER_CRITICAL_LABELS = [
   'claude_auth:logged_out',
+  // The worker is running on an account it was not dedicated to, or the guard
+  // is configured and cannot identify the session at all. Both mean the same
+  // thing operationally — the pipelines are skipping, nothing is generated —
+  // and neither is visible any other way: the skip is benign by design (exit 0,
+  // ok:true, envelope not pulled) so age, ok and exitCode all stay green.
+  'claude_account',
   'batch_failed',
   'cron_file_missing',
   'cron_file_crlf',
@@ -1321,6 +1327,27 @@ const LABEL_HOST_ACTIONS: Record<
     // discriminator is redundant here: its command is a server command, always.
     commandKind: 'server-login',
     severity: 'pending',
+  },
+  // J9 follow-up — the dedicated-account requirement, made checkable.
+  //
+  // The RUNBOOK used to state that nothing could verify WHICH account the worker
+  // runs on. Measured 2026-08-04: a subscription session reports `email`,
+  // `orgName` and `subscriptionType`, and run-batch.sh had always read the
+  // address — it simply never compared it to anything. These two cards are that
+  // comparison surfacing.
+  'claude_account:unexpected': {
+    label: 'Worker · le mauvais compte Claude est connecté',
+    detail:
+      "Le compte Claude connecté sur la machine worker n'est pas celui auquel ce worker est dédié. Les batchs se mettent volontairement en pause plutôt que de consommer le quota d'un autre compte : rien n'est perdu, les membres en attente seront repris. Reconnecte le compte dédié.",
+    commandKind: 'login',
+    severity: 'blocked',
+  },
+  'claude_account:unverifiable': {
+    label: 'Worker · compte Claude non identifiable',
+    detail:
+      "La vérification du compte dédié est configurée, mais la session connectée ne porte aucune identité à comparer : c'est le cas d'une authentification par jeton en variable d'environnement. Les batchs se mettent en pause. Reconnecte le compte avec le flux d'abonnement, ou retire la vérification si elle n'est plus voulue.",
+    commandKind: 'login',
+    severity: 'blocked',
   },
   'claude_quota:capped': {
     label: 'Worker · quota Claude atteint',

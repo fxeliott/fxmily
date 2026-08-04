@@ -201,12 +201,39 @@ fi
 
 # --- 4. RUNS -----------------------------------------------------------------
 QUOTA_SEEN=false
+# The dedicated-account guard is machine-wide, like the quota one: every
+# pipeline skips for the same reason, so reporting it once is the honest count.
+ACCOUNT_SEEN=false
 for p in "${PIPELINES[@]}"; do
   status_file="$LOG_DIR/${p}.status.json"
   [[ -r "$status_file" ]] || continue
   ok="$(jq -r '.ok // false' "$status_file" 2>/dev/null || echo false)"
   code="$(jq -r '.exitCode // 0' "$status_file" 2>/dev/null || echo 0)"
   capped="$(jq -r '.quotaCapped // false' "$status_file" 2>/dev/null || echo false)"
+  # `skipped` was written by run-batch.sh and read by NOBODY on this side. The
+  # dedicated-account guard skips the tick benignly (exit 0, ok:true) precisely
+  # so nothing is lost — which means the age heartbeat and the ok/exitCode pair
+  # both stay green, and this field is the ONLY place the reason survives.
+  skipped="$(jq -r '.skipped // ""' "$status_file" 2>/dev/null || echo "")"
+  if [[ "$ACCOUNT_SEEN" == "false" ]]; then
+    case "$skipped" in
+      account_unexpected)
+        # The signed-in account is not the one this worker is dedicated to.
+        # Critical even in observation: it is not a planned state, and the whole
+        # point of the guard is that a shared account otherwise fails as
+        # "members waiting" with every indicator green.
+        add_label 'claude_account:unexpected'
+        ACCOUNT_SEEN=true
+        ;;
+      account_unverifiable)
+        # The guard is configured but the session carries no identity to compare
+        # (an environment-variable token returns no address). Nothing generates,
+        # so this is not informational.
+        add_label 'claude_account:unverifiable'
+        ACCOUNT_SEEN=true
+        ;;
+    esac
+  fi
   if [[ "$capped" == "true" && "$QUOTA_SEEN" == "false" ]]; then
     # Benign + self-resolving: the cooldown stamp makes every following tick a
     # no-op until the quota window reopens. Reported once, machine-wide.

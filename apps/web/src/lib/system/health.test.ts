@@ -2269,6 +2269,57 @@ describe('buildHostActionsReport', () => {
   });
 
   /**
+   * J9 follow-up — the dedicated-account guard, surfaced.
+   *
+   * The RUNBOOK used to state that nothing could check WHICH account the worker
+   * runs on. Measured 2026-08-04: a subscription session reports its address,
+   * and `run-batch.sh` had always read it — it was never compared to anything.
+   * The guard skips the tick BENIGNLY on a mismatch (exit 0, ok:true, envelope
+   * never pulled), which is exactly why the label is the only surviving signal:
+   * age, `ok` and `exitCode` all stay green while nothing is generated.
+   */
+  it('surfaces the wrong Claude account as a BLOCKED action, not a benign pause', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['claude_account:unexpected'],
+        }),
+      ]),
+    );
+    expect(report.items).toHaveLength(1);
+    const item = report.items[0]!;
+    expect(item.key).toBe('label:claude_account:unexpected');
+    // `blocked`, deliberately. A shared account is not a self-resolving pause
+    // like `claude_quota:capped`: it never clears on its own, and its only
+    // symptom is members waiting.
+    expect(item.severity).toBe('blocked');
+    expect(item.sinceIso).toBeNull();
+  });
+
+  it('surfaces an unidentifiable Claude session as BLOCKED too', () => {
+    const report = buildHostActionsReport(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['claude_account:unverifiable'],
+        }),
+      ]),
+    );
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0]!.key).toBe('label:claude_account:unverifiable');
+    expect(report.items[0]!.severity).toBe('blocked');
+  });
+
+  /**
    * J9 — the command must follow the watchdog that REPORTED the fault, not
    * `WORKER_HOST`.
    *

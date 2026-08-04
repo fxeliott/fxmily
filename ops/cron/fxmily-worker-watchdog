@@ -65,6 +65,15 @@ if [[ -r /etc/fxmily/cron.env ]]; then
   # shellcheck disable=SC1091
   source /etc/fxmily/cron.env
 fi
+# Identical to the wrapper's, and it HAS to be. These two readers already cost
+# this jalon one incident by disagreeing on the default (`:-1` here vs `:-0`
+# there) — the watchdog then called a healthy host logged out. A CR stripped in
+# one reader and not the other reproduces that class exactly: the wrapper would
+# run in observation while the watchdog reported on a production host.
+# `:-` first for the same reason as there: `set -u` is active and the key is
+# legitimately absent on a fresh host.
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN:-}"
+FXMILY_WORKER_DRY_RUN="${FXMILY_WORKER_DRY_RUN%$'\r'}"
 WATCHDOG_LOG="${WORKER_LOG:-/var/log/fxmily/worker.log}"
 mkdir -p "$(dirname "$WATCHDOG_LOG")" 2>/dev/null || true
 
@@ -192,12 +201,50 @@ fi
 
 # --- 4. RUNS -----------------------------------------------------------------
 QUOTA_SEEN=false
+# The dedicated-account guard is machine-wide, like the quota one: every
+# pipeline skips for the same reason, so reporting it once is the honest count.
+ACCOUNT_SEEN=false
 for p in "${PIPELINES[@]}"; do
   status_file="$LOG_DIR/${p}.status.json"
   [[ -r "$status_file" ]] || continue
   ok="$(jq -r '.ok // false' "$status_file" 2>/dev/null || echo false)"
   code="$(jq -r '.exitCode // 0' "$status_file" 2>/dev/null || echo 0)"
   capped="$(jq -r '.quotaCapped // false' "$status_file" 2>/dev/null || echo false)"
+  # `skipped` was written by run-batch.sh and read by NOBODY on this side. The
+  # dedicated-account guard skips the tick benignly (exit 0, ok:true) precisely
+  # so nothing is lost — which means the age heartbeat and the ok/exitCode pair
+  # both stay green, and this field is the ONLY place the reason survives.
+  skipped="$(jq -r '.skipped // ""' "$status_file" 2>/dev/null || echo "")"
+  if [[ "$ACCOUNT_SEEN" == "false" ]]; then
+    case "$skipped" in
+      account_unexpected)
+        # The signed-in account is not the one this worker is dedicated to.
+        # Severity is decided by the BOARD, not here, and it depends on which
+        # host owns generation: informational while the PC is still master (a
+        # server-side account fault holds up nobody), blocking once the server
+        # owns it. An earlier version of this comment claimed "critical even in
+        # observation" — that contradicted `health.ts`, which downgrades any
+        # label emitted by an observing server to `pending`, exactly as it does
+        # for `claude_auth:observation_pending`.
+        add_label 'claude_account:unexpected'
+        ACCOUNT_SEEN=true
+        ;;
+      account_guard_misconfigured)
+        # The configured digest is not a digest. Distinct from `unexpected` on
+        # purpose: telling the operator to reconnect the account would send them
+        # to fix the one thing that is not broken.
+        add_label 'claude_account:misconfigured'
+        ACCOUNT_SEEN=true
+        ;;
+      account_unverifiable)
+        # The guard is configured but the session carries no identity to compare
+        # (an environment-variable token returns no address). Nothing generates,
+        # so this is not informational.
+        add_label 'claude_account:unverifiable'
+        ACCOUNT_SEEN=true
+        ;;
+    esac
+  fi
   if [[ "$capped" == "true" && "$QUOTA_SEEN" == "false" ]]; then
     # Benign + self-resolving: the cooldown stamp makes every following tick a
     # no-op until the quota window reopens. Reported once, machine-wide.

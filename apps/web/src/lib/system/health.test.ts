@@ -2269,6 +2269,96 @@ describe('buildHostActionsReport', () => {
   });
 
   /**
+   * J9 follow-up — the dedicated-account guard, surfaced.
+   *
+   * The RUNBOOK used to state that nothing could check WHICH account the worker
+   * runs on. Measured 2026-08-04: a subscription session reports its address,
+   * and `run-batch.sh` had always read it — it was never compared to anything.
+   * The guard skips the tick BENIGNLY on a mismatch (exit 0, ok:true, envelope
+   * never pulled), which is exactly why the label is the only surviving signal:
+   * age, `ok` and `exitCode` all stay green while nothing is generated.
+   */
+  it('surfaces the three account faults from the version string the emitter REALLY posts', () => {
+    // A first version of these tests omitted `watchdogVersion` entirely and
+    // asserted `blocked`. That path does not exist: the ONLY emitter of
+    // `claude_account:*` is the Linux watchdog, which always suffixes `-srv`.
+    // The tests were green against a fixture the product never produces — a
+    // decorative test, which is worse than none.
+    const itemFor = (label: string, watchdogVersion: string) =>
+      buildHostActionsReport(
+        cronReport([]),
+        workerReport([
+          entry({
+            action: 'worker.watchdog.heartbeat',
+            status: 'red',
+            lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+            ageMs: 20 * MIN,
+            errorLabels: [label],
+            watchdogVersion,
+          }),
+        ]),
+      ).items[0]!;
+
+    for (const label of [
+      'claude_account:unexpected',
+      'claude_account:unverifiable',
+      'claude_account:misconfigured',
+    ]) {
+      // Both version strings the emitter can post, in the profile this suite
+      // runs under (`WORKER_HOST` unset, i.e. `pc` — today's reality and the
+      // whole observation window). The card must EXIST and be informational:
+      // the PC is still master and generating, so a server-side account fault
+      // holds nobody up. Same treatment as `claude_auth:observation_pending`,
+      // deliberately: a board that cries wolf through a planned migration is a
+      // board nobody reads afterwards.
+      for (const version of [SERVER_WATCHDOG_VERSION_OBSERVING, SERVER_WATCHDOG_VERSION_LIVE]) {
+        const item = itemFor(label, version);
+        expect(item.key).toBe(`label:${label}`);
+        expect(item.severity).toBe('pending');
+
+        // No card carries a "since": nothing records when a label first
+        // appeared, and `lastRanAt` is the watchdog's last BEAT, which would
+        // rejuvenate on every tick.
+        expect(item.sinceIso).toBeNull();
+      }
+
+      // NOT ASSERTED HERE, and saying so rather than implying coverage: the
+      // `blocked` severity once `WORKER_HOST=server`. `env.WORKER_HOST` is
+      // parsed ONCE at module load, so it needs the separate re-import harness
+      // of the "J9 server profile" suite above. What this loop does prove is the
+      // part that was actually broken — that the three labels resolve to a card
+      // at all, which they did not before they had remediation entries.
+    }
+  });
+
+  it('sends a misconfigured digest to the config, not to the account', () => {
+    // The three faults must not share a remediation. Telling an operator to
+    // reconnect the account when the configured digest is simply not a digest
+    // points them at the one thing that is not broken.
+    const itemFor = (label: string) =>
+      buildHostActionsReport(
+        cronReport([]),
+        workerReport([
+          entry({
+            action: 'worker.watchdog.heartbeat',
+            status: 'red',
+            lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+            ageMs: 20 * MIN,
+            errorLabels: [label],
+            watchdogVersion: SERVER_WATCHDOG_VERSION_LIVE,
+          }),
+        ]),
+      ).items[0]!;
+
+    expect(itemFor('claude_account:misconfigured').command).toBe(
+      'sudo bash ops/worker/install-worker-vps.sh',
+    );
+    expect(itemFor('claude_account:unexpected').command).toBe(
+      'sudo -u fxmily -H claude auth login --claudeai',
+    );
+  });
+
+  /**
    * J9 — the command must follow the watchdog that REPORTED the fault, not
    * `WORKER_HOST`.
    *

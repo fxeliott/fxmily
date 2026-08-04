@@ -190,12 +190,22 @@ jq -s --arg ms "$MONTH_START" --arg me "$MONTH_END" \
 
 if [ "$DRY_RUN" = "true" ]; then
   echo "[3/3] --dry-run : skipping persist. Results saved at $RESULTS_FILE"
-  exit 0
+  # `core_run_exit_code`, not a bare 0: this early exit precedes the run's only
+  # other call to it, so a bare 0 discarded BOTH outcome signals for the whole
+  # observation window — a usage cap never reached 75 (no cooldown stamp, so the
+  # anti-ban pause never engaged) and a run that failed on every member never
+  # reached 76 (green board, nothing produced). Measured 2026-08-04.
+  exit "$(core_run_exit_code)"
 fi
 
 if [ "$generated" -eq 0 ]; then
-  echo "[3/3] No debriefs to persist (all errored). Exit 0."
-  exit 0
+  echo "[3/3] No debriefs to persist (all errored)."
+  # THE production-path door, and the one that matters. "Nothing to persist
+  # because everything errored" IS the total failure exit 76 exists to report —
+  # returning 0 here made the fix above live only inside `--dry-run`, i.e. only
+  # where the watchdog deliberately downgrades it. It also swallowed 75, so a
+  # usage cap left no cooldown stamp and the next tick re-hit a capped account.
+  exit "$(core_run_exit_code)"
 fi
 
 echo "[3/3] Persisting $generated debriefs to $APP_URL..."
@@ -216,4 +226,11 @@ echo "  claude errors  : $BATCH_DIR/claude-errors.log"
 
 # Volet B — surface a rate/usage-limit halt to the worker as exit 75 (benign
 # cooldown) even though the partial persist above succeeded. 0 otherwise.
-exit "$(core_run_exit_code)"
+#
+# The `1` is the "produced" count, and it is not decorative. Reaching this line
+# means the run got PAST the "nothing to persist" gate above, so it delivered
+# real work. Without it, a `--resume` run that reuses a prior result and hits one
+# new failure has zero model-call successes of its own and would exit 76 — a
+# "this batch generates nothing" card over a run that just persisted. Breaking
+# the recovery path is worse than the fault it recovers from.
+exit "$(core_run_exit_code 1)"

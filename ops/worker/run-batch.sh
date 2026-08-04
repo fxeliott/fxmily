@@ -214,12 +214,14 @@ fi
 # against a broken auth — so we skip the whole tick cleanly instead (benign;
 # the members are re-picked idempotently once an account is logged back in).
 ACCOUNT_EMAIL=""
+AUTH_METHOD=""
 AUTH_OK=false
 AUTH_JSON="$(claude auth status --json 2>/dev/null || true)"
 if [[ -n "$AUTH_JSON" ]]; then
   # jq is guaranteed present (every batch script requires it via
   # core_sanity_checks); parse robustly and treat any parse miss as logged-out.
   AUTH_LOGGED_IN="$(printf '%s' "$AUTH_JSON" | jq -r '.loggedIn // false' 2>/dev/null || echo false)"
+  AUTH_METHOD="$(printf '%s' "$AUTH_JSON" | jq -r '.authMethod // ""' 2>/dev/null || echo "")"
   if [[ "$AUTH_LOGGED_IN" == "true" ]]; then
     AUTH_OK=true
     ACCOUNT_EMAIL="$(printf '%s' "$AUTH_JSON" | jq -r '.email // ""' 2>/dev/null || echo "")"
@@ -230,6 +232,78 @@ if [[ "$AUTH_OK" != "true" ]]; then
   write_skip_status "no_claude_auth" ",
   \"authOk\": false"
   exit 0
+fi
+
+# --- Pre-flight: and it must be the account this worker is SUPPOSED to run on --
+#
+# WHY THIS EXISTS. The RUNBOOK used to state that a dedicated account is "a
+# requirement, not an observed state — and nothing here can check it", on the
+# grounds that `claude auth status --json` "reports whether AN account is logged
+# in, never which one". Measured 2026-08-04: that is false. A subscription
+# session returns `email`, `orgName` and `subscriptionType` — and the line above
+# has always read `.email`. The identity was captured and recorded in
+# status.json; nothing ever compared it to anything.
+#
+# That gap matters because a shared account does not fail loudly. Every guard in
+# this file stays green, the batches run, and the only symptom is members waiting
+# while some other session eats the 5-hour window. It is the exact silence this
+# jalon exists to remove.
+#
+# The check is OPT-IN: unset ⇒ previous behaviour, byte for byte. Configured ⇒
+# a mismatch SKIPS the tick (benign, idempotent, nothing lost) and reports a
+# label the board escalates. Skipping beats running: burning someone else's quota
+# is not recoverable by a later tick, whereas a skipped tick is.
+#
+# A HASH, not the address. `worker.env` is mirrored onto a public-repo host whose
+# Actions logs are public, and §21.5 treats the account address as personal data.
+# The hash is compared, never the value, and neither is ever printed.
+EXPECTED_ACCOUNT_SHA256="${FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256:-}"
+# Strip CR and surrounding blanks, then lower-case. The CR is not hypothetical:
+# `worker.env` is authored and edited from a Windows machine, and a surviving
+# \r has already cost this project a whole class of silent 401s. Lower-casing
+# both sides makes the comparison agree with how mail addresses actually behave.
+EXPECTED_ACCOUNT_SHA256="$(printf '%s' "$EXPECTED_ACCOUNT_SHA256" | tr -d '\r' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+if [[ -n "$EXPECTED_ACCOUNT_SHA256" ]]; then
+  # Validate the CONFIGURED value before comparing anything against it. Without
+  # this, `changeme` — or the raw output of `sha256sum`, which carries a trailing
+  # ` -` — is simply "a value that does not match", so every tick reported "the
+  # signed-in account is NOT the dedicated one" and the board printed "reconnect
+  # the dedicated account": a remediation that can never fix a typo. Same fault
+  # as telling an operator to reinstall the machine that is working.
+  if [[ ! "$EXPECTED_ACCOUNT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "[worker] $BATCH — SKIP: FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256 is not a 64-character hex digest, so no account can ever match it. Fix worker.env (see worker.env.example). Skipping (benign)."
+    write_skip_status "account_guard_misconfigured" ",
+  \"authOk\": true,
+  \"authMethod\": \"${AUTH_METHOD:-}\""
+    exit 0
+  fi
+  ACTUAL_ACCOUNT_SHA256=""
+  if [[ -n "$ACCOUNT_EMAIL" ]]; then
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL_ACCOUNT_SHA256="$(printf '%s' "$ACCOUNT_EMAIL" | tr '[:upper:]' '[:lower:]' | sha256sum | cut -d' ' -f1)"
+    elif command -v openssl >/dev/null 2>&1; then
+      ACTUAL_ACCOUNT_SHA256="$(printf '%s' "$ACCOUNT_EMAIL" | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256 -r | cut -d' ' -f1)"
+    fi
+  fi
+  if [[ -z "$ACTUAL_ACCOUNT_SHA256" ]]; then
+    # Either the session carries no address (an environment-variable token does
+    # not — measured: `authMethod: "oauth_token"` returns neither `email` nor
+    # `subscriptionType`), or no hasher is on PATH. Both mean the SAME thing: the
+    # operator asked for this account to be verified and it cannot be. Saying so
+    # beats quietly proceeding as if the check had passed.
+    echo "[worker] $BATCH — SKIP: the dedicated-account check is configured but the signed-in account cannot be identified (authMethod=${AUTH_METHOD:-unknown}). Skipping (benign)."
+    write_skip_status "account_unverifiable" ",
+  \"authOk\": true,
+  \"authMethod\": \"${AUTH_METHOD:-}\""
+    exit 0
+  fi
+  if [[ "$ACTUAL_ACCOUNT_SHA256" != "$EXPECTED_ACCOUNT_SHA256" ]]; then
+    echo "[worker] $BATCH — SKIP: the signed-in Claude account is NOT the one this worker is dedicated to. Skipping (benign) rather than spending another account's quota."
+    write_skip_status "account_unexpected" ",
+  \"authOk\": true,
+  \"authMethod\": \"${AUTH_METHOD:-}\""
+    exit 0
+  fi
 fi
 export ACCOUNT_EMAIL
 

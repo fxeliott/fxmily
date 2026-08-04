@@ -229,6 +229,20 @@ else
     echo "(the existing worker.env was left untouched)" >&2
     exit 2
   fi
+  # Carry the account guard across the rewrite. It is the ONE key here that is
+  # NOT mirrored from web.env: it is placed by hand, deliberately, and the block
+  # below is a `>` truncate. Without this, the documented rotation command
+  # (`--refresh-env`) silently DISARMS the guard — the file comes back valid,
+  # every batch runs, and the board reports the account as verified because
+  # "no expected digest configured" is the guard's own opt-out. A maintenance
+  # gesture that removes a security control without saying so is the failure
+  # mode this whole guard exists to prevent, one square over.
+  PRESERVED_ACCOUNT_GUARD=""
+  if [[ -f "$WORKER_ENV" ]]; then
+    PRESERVED_ACCOUNT_GUARD="$(
+      sed -n 's/^\(FXMILY_WORKER_EXPECTED_ACCOUNT_SHA256=.*\)$/\1/p' "$WORKER_ENV" | head -1
+    )"
+  fi
   [[ -f "$WORKER_ENV" ]] &&
     cp -a "$WORKER_ENV" "$WORKER_ENV.bak-$(date -u +%Y%m%dT%H%M%SZ)"
   install -o "$WORKER_USER" -g "$WORKER_USER" -m 600 /dev/null "$WORKER_ENV"
@@ -244,6 +258,11 @@ else
     sed -n 's/^SEANCES_ADMIN_BATCH_TOKEN=/FXMILY_SEANCES_TOKEN=/p' "$WEB_ENV"
     echo
     echo "FXMILY_BASE_URL=${FXMILY_BASE_URL:-https://app.fxmilyapp.com}"
+    if [[ -n "$PRESERVED_ACCOUNT_GUARD" ]]; then
+      echo
+      echo "# Carried over from the previous worker.env — NOT mirrored from web.env."
+      echo "$PRESERVED_ACCOUNT_GUARD"
+    fi
   } >"$WORKER_ENV"
   chmod 600 "$WORKER_ENV"
   chown "$WORKER_USER:$WORKER_USER" "$WORKER_ENV"

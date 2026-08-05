@@ -15,6 +15,7 @@ import { AppShell } from '@/components/nav/app-shell';
 import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getSessionAvatar } from '@/lib/avatar/read-url';
+import { env } from '@/lib/env';
 import './globals.css';
 
 const inter = Inter({
@@ -65,6 +66,29 @@ const clashDisplay = localFont({
 });
 
 export const metadata: Metadata = {
+  // Base de toute URL absolue de métadonnée (og:image, twitter:image, canonical,
+  // alternates). Sans elle, Next retombe sur `http://localhost:3000` : mesuré en
+  // production le 2026-08-05, le HTML servi de `/`, `/login` et `/rejoindre`
+  // annonçait `<meta property="og:image" content="http://localhost:3000/...">`.
+  // L'image elle-même répond pourtant 200 en `image/png` — seule la BASE était
+  // fausse. Conséquence : aucune vignette quand un lien est partagé dans un
+  // groupe ou envoyé à un prospect, et la seule référence `http://` non
+  // sécurisée du document.
+  //
+  // Source unique de vérité : `env.AUTH_URL`, déjà validé par Zod et contraint
+  // en HTTPS en production (`lib/env.ts`) — c'est la même origine que celle dont
+  // dépendent la garde same-origin de l'export RGPD et les URL des e-mails.
+  // Ne PAS écrire l'adresse en dur ici : une seconde copie dériverait.
+  //
+  // Lecture au chargement du module, donc dans le PROCESS QUI SERT — pas au
+  // build. C'est ce qui compte : `ops/docker/Dockerfile.prod` construit l'image
+  // avec `AUTH_URL=https://build.fxmily.invalid` et n'injecte les vraies valeurs
+  // qu'au runtime via `env_file`. Toutes les pages de l'app sont `ƒ`
+  // (server-rendered on demand), elles lisent donc la bonne valeur. Les rares
+  // routes `○` prérendues au build (`/offline`, les icônes) figent le
+  // placeholder — sans effet : elles ne se partagent pas, et `sitemap.ts` comme
+  // `robots.ts` n'émettent aucune URL absolue.
+  metadataBase: new URL(env.AUTH_URL),
   title: {
     default: 'Fxmily',
     template: '%s · Fxmily',

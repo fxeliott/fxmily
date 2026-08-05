@@ -128,9 +128,20 @@ upsert_record() {
 # ---- 3. Apply the 5 records ------------------------------------------------
 echo "→ Applying DNS records …"
 upsert_record "A"  "${APP_SUBDOMAIN}.${DOMAIN}" "${FXMILY_HETZNER_IP}"
-upsert_record "MX" "${DOMAIN}" "mx1.resend.com" 10
-upsert_record "MX" "${DOMAIN}" "mx2.resend.com" 20
-upsert_record "TXT" "${DOMAIN}" "v=spf1 include:_spf.resend.com ~all"
+# THE APEX MX AND SPF ARE DELIBERATELY NOT MANAGED HERE. They used to be, and
+# re-running this script would have DESTROYED production mail: it wrote
+# `mx1/mx2.resend.com` and `v=spf1 include:_spf.resend.com` unconditionally,
+# while the live zone runs the registrar's mailbox
+# (`mx.hover.com.cust.hostedemail.com`) with SPF on `send.` via Amazon SES.
+# Overwriting the apex MX silently stops eliot@ receiving anything — including
+# the certificate-expiry notices this stack depends on. The header of this file
+# promises idempotence, which is exactly the assurance that makes someone
+# re-run it "to re-sync DNS after a change".
+# Second reason it was unsafe: `find_record` reads `.result[0]`, so with TWO MX
+# at the same name the `mx1` upsert could target the `mx2` row and collapse the
+# pair to one.
+# If mail ever moves back to Resend, add these records BY HAND and update
+# `ops/scripts/verify-dns.sh` in the same commit — one source of truth per fact.
 upsert_record "TXT" "resend._domainkey.${DOMAIN}" "${FXMILY_RESEND_DKIM_VALUE}"
 upsert_record "TXT" "_dmarc.${DOMAIN}" "v=DMARC1; p=quarantine; rua=mailto:eliot@${DOMAIN}"
 

@@ -30,7 +30,13 @@ readonly REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 readonly TOKENS_FILE="${TOKENS_FILE:-$REPO_ROOT/tokens.local.env}"
 readonly DOMAIN="${FXMILY_DOMAIN:-fxmilyapp.com}"
 readonly APP_HOST="app.${DOMAIN}"
-readonly HETZNER_IP="${FXMILY_HETZNER_IP:-203.0.113.10}"
+# NO DEFAULT, on purpose. This used to fall back to 203.0.113.10, which is
+# RFC 5737 TEST-NET-3 — a documentation address that routes nowhere. An
+# unexported variable therefore pointed `app.fxmilyapp.com` at a black hole and
+# took the whole app down, silently, from a script whose job is to launch it.
+# A placeholder that looks like an IP is worse than no value: it fails LATE and
+# far from the cause. Fail here instead, with the variable named.
+readonly HETZNER_IP="${FXMILY_HETZNER_IP:?FXMILY_HETZNER_IP must be set (no default: a placeholder IP would point the app at a documentation address and take it down)}"
 
 SKIP_PREFLIGHT=0
 SKIP_VERIFY_TOKENS=0

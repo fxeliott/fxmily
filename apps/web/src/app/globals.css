@@ -2374,11 +2374,19 @@ body:has(
    .test.ts` échoue si une autre apparaît. Règle hors `@layer` : elle gagne donc
    sur l'utilitaire Tailwind homonyme sans `!important`. Repli `0px` : quand
    aucun îlot n'est monté, `calc(100dvh - 0px)` est strictement `100dvh`. */
+/* `--slot-legal-footer` : ce qui SUIT `<main>` dans le flux doit sortir de la
+   bande lui aussi. Mesuré à 1440×900 sur `/login` : rétrécir `<main>` de la
+   seule bande libérait exactement celle-ci en bas d'écran, et le pied de page
+   légal — élément suivant du flux — s'y installait aussitôt (liens à 819..847,
+   bannière à 810..888). La réservation avait donc DÉPLACÉ le recouvrement sur
+   les liens que la bannière référence, au lieu de le supprimer. Le pied de page
+   se retire de lui-même sur `/` (l'accueil porte le sien), et sa variable
+   disparaît avec lui. */
 .min-h-dvh {
-  min-height: calc(100dvh - var(--bottom-slot-inset, 0px));
+  min-height: calc(100dvh - var(--bottom-slot-inset, 0px) - var(--slot-legal-footer, 0px));
 }
 [data-slot='splash-hero'] {
-  min-height: calc(100svh - var(--bottom-slot-inset, 0px));
+  min-height: calc(100svh - var(--bottom-slot-inset, 0px) - var(--slot-legal-footer, 0px));
 }
 
 /* Sur les petits écrans, réserver ne suffit pas : mesurée à 375×667, la page
@@ -2405,7 +2413,36 @@ body:has(
     )
     [data-slot='auth-shell']
     > section {
-    gap: 1rem;
+    gap: 0.75rem;
+  }
+  /* Troisième mesure, sur `/rejoindre` : trois champs au lieu d'un, et le
+     submit « Envoyer ma demande » repassait sous la bande. Les pixels y sont
+     dans la carte (28px de padding vertical), la marge de son en-tête (24px) et
+     l'intervalle du formulaire (20px × 3). On les resserre ensemble plutôt que
+     de retoucher une page : c'est la structure commune à toutes les coquilles
+     d'auth. Toujours sous `sm` seulement, et toujours réversible à la fermeture
+     de l'îlot. */
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='auth-shell']
+    [data-slot='card'] {
+    padding-block: 0.75rem;
+  }
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='auth-shell']
+    [data-slot='card']
+    > header {
+    margin-bottom: 0.5rem;
+  }
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='auth-shell']
+    form {
+    gap: 0.75rem;
   }
   body:has(
       :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])

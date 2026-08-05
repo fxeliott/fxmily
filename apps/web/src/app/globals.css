@@ -2324,6 +2324,93 @@ body:has([data-slot='cookie-banner']) [data-slot='ios-install-hint'] {
 }
 
 /* =============================================================
+ * 2026-08-05 — RÉSERVATION DE LA BANDE DU SLOT BAS
+ * -------------------------------------------------------------
+ * Les règles ci-dessus arbitrent les îlots du slot bas ENTRE EUX. Aucune ne
+ * les arbitrait contre la PAGE : un îlot `fixed` ne réserve aucune place, donc
+ * il se pose sur le contenu.
+ *
+ * Mesuré en production le 2026-08-05 à 375×667 (iPhone SE), bannière cookies
+ * visible, par `document.elementFromPoint()` au centre de chaque cible :
+ *   /                « Se connecter » et « Demander un accès »  → OCCLUDED
+ *   /login           « Se connecter » (submit), « Mot de passe oublié ? »,
+ *                    « Faire une demande »                       → OCCLUDED
+ *   /forgot-password « Envoyer le lien » (submit),
+ *                    « Revenir à la connexion »                  → OCCLUDED
+ * Soit l'action principale des trois portes d'entrée de l'app. Le rendu visuel
+ * était correct — la bannière est opaque et « au-dessus », ce qui a l'air
+ * normal ; c'est le hit-test qui montre que le bouton n'est plus atteignable.
+ *
+ * Chaque îlot publie sa bande réelle (hauteur mesurée + décalage bas résolu)
+ * dans `--slot-<data-slot>` via `useBottomSlotReservation`. On prend le `max()`
+ * plutôt qu'une somme : les trois îlots sont mutuellement exclusifs à
+ * l'exécution (le CSS ci-dessus masque les deux hints sous la bannière), donc
+ * un seul porte une valeur non nulle, et un îlot masqué ne peut pas écraser
+ * celle d'un îlot visible.
+ * ============================================================= */
+body:has(
+  :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+) {
+  --bottom-slot-inset: calc(
+    max(
+        var(--slot-cookie-banner, 0px),
+        var(--slot-a2hs-hint, 0px),
+        var(--slot-ios-install-hint, 0px)
+      ) +
+      0.75rem
+  );
+  /* Rallonge la zone scrollable : ce qui suit `#main-content` dans le flux —
+     au premier chef le `<LegalFooter>` global, dont le recouvrement en desktop
+     a été signalé en revue — se termine désormais AU-DESSUS de l'îlot une fois
+     la page défilée en bas, au lieu de finir dessous. */
+  padding-bottom: var(--bottom-slot-inset);
+}
+
+/* Les boîtes verrouillées sur la hauteur du viewport doivent rendre la bande.
+   Sans ça, réserver ne sert à rien : `100dvh` ignore le padding d'un ancêtre,
+   la boîte reste pleine hauteur et le contenu centré retombe sous l'îlot.
+   `.min-h-dvh` est la SEULE expression de ce verrou dans ce dépôt (94
+   occurrences au 2026-08-05, toutes sur un `<main>`) ; `bottom-slot-reservation
+   .test.ts` échoue si une autre apparaît. Règle hors `@layer` : elle gagne donc
+   sur l'utilitaire Tailwind homonyme sans `!important`. Repli `0px` : quand
+   aucun îlot n'est monté, `calc(100dvh - 0px)` est strictement `100dvh`. */
+.min-h-dvh {
+  min-height: calc(100dvh - var(--bottom-slot-inset, 0px));
+}
+[data-slot='splash-hero'] {
+  min-height: calc(100svh - var(--bottom-slot-inset, 0px));
+}
+
+/* Sur les petits écrans, réserver ne suffit pas : mesurée à 375×667, la page
+   d'accueil fait déjà 823 px et `/login` 784 px — elles DÉBORDENT du viewport,
+   il n'y a donc aucun mou à récupérer, et le contenu resterait sous l'îlot au
+   défilement 0 quoi qu'on réserve. La bande se paie donc aussi en respiration,
+   et uniquement tant qu'un îlot est monté : à la fermeture, la page reprend
+   exactement sa composition d'origine. Rien au-dessus de `sm`, où la place ne
+   manque pas. */
+@media (max-width: 639px) {
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='auth-shell'] {
+    padding-block: 1.5rem;
+  }
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='splash-centre'] {
+    gap: 1.5rem;
+    padding-block: 1.5rem;
+  }
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='splash-emblem'] {
+    width: 160px;
+  }
+}
+
+/* =============================================================
  * S9.1 "WAVE WOW" — premium ADDITIVE craft (login aurora,
  * non-toxic celebrations, first-run reveal).
  * -------------------------------------------------------------

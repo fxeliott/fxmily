@@ -28,7 +28,14 @@ export function SplashHero() {
   return (
     <main className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[var(--bg)]">
       {/* ═══════════════ HERO (premier écran, ambiance deep-space scopée) ═══════════════ */}
-      <section className="splash-aurora-rich relative flex min-h-[100svh] flex-col overflow-hidden">
+      {/* `data-slot="splash-hero"` : globals.css retranche de ce `100svh` la
+          bande occupée par un îlot du slot bas (bannière cookies, hints
+          d'installation). Sans ça l'écran d'accueil reste plein-viewport et la
+          bannière se pose sur les deux actions — mesuré en prod le 2026-08-05. */}
+      <section
+        data-slot="splash-hero"
+        className="splash-aurora-rich relative flex min-h-[100svh] flex-col overflow-hidden"
+      >
         {/* Ambient backplate : champ d'étoiles + rayons coniques + orbes lents + grain
             (couches décoratives, z auto < contenu z-10). */}
         <StarField />
@@ -78,7 +85,10 @@ export function SplashHero() {
         </header>
 
         {/* ── Bienvenue centrée ── */}
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-5 py-10 text-center">
+        <div
+          data-slot="splash-centre"
+          className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-5 py-10 text-center"
+        >
           {/* Élément signature : emblème de marque orbital animé */}
           <SplashParallax>
             <div className="splash-float">
@@ -330,6 +340,11 @@ function BrandEmblem() {
       viewBox="0 0 200 200"
       aria-hidden="true"
       focusable="false"
+      // `data-slot="splash-emblem"` : sur petit écran, globals.css le réduit à
+      // 160px tant qu'un îlot du slot bas occupe le bas de la page. C'est le
+      // seul bloc de l'accueil assez gros pour rendre la place que la bannière
+      // prend — et il est purement décoratif, donc c'est lui qui paie.
+      data-slot="splash-emblem"
       className="h-auto w-[208px] sm:w-[268px]"
     >
       <defs>

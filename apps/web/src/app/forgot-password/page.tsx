@@ -23,7 +23,10 @@ export default async function ForgotPasswordPage() {
   }
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       <LoginAurora />
 
       <section className="relative z-10 flex w-full max-w-sm flex-col gap-6">

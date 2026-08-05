@@ -22,7 +22,10 @@ export const dynamic = 'force-static';
 
 export default function OfflinePage(): React.ReactElement {
   return (
-    <main className="relative flex min-h-dvh w-full flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-16 text-center">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh w-full flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-16 text-center"
+    >
       {/* Ambient backplate — decorative, aria-hidden, reduced-motion safe. */}
       <div
         aria-hidden="true"

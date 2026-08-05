@@ -38,7 +38,10 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
   }
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       <LoginAurora />
 
       <section className="relative z-10 flex w-full max-w-sm flex-col gap-6">
@@ -113,7 +116,10 @@ function InvalidTokenView({
   })();
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       <LoginAurora />
       <section className="relative z-10 mx-auto flex w-full max-w-md flex-col gap-5">
         <Card primary className="py-2">

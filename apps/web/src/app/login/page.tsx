@@ -35,7 +35,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const showResetNotice = resetFlag === 'success';
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       {/* S9.1 — premium drifting aurora backplate (decorative, zero JS). */}
       <LoginAurora />
 
@@ -94,7 +97,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           style={{ '--rise-delay': '230ms' } as CSSProperties}
         >
           Pas encore membre ?{' '}
-          <Link href="/rejoindre" className="text-[var(--acc)] underline-offset-2 hover:underline">
+          {/* Cible tactile ≥ 24×24 px (WCAG 2.2 SC 2.5.8) — mesurée à 100×14 px
+              le 2026-08-05. Le lien est dans une phrase, ce que la norme exempte,
+              mais c'est aussi la seule route « je veux entrer » de la page :
+              `inline-flex min-h-6` la met au gabarit sans casser la phrase. */}
+          <Link
+            href="/rejoindre"
+            className="inline-flex min-h-6 items-center rounded-[3px] px-1 align-middle text-[var(--acc)] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
             Faire une demande
           </Link>
         </p>

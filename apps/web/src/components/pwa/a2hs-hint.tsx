@@ -1,9 +1,10 @@
 'use client';
 
 import { Smartphone, X } from 'lucide-react';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { Btn } from '@/components/ui/btn';
+import { useBottomSlotReservation } from '@/components/ui/use-bottom-slot-reservation';
 
 const STORAGE_KEY = 'fxmily.a2hs.dismissed';
 
@@ -49,6 +50,7 @@ interface BeforeInstallPromptEvent extends Event {
 export function A2HSHint(): React.ReactElement | null {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [bump, setBump] = useState(0);
+  const hintRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -108,11 +110,16 @@ export function A2HSHint(): React.ReactElement | null {
     }
   };
 
+  // Same bottom slot as the cookie banner, so the same duty: reserve the band
+  // instead of painting over whatever the page put there.
+  useBottomSlotReservation(hintRef, !dismissed && Boolean(deferredPrompt), 'a2hs-hint');
+
   // Show only when we actually have a captured prompt AND it isn't dismissed.
   if (dismissed || !deferredPrompt) return null;
 
   return (
     <div
+      ref={hintRef}
       role="region"
       aria-label="Installer l'application"
       data-slot="a2hs-hint"

@@ -95,9 +95,11 @@ export function ForgotForm() {
         {pending ? 'Envoi…' : 'Envoyer le lien'}
       </Btn>
 
+      {/* Cible tactile ≥ 24×24 px (WCAG 2.2 SC 2.5.8) — mesurée à 117×17 px le
+          2026-08-05. Lien de navigation autonome : pas d'exception « inline ». */}
       <Link
         href="/login"
-        className="self-center rounded-[3px] text-[11px] text-[var(--t-4)] underline-offset-2 transition-colors hover:text-[var(--acc)] hover:underline focus-visible:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        className="inline-flex min-h-6 items-center self-center rounded-[3px] px-2 text-[11px] text-[var(--t-4)] underline-offset-2 transition-colors hover:text-[var(--acc)] hover:underline focus-visible:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
       >
         Revenir à la connexion
       </Link>

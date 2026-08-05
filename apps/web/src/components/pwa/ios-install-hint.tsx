@@ -2,9 +2,10 @@
 
 import { X } from 'lucide-react';
 import Link from 'next/link';
-import { useSyncExternalStore } from 'react';
+import { useRef, useSyncExternalStore } from 'react';
 
 import { btnVariants } from '@/components/ui/btn';
+import { useBottomSlotReservation } from '@/components/ui/use-bottom-slot-reservation';
 import { cn } from '@/lib/utils';
 import { detectPlatform, isStandalone } from '@/lib/pwa/platform';
 
@@ -85,11 +86,18 @@ function isIosSafari(): boolean {
 
 export function IOSInstallHint() {
   const dismissed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const hintRef = useRef<HTMLDivElement | null>(null);
+  const visible = !dismissed && isIosSafari() && !isStandalone();
 
-  if (dismissed || !isIosSafari() || isStandalone()) return null;
+  // Same bottom slot as the cookie banner, so the same duty: reserve the band
+  // instead of painting over whatever the page put there.
+  useBottomSlotReservation(hintRef, visible, 'ios-install-hint');
+
+  if (!visible) return null;
 
   return (
     <div
+      ref={hintRef}
       role="region"
       aria-label="Installer Fxmily sur iPhone"
       data-slot="ios-install-hint"

@@ -35,7 +35,10 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
   }
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       {/* S18 — premium drifting aurora backplate, lifted to /login parity (the
           first post-invitation screen now reads as alive, not a flat opacity-25
           orb). Decorative, zero JS, aria-hidden, perf-gated on mobile. */}
@@ -112,7 +115,10 @@ function InvalidTokenView({
   })();
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       {/* S20 — same premium backplate as the happy-path (was a generic faint
           `.aurora`): the error branch shouldn't read as a downgraded screen. */}
       <LoginAurora />

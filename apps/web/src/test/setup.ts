@@ -46,3 +46,23 @@ if (typeof window !== 'undefined' && typeof window.IntersectionObserver !== 'fun
   window.IntersectionObserver = IntersectionObserverStub;
   globalThis.IntersectionObserver = IntersectionObserverStub;
 }
+
+// jsdom ships no `ResizeObserver` either. `useBottomSlotReservation` (every
+// fixed bottom-slot island) constructs one to re-measure the band when the copy
+// re-wraps, so without this the three island components throw on mount and their
+// suites go red for a missing browser API rather than for a real defect.
+//
+// Inert like the stub above, and that costs no coverage here: the hook publishes
+// once by direct call BEFORE observing, so the measuring path still runs under
+// test. Only the "re-measure on reflow" branch is untested in jsdom, which has
+// no layout engine to reflow in the first place — it is proven in-browser.
+if (typeof window !== 'undefined' && typeof window.ResizeObserver !== 'function') {
+  class ResizeObserverStub implements ResizeObserver {
+    constructor(_cb: ResizeObserverCallback) {}
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  window.ResizeObserver = ResizeObserverStub;
+  globalThis.ResizeObserver = ResizeObserverStub;
+}

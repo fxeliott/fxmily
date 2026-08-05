@@ -31,7 +31,10 @@ export default async function RejoindrePage() {
   if (session?.user) redirect('/dashboard');
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+    <main
+      data-slot="auth-shell"
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10"
+    >
       {/* Premium drifting aurora backplate (decorative, zero JS) — mirrors the
           Tier-S /login front door so the acquisition surface reads as alive. */}
       <RejoindreAurora />

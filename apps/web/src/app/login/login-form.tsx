@@ -89,9 +89,13 @@ export function LoginForm() {
       {/* Self-service password reset (SPEC §7.1) — replaces the former mailto
           recourse with a real flow: /forgot-password → emailed single-use link
           → /reset-password. Anti-enumeration neutral response server-side. */}
+      {/* `inline-flex min-h-6 px-2` : cible tactile ≥ 24×24 px (WCAG 2.2 SC
+          2.5.8). Mesurée à 114×17 px le 2026-08-05 — un lien de recours
+          autonome, hors phrase, donc l'exception « inline » ne s'applique pas.
+          Même idiome que les liens légaux du pied d'accueil. */}
       <Link
         href="/forgot-password"
-        className="self-center rounded-[3px] text-[11px] text-[var(--t-4)] underline-offset-2 transition-colors hover:text-[var(--acc)] hover:underline focus-visible:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        className="inline-flex min-h-6 items-center self-center rounded-[3px] px-2 text-[11px] text-[var(--t-4)] underline-offset-2 transition-colors hover:text-[var(--acc)] hover:underline focus-visible:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
       >
         Mot de passe oublié&nbsp;?
       </Link>

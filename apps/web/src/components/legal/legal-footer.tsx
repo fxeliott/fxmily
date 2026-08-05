@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useRef } from 'react';
+
+import { useBottomSlotReservation } from '@/components/ui/use-bottom-slot-reservation';
 
 /**
  * Global footer wired from `app/layout.tsx`. Surfaces the three RGPD legal
@@ -20,10 +23,25 @@ import { usePathname } from 'next/navigation';
  */
 export function LegalFooter(): React.ReactElement | null {
   const pathname = usePathname();
+  const footerRef = useRef<HTMLElement | null>(null);
+
+  // This footer publishes its height for the SAME reason the fixed islands
+  // publish theirs — and closing a defect the first reservation created.
+  //
+  // Measured on the deployed build at 1440x900, `/login`: shrinking `<main>` by
+  // the banner's band freed exactly that band at the bottom of the viewport, and
+  // this footer, being the next element in the flow, moved straight into it. The
+  // legal links landed at y=819..847 under a banner occupying 810..888 — so the
+  // reservation had MOVED the occlusion onto the very links the banner points
+  // at, instead of removing it. A viewport-locked box must therefore give back
+  // the band AND whatever follows it in the flow.
+  useBottomSlotReservation(footerRef, pathname !== '/', 'legal-footer');
+
   if (pathname === '/') return null;
   const year = new Date().getFullYear();
   return (
     <footer
+      ref={footerRef}
       data-slot="legal-footer"
       role="contentinfo"
       className="mt-auto border-t border-[var(--b-subtle)] bg-[var(--bg-1)]/40 backdrop-blur-sm"

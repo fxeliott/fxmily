@@ -51,14 +51,13 @@ test.describe('Visual smoke-tour — member full journey', () => {
       fullPage: true,
     });
 
-    // Dismiss the cookie-info banner (localStorage-gated → always present on a
-    // fresh CI browser). It is `fixed bottom` and would otherwise intercept the
-    // click on a later wizard submit button that sits low on a long step.
-    const cookieDismiss = page.getByRole('button', { name: /J'ai compris/i });
-    if (await cookieDismiss.isVisible().catch(() => false)) {
-      await cookieDismiss.click();
-      await cookieDismiss.waitFor({ state: 'hidden' }).catch(() => {});
-    }
+    // A dismiss-the-cookie-banner block used to sit here — inert since the `page`
+    // fixture started pre-seeding the flag, and pointless now that the banner is
+    // mounted for visitors only (`app/layout.tsx`). Its comment named the real
+    // defect ("would otherwise intercept the click on a later wizard submit
+    // button") and clicked it out of sight instead of reporting it. Guard:
+    // `bottom-slot-arbitration.test.ts`. No assertion here: the fixture makes
+    // any `toHaveCount(0)` true whatever the layout does.
 
     // ─── 3) /checkin landing — empty streak ─────────────────────────────
     await page.goto('/checkin');

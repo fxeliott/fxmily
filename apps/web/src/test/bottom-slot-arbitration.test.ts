@@ -1,7 +1,9 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { showsCookieBanner } from '@/lib/legal/cookie-banner-visibility';
 
 /**
  * BOTTOM-SLOT ARBITRATION GUARD — exhaustive by construction.
@@ -198,5 +200,99 @@ describe('bottom-slot arbitration — every fixed bottom island is enrolled in e
     }
 
     expect(violations, `\n\n${violations.join('\n\n')}\n`).toEqual([]);
+  });
+});
+
+/**
+ * MONTAGE DE LA BANNIÈRE — visiteurs seulement.
+ *
+ * Le garde ci-dessus prouve que les îlots du slot bas ne se peignent pas les uns
+ * sur les autres. Il ne dit rien de ce qu'ils recouvrent DANS LA PAGE, et c'est
+ * par là que le défaut est passé : mesuré sur le build déployé, 375×667, session
+ * ouverte, scrollY=0, la bannière (`fixed`, 445..531) recouvrait l'action
+ * principale de `/dashboard` (483..568) et une carte-lien de `/journal`
+ * (402..597). Contrôle négatif : la même page avec la bannière déjà fermée rend
+ * le CTA libre. Elle est donc réservée aux visiteurs.
+ *
+ * ## Pourquoi ce garde a été RÉÉCRIT avant même d'être livré
+ *
+ * Sa première version lisait l'expression JSX du layout et vérifiait que le mot
+ * « session » y apparaissait. Deux revues en contexte frais l'ont contournée en
+ * une mutation chacune :
+ *
+ *   {sessionLite ? <CookieBanner /> : null}   ← polarité INVERSE, garde VERT
+ *
+ * c'est-à-dire la bannière montrée aux seuls membres et jamais aux visiteurs —
+ * l'inverse terme à terme de l'intention, et le défaut d'origine restauré. Un
+ * garde qui verdit sur l'inverse exact de ce qu'il protège est pire que pas de
+ * garde. Deuxième contournement : remonter la bannière AILLEURS (le dépôt monte
+ * déjà deux îlots du même slot depuis `dashboard/page.tsx`), invisible pour un
+ * garde qui ne lit que `layout.tsx`.
+ *
+ * D'où les trois assertions ci-dessous : la polarité vit dans un prédicat pur
+ * dont on asserte la table de vérité, la FORME du montage est verrouillée, et le
+ * comptage porte sur tout `src/**`.
+ */
+describe('montage de la bannière cookies — visiteurs uniquement', () => {
+  const LAYOUT = join(SRC, 'app', 'layout.tsx');
+  const layout = readFileSync(LAYOUT, 'utf8');
+  const sansCommentaires = (src: string): string =>
+    src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('le prédicat dit bien « visiteur oui, membre non » (table de vérité)', () => {
+    // La polarité se teste ICI, sur la fonction, pas sur une chaîne de source :
+    // c'est la seule assertion que l'inversion ne peut pas satisfaire.
+    expect(showsCookieBanner(null), 'un visiteur doit voir la bannière').toBe(true);
+    expect(
+      showsCookieBanner({ email: 'membre@exemple.test' }),
+      'un membre connecté ne doit PAS la voir (elle recouvre son contenu)',
+    ).toBe(false);
+  });
+
+  it('la bannière est bien montée depuis le layout racine (anti-garde-vide)', () => {
+    // Sans cette assertion, supprimer le composant rendrait les suivantes vertes
+    // par vacuité — un garde qui ne voit plus rien lit comme un garde qui ne
+    // trouve rien à redire.
+    expect(
+      layout,
+      'layout.tsx n’importe plus CookieBanner : les gardes ci-dessous ne prouveraient plus rien',
+    ).toContain("from '@/components/legal/cookie-banner'");
+  });
+
+  it('le montage passe par le prédicat, dans la BRANCHE VRAIE', () => {
+    // Formes acceptées, et elles seules. `showsCookieBanner(x) ? null :
+    // <CookieBanner />` échoue ici : c'est exactement la mutation qui passait.
+    const canoniques = [
+      /\{\s*showsCookieBanner\([^)]*\)\s*\?\s*<CookieBanner\s*\/>\s*:\s*null\s*\}/,
+      /\{\s*showsCookieBanner\([^)]*\)\s*&&\s*<CookieBanner\s*\/>\s*\}/,
+    ];
+    const src = sansCommentaires(layout);
+    expect(
+      canoniques.some((re) => re.test(src)),
+      [
+        'Le montage de la bannière ne suit aucune des deux formes canoniques :',
+        '  {showsCookieBanner(sessionLite) ? <CookieBanner /> : null}',
+        '  {showsCookieBanner(sessionLite) && <CookieBanner />}',
+        '',
+        'La bannière est `fixed` au-dessus du contenu, et la réserve de hauteur,',
+        'posée en fin de document, ne protège rien à scrollY=0 : sur une page',
+        'membre elle recouvre l’action principale (mesuré sur /dashboard et',
+        '/journal). La montrer aux membres — ou la monter sans condition — remet',
+        'ce défaut en place.',
+      ].join('\n'),
+    ).toBe(true);
+  });
+
+  it('elle n’est montée NULLE PART ailleurs dans src/**', () => {
+    // Le contournement le plus naturel d'un futur contributeur : « remettre la
+    // bannière sur le dashboard ». `dashboard/page.tsx` monte déjà deux îlots du
+    // même slot, donc le précédent existe et se copie sans y penser.
+    const sites = walkTsx(SRC)
+      .filter((f) => !f.endsWith(`app${sep}layout.tsx`))
+      .filter((f) => /<CookieBanner\b/.test(sansCommentaires(readFileSync(f, 'utf8'))));
+    expect(
+      sites.map((f) => f.slice(SRC.length + 1)),
+      'La bannière ne doit être montée que par le layout racine, derrière le prédicat.',
+    ).toEqual([]);
   });
 });

@@ -73,20 +73,46 @@ app.fxmilyapp.com {
 }
 
 # Marketing / public landing : redirects to the app for V1 (no public
-# marketing site yet). Kill this block when fxmilyapp.com gets a real
-# landing page in V2.
+# marketing site yet).
 #
-# `tls internal` — these two names are Cloudflare-PROXIED (orange cloud), so
-# public ACME can never validate them from here: tls-alpn-01 terminates at
-# Cloudflare's edge ("Cannot negotiate ALPN protocol acme-tls/1") and http-01
-# gets bounced to an https:// URL that has no cert yet (chicken-and-egg).
-# That failing loop left the apex with NO cert at all → TLS alert on every
-# Cloudflare origin fetch → visitors saw a CF 522 while app.fxmilyapp.com
-# (DNS-only, direct ACME) stayed green. Cloudflare already serves the public
-# certificate at its edge; the origin only needs A cert for the CF→origin
-# hop, and CF "Full" accepts Caddy's internal CA. Long-term nicety: replace
-# this origin round-trip with a Cloudflare edge Redirect Rule.
+# DO NOT remove this block "because V2 has a landing page" without first
+# removing `tls internal` from the equation: these two names are
+# Cloudflare-PROXIED, so a Caddy site block for them WILL attempt public ACME
+# the moment `tls internal` goes away, and public ACME cannot validate a
+# proxied name from here (tls-alpn-01 terminates at Cloudflare's edge,
+# http-01 is bounced to an https:// URL with no cert yet). While the apex was
+# dead this was harmless; now that it reaches the origin it would be a
+# visible outage on a live hostname.
+#
+# WHY 522 HAPPENED — settled by measurement on 2026-08-05, and the earlier
+# explanation in this file was WRONG. It blamed the ACME loop above. It was
+# not that: the certificate existed on disk, Caddy answered a local TLS
+# handshake for the apex, and ufw allowed 443 from anywhere. The real cause
+# was DNS — the proxied A records for `fxmilyapp.com` and `www` pointed at
+# 216.40.34.41, the REGISTRAR'S PARKING IP (same provider as the apex MX,
+# `mx.hover.com.cust.hostedemail.com`), so Cloudflare was dialling a machine
+# that does not serve this domain and timed out. Both records now point at
+# the same origin as `app`. Cloudflare "Full" (NOT strict — verified in the
+# dashboard) accepts Caddy's internal CA for the CF→origin hop.
+#
+# `temporary` (302), NOT `permanent`. A 301 without Cache-Control is cached by
+# browsers indefinitely: every visitor who ever hit the apex would be pinned
+# to this redirect and would NEVER see the V2 landing page this block is
+# meant to be replaced by. That trap was inert while the apex returned 522;
+# repointing the DNS armed it for every visitor. Switch back to `permanent`
+# only once the apex is meant to redirect forever.
 www.fxmilyapp.com, fxmilyapp.com {
 	tls internal
-	redir https://app.fxmilyapp.com{uri} permanent
+
+	# These two hostnames became a LIVE public surface on 2026-08-05. Before
+	# that they returned 522 and served nothing, so the absence of headers
+	# here cost nothing. It costs something now: without HSTS a visitor's
+	# first hop is in the clear and nothing protects the next one — the HSTS
+	# on `app.fxmilyapp.com` covers subdomains OF app, not the apex.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		-Server
+	}
+
+	redir https://app.fxmilyapp.com{uri} temporary
 }

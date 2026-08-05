@@ -52,20 +52,52 @@ else
   ko "A $APP missing — set Cloudflare DNS A record (Proxied=NO)"
 fi
 
+# A <domain> and A www.<domain> — the two records that carry the apex redirect.
+# They were UNCHECKED here until 2026-08-05, which is why a green run of this
+# script proved nothing about the apex while it returned Cloudflare 522 for
+# days. What matters is not the literal address (it changes with the host) but
+# that all three names agree: apex and www must resolve to whatever `app` does,
+# or Cloudflare dials a machine that does not serve this domain.
+#
+# NOTE: apex and www are Cloudflare-PROXIED, so a public `dig` returns
+# Cloudflare edge IPs for them and `app` (DNS-only) returns the origin — the
+# three will NOT match from outside. This check is therefore only meaningful
+# from a resolver that sees the zone's own records, so it reports rather than
+# fails when it sees a proxied answer.
+for name in "$DOMAIN" "www.$DOMAIN"; do
+  VALUE=$(dig_short A "$name")
+  if [[ -z "$VALUE" ]]; then
+    ko "A $name missing — the apex redirect to $APP cannot work without it"
+  elif echo "$VALUE" | grep -qE '^(104\.(1[6-9]|2[0-7])\.|172\.6[4-9]\.|172\.7[01]\.|188\.114\.)'; then
+    echo "  ~ A $name → $VALUE (Cloudflare edge: proxied. Check the ORIGIN value in the dashboard — it must equal $APP's address)"
+  elif [[ "$VALUE" == "$A_VALUE" ]]; then
+    ok "A $name → $VALUE (same origin as $APP)"
+  else
+    ko "A $name → $VALUE but $APP → $A_VALUE. They MUST match: a mismatch is exactly what produced the 522 outage of 2026-08."
+  fi
+done
+
 # MX <domain>
+# Mail is the REGISTRAR'S mailbox, not Resend. This block used to demand
+# mx1/mx2.resend.com and failed on a perfectly healthy zone — and the fix it
+# suggested (re-running cloudflare-dns-setup.sh) would have overwritten the
+# real MX and stopped eliot@ receiving anything. A verifier that is red on a
+# healthy system does not just fail to help: it points at a destructive action.
 MX_VALUES=$(dig_short MX "$DOMAIN")
-if echo "$MX_VALUES" | grep -qi "mx1.resend.com\|mx2.resend.com"; then
-  ok "MX $DOMAIN includes Resend mx hosts"
+if [[ -n "$MX_VALUES" ]]; then
+  ok "MX $DOMAIN present → $(echo "$MX_VALUES" | tr '\n' ' ')"
 else
-  ko "MX $DOMAIN missing Resend (expected 10 mx1.resend.com, 20 mx2.resend.com)"
+  ko "MX $DOMAIN missing — the mailbox at eliot@$DOMAIN stops receiving"
 fi
 
-# SPF TXT
-SPF_VALUE=$(dig_short TXT "$DOMAIN" | grep -i 'v=spf1' || true)
-if echo "$SPF_VALUE" | grep -q "include:_spf.resend.com"; then
-  ok "SPF $DOMAIN includes _spf.resend.com"
+# SPF TXT — on the SENDING subdomain, not the apex. Transactional mail leaves
+# via Amazon SES from `send.$DOMAIN`; the apex has no SPF because nothing sends
+# from it. DMARC still aligns, via DKIM below.
+SPF_VALUE=$(dig_short TXT "send.$DOMAIN" | grep -i 'v=spf1' || true)
+if echo "$SPF_VALUE" | grep -q "v=spf1"; then
+  ok "SPF send.$DOMAIN present → $SPF_VALUE"
 else
-  ko "SPF $DOMAIN missing 'include:_spf.resend.com'"
+  ko "SPF send.$DOMAIN missing — transactional mail will fail SPF"
 fi
 
 # DKIM (Resend uses 'resend' selector by default)

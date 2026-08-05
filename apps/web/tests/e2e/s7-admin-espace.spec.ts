@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test } from './fixtures';
+import { chromium, expect, placedMain, test } from './fixtures';
 
 import { db } from '@/lib/db';
 import {
@@ -285,7 +285,15 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     // window, all uncommented at this point (A/B annotated a page-2 OLD trade,
     // E a 26-day-old backtest — both outside the window), so the strip shows.
     await page.goto('/admin/members');
-    const triageStrip = page.getByRole('status').filter({ hasText: 'À traiter dans la cohorte' });
+    // Rooted in `placedMain` (fixtures.ts), NOT in the page: right after a
+    // navigation React still holds a second copy of this whole subtree in its
+    // streaming staging div (`<div hidden id="S:0">`, a direct child of <body>),
+    // so a page-rooted locator transiently resolves to TWO elements → fatal
+    // `strict mode violation`. That is the measured cause of this test failing
+    // 3× in CI run 31001531324 then passing on re-run untouched.
+    const triageStrip = placedMain(page)
+      .getByRole('status')
+      .filter({ hasText: 'À traiter dans la cohorte' });
     await expect(triageStrip).toBeVisible();
     await expect(triageStrip.getByText(/trades? à commenter/)).toBeVisible();
 
@@ -293,7 +301,7 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     // guaranteed on-page regardless of the live cohort size, then assert the
     // « N à commenter » pill renders on THAT row (scoped to its <li>).
     await page.goto(`/admin/members?q=${encodeURIComponent(memberUser.email)}`);
-    const memberCard = page.locator('main li').filter({ hasText: 'S7Member' });
+    const memberCard = placedMain(page).locator('li').filter({ hasText: 'S7Member' });
     await expect(memberCard.getByText(/à commenter/)).toBeVisible();
 
     // --- #1 — palette: open a fresh (page-1, recent, uncommented) trade and drop

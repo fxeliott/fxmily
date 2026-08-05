@@ -63,8 +63,18 @@ const BOTTOM_SLOT_MARKERS = ['fixed', 'inset-x-3', 'z-40'] as const;
  */
 const COVERED_VIEWPORT_LOCKS: Record<string, string> = {
   'min-h-dvh': '.min-h-dvh { min-height: calc(100dvh - var(--bottom-slot-inset, 0px)) }',
-  'min-h-[100svh]': "[data-slot='splash-hero'] { min-height: calc(100svh - …) }",
+  // ⚠️ Couverture par COÏNCIDENCE, pas par le token. La règle CSS cible un
+  // ATTRIBUT (`[data-slot='splash-hero']`), pas la classe : elle ne couvre ce
+  // token que tant que les deux sont portés par le MÊME élément. Le jour où
+  // quelqu'un écrit `min-h-[100svh]` ailleurs, ce tableau le déclarerait couvert
+  // à tort et la réservation ne s'appliquerait pas. D'où l'assertion de
+  // confinement plus bas — sans elle, cette ligne est un mensonge en attente.
+  'min-h-[100svh]':
+    "[data-slot='splash-hero'] { min-height: calc(100svh - …) } (attribut, pas classe)",
 };
+
+/** Le seul fichier autorisé à porter `min-h-[100svh]` — cf. la note ci-dessus. */
+const SVH_LOCK_OWNER = 'src/app/splash-hero.tsx';
 
 /**
  * A class token that pins a box to the viewport height, variant prefix included.
@@ -192,6 +202,74 @@ describe('bottom-slot reservation — les îlots fixes rendent leur place à la 
         `globals.css ne mentionne pas ${slot} : son îlot ne déclenche pas la réservation`,
       ).toBe(true);
     }
+  });
+
+  it('le verrou svh reste confiné à l’élément que la règle d’attribut couvre', () => {
+    // La règle CSS cible `[data-slot='splash-hero']`, pas la classe. La table
+    // COVERED_VIEWPORT_LOCKS déclare pourtant le TOKEN couvert : c'est vrai
+    // uniquement tant que les deux vivent sur le même élément. Sans cette
+    // assertion, écrire `min-h-[100svh]` sur n'importe quel autre composant
+    // passerait le garde au vert tout en rouvrant l'occlusion sur cette page.
+    const porteurs = (locks.get('min-h-[100svh]') ?? []).map(rel);
+    expect(
+      porteurs.length,
+      'plus aucun usage de min-h-[100svh] : soit le hero a changé, soit l’extracteur est cassé — retire la ligne du tableau ou répare',
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      porteurs,
+      `min-h-[100svh] n’est couvert que par la règle d’ATTRIBUT [data-slot='splash-hero']. Ces fichiers l’utilisent hors du porteur autorisé, donc SANS réservation : ${porteurs.join(', ')}`,
+    ).toEqual([SVH_LOCK_OWNER]);
+    const hero = readFileSync(join(WEB_ROOT, SVH_LOCK_OWNER), 'utf8');
+    expect(
+      hero.includes(`data-slot="splash-hero"`),
+      `${SVH_LOCK_OWNER} a perdu data-slot="splash-hero" : la règle CSS ne l’atteint plus, la coïncidence est rompue`,
+    ).toBe(true);
+  });
+
+  it('aucun `padding-bottom` concurrent sur <body> : ils composent, ils ne s’écrasent pas', () => {
+    // DÉFAUT MESURÉ le 2026-08-05, en production, sur la feuille de style RÉELLE.
+    // `globals.css` portait DEUX `padding-bottom` sur `body`, tous deux hors
+    // `@layer`, à spécificité ÉGALE — (0,1,1) contre (0,1,1) : celui de la
+    // bottom-nav, plus bas dans le fichier, écrasait la réservation d'îlot.
+    // Conséquence : la réservation livrée par #597/#598/#600 était INERTE sur
+    // toute route authentifiée < 1024px, c'est-à-dire la surface où les membres
+    // passent leur temps. Personne ne l'a vu : les deux règles sont à 800 lignes
+    // d'écart, et l'e2e est aveugle (fixtures.ts pré-ferme la bannière).
+    //
+    // Preuve runtime : en ajoutant un `<nav data-slot="app-bottom-nav">` au DOM
+    // de la prod, le `padding-bottom` du corps tombait de 111px à 56px.
+    //
+    // L'invariant qui ferme la classe : tout `padding-bottom` posé sur `body`
+    // doit passer par `--bottom-slot-inset`, donc COMPOSER avec la bande au lieu
+    // de la remplacer. Une future règle qui pose une valeur fixe échoue ici.
+    const declarations: { selector: string; value: string }[] = [];
+    for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = (match[1] ?? '').trim().replace(/\s+/g, ' ');
+      if (!/(^|[\s,>~+])body\b/.test(selector)) continue;
+      const decl = /(?:^|[;\s])padding-bottom\s*:([^;]*)/.exec(match[2] ?? '');
+      if (!decl?.[1]) continue;
+      declarations.push({ selector, value: decl[1].trim() });
+    }
+
+    // ANTI-VACUITÉ : si l'extracteur ne trouve plus rien, il valide du vide.
+    expect(
+      declarations.length,
+      'aucun padding-bottom sur body trouvé dans globals.css — l’extracteur est cassé, ou la réservation a disparu',
+    ).toBeGreaterThanOrEqual(2);
+
+    const concurrents = declarations.filter((d) => !d.value.includes('--bottom-slot-inset'));
+    expect(
+      concurrents,
+      `\n\n${concurrents
+        .map(
+          (d) =>
+            `PADDING CONCURRENT : ${d.selector} { padding-bottom: ${d.value} }\n` +
+            '  Il a la même spécificité que la réservation d’îlot et n’en tient pas compte :\n' +
+            '  celui des deux qui est le plus bas dans le fichier gagne, l’autre devient inerte.\n' +
+            '  Compose au lieu d’écraser, p. ex. max(var(--bottom-slot-inset, 0px), <ta valeur>).',
+        )
+        .join('\n\n')}\n`,
+    ).toEqual([]);
   });
 
   it('chaque verrou plein-viewport est couvert par une règle de réservation', () => {

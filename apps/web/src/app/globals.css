@@ -2369,9 +2369,14 @@ body:has(
 /* Les boîtes verrouillées sur la hauteur du viewport doivent rendre la bande.
    Sans ça, réserver ne sert à rien : `100dvh` ignore le padding d'un ancêtre,
    la boîte reste pleine hauteur et le contenu centré retombe sous l'îlot.
-   `.min-h-dvh` est la SEULE expression de ce verrou dans ce dépôt (94
-   occurrences au 2026-08-05, toutes sur un `<main>`) ; `bottom-slot-reservation
-   .test.ts` échoue si une autre apparaît. Règle hors `@layer` : elle gagne donc
+   `.min-h-dvh` est l'expression MAJORITAIRE de ce verrou dans ce dépôt — 94
+   occurrences au 2026-08-05, dont 92 sur un `<main>`, une sur un `<div>` et une
+   en prose JSDoc (re-mesuré par résolution de la balise porteuse ; la version
+   précédente de ce commentaire écrivait « toutes sur un `<main>` », ce qui était
+   faux). L'autre expression vivante est `min-h-[100svh]`, portée par le seul
+   `splash-hero.tsx`, couverte par la règle d'ATTRIBUT juste en dessous.
+   `bottom-slot-reservation.test.ts` échoue si une troisième apparaît, et si le
+   token svh migre hors de splash-hero. Règle hors `@layer` : elle gagne donc
    sur l'utilitaire Tailwind homonyme sans `!important`. Repli `0px` : quand
    aucun îlot n'est monté, `calc(100dvh - 0px)` est strictement `100dvh`. */
 /* `--slot-legal-footer` : ce qui SUIT `<main>` dans le flux doit sortir de la
@@ -2456,6 +2461,76 @@ body:has(
     )
     [data-slot='splash-emblem'] {
     width: 160px;
+  }
+}
+
+/* ─── Portrait étroit et court : l'îlot rejoint le flux au lieu de survoler ─
+   MESURÉ EN PRODUCTION le 2026-08-05, sur un chargement PROPRE à 320×568 —
+   aucun redimensionnement en jeu, donc rien à mettre sur le dos de l'outil de
+   mesure. La réservation était EXACTE (`--slot-cookie-banner` publiait 118px
+   pour 106px de bannière + 12px de décalage) et les deux actions de `/`
+   restaient malgré tout recouvertes à l'arrivée : « Se connecter » 466..514 et
+   « Demander un accès » 526..574 contre une bannière à 450..556. `/login`
+   perdait « Faire une demande » (463..487). C'est le défaut d'origine, revenu
+   à un format que la première correction n'avait jamais mesuré.
+
+   POURQUOI RÉSERVER NE SUFFIT PAS. Le padding de fin de document garantit
+   qu'on peut TOUT faire défiler hors de la bande ; il ne garantit pas qu'à un
+   défilement donné — en particulier à l'arrivée, scrollY = 0 — rien ne se
+   trouve dessous. Sur un écran court le contenu du hero (718px mesurés pour
+   438px disponibles) déborde et retombe dans la bande.
+
+   TROIS AUTRES VOIES ESSAYÉES ET REJETÉES SUR MESURE, pas sur avis : comprimer
+   le rythme du hero (gaps, padding, emblème) libère bien les deux CTA — et
+   fait aussitôt entrer les trois liens légaux dans la bande ; raccourcir la
+   bannière à une seule ligne produit le même échange. Réserver DÉPLACE le
+   recouvrement, ça ne le supprime pas.
+
+   CE QUE FAIT CETTE RÈGLE. Sous 640px de hauteur ET 480px de largeur (voir la
+   PORTÉE plus bas : les deux conditions sont exigées, la hauteur seule aurait
+   touché le paysage sans défaut à y corriger), l'îlot cesse d'être `fixed` et
+   rejoint le flux en fin de document : plus rien ne peut être recouvert, et
+   la réservation devient inutile — remise à zéro, ce qui rend au hero la
+   hauteur qu'on lui prenait. Mesuré après application, même viewport : 0 cible
+   occultée à l'arrivée, 0 débordement horizontal, bouton de fermeture 109×44.
+
+   POURQUOI C'EST LE BON COMPROMIS. Ces trois îlots sont INFORMATIFS (SPEC §16
+   — cookies techniques uniquement, aucune barrière de consentement) : les
+   reléguer en fin de page sur un écran court coûte de la visibilité, jamais
+   une fonctionnalité. Le compromis inverse — garder l'îlot flottant — coûte
+   l'action principale de la page, c'est-à-dire exactement le défaut corrigé.
+
+   PORTÉE, RESSERRÉE SUR CE QUI EST RÉELLEMENT CASSÉ. Le premier jet ne
+   déclenchait que sur la hauteur ; la mesure a montré que le paysage n'a pas
+   besoin d'être touché — 568×320 et 667×375 rendent 0 cible occultée en l'état.
+   La règle exige donc AUSSI un portrait étroit. Relevé en production, à
+   l'arrivée, sur `/` :
+
+     320×568   avant : « Se connecter » + « Demander un accès »  → après : 0
+     360×640   avant : « Demander un accès »                     → après : 0
+     568×320   avant : 0 (non concerné, largeur > 480)
+     667×375   avant : 0 (non concerné, largeur > 480)
+     375×667 · 393×852 · desktop : hors media query, inchangés par construction
+
+   360×640 n'est pas un cas d'école : c'est la taille d'écran Android la plus
+   répandue. */
+@media (max-height: 640px) and (max-width: 480px) {
+  :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint']) {
+    position: static;
+    inset: auto;
+    margin: 0 0.75rem 0.75rem;
+  }
+  /* On remet la VARIABLE à zéro, pas le `padding-bottom` : le padding en
+     dérive partout, et une déclaration littérale de plus sur `body` serait
+     précisément le motif de concurrence qui a rendu la réservation inerte sur
+     la surface authentifiée (cf. la règle de la bottom-nav plus bas). Le
+     garde-fou `bottom-slot-reservation.test.ts` refuse désormais tout
+     `padding-bottom` sur `body` qui ne passe pas par `--bottom-slot-inset`.
+     Équivalence re-mesurée en production après simplification. */
+  body:has(
+    :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+  ) {
+    --bottom-slot-inset: 0px;
   }
 }
 
@@ -3108,8 +3183,31 @@ body:has(
  * haut). Hauteur nav ≈ 56px (h-14) + safe-area. forced-colors / desktop : RAS.
  * ============================================================= */
 @media (max-width: 1023px) {
+  /* `max()`, PAS une valeur fixe — et ce n'est pas un raffinement, c'est un
+     défaut mesuré. Cette déclaration et celle de la bande d'îlots (plus haut,
+     `padding-bottom: var(--bottom-slot-inset)`) portent TOUTES DEUX un
+     `padding-bottom` sur `body`, toutes deux hors `@layer`, à spécificité
+     ÉGALE — (0,1,1) contre (0,1,1). L'ordre source tranchait donc, et comme
+     celle-ci est plus bas dans le fichier, elle écrasait l'autre : la
+     réservation d'îlot était INERTE sur toute route authentifiée < 1024px,
+     c'est-à-dire sur la surface où les membres passent leur temps.
+
+     Prouvé en runtime sur la production le 2026-08-05, feuille de style réelle :
+     en ajoutant un `<nav data-slot="app-bottom-nav">` au DOM de `/`, le
+     `padding-bottom` du corps tombe de 111px à 56px, et revient à 111px dès
+     qu'on le retire. Le déficit est d'autant plus grand que la bannière est
+     remontée par la règle plus bas (`bottom: 4.25rem` avec la nav, `8.5rem`
+     avec le FAB) : la bande à dégager croît, la réservation servie ne bougeait
+     pas.
+
+     `max()` fait cohabiter les deux garanties au lieu de les mettre en
+     concurrence : le dégagement de la nav est un PLANCHER, la bande d'îlots
+     le relève quand elle est plus haute. Repli `0px` : sans îlot monté, la
+     variable n'existe pas et on retrouve exactement l'ancien comportement.
+     `bottom-slot-reservation.test.ts` échoue désormais si un futur
+     `padding-bottom` sur `body` réintroduit la concurrence. */
   body:has([data-slot='app-bottom-nav']) {
-    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    padding-bottom: max(var(--bottom-slot-inset, 0px), calc(3.5rem + env(safe-area-inset-bottom)));
   }
   body:has([data-slot='app-bottom-nav']) [data-slot='log-express-fab'] {
     bottom: calc(4.75rem + env(safe-area-inset-bottom));

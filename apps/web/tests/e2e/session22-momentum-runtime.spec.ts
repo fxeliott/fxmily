@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { chromium, expect, test, type ConsoleMessage } from './fixtures';
+import { chromium, expect, placedMain, test, type ConsoleMessage } from './fixtures';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
@@ -152,7 +152,14 @@ test.describe('S22 — MomentumCard surfacée au membre (runtime, posture §2)',
     await page.goto('/dashboard');
 
     // Dashboard renders (hero present) but the momentum card is ABSENT from the DOM.
-    await expect(page.locator('main')).toBeVisible();
+    // `placedMain`, not `page.locator('main')`: `/dashboard` ships a `loading.tsx`
+    // whose root is a `<main>` AND a `page.tsx` whose root is a `<main>`, so two
+    // of them coexist during React's streaming hand-off — a page-rooted CSS
+    // locator resolves to 2 and dies on a fatal strict-mode violation. Same
+    // measured cause as `s7-admin-espace.spec.ts` (CI run 31001531324); this was
+    // the last unprotected instance of that pattern, found by a fresh-context
+    // review of PR #602.
+    await expect(placedMain(page)).toBeVisible();
     await expect(page.locator('[data-slot="momentum-card"]')).toHaveCount(0);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);

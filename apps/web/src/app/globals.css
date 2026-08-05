@@ -2393,7 +2393,19 @@ body:has(
       :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
     )
     [data-slot='auth-shell'] {
-    padding-block: 1.5rem;
+    padding-block: 1rem;
+  }
+  /* Mesuré après coup sur la prod : le padding seul ne suffisait pas — sur
+     `/login`, « Faire une demande » restait recouvert de 27px. Les pages d'auth
+     empilent leur contenu dans un `<section>` en colonne à `gap-6` ; trois
+     intervalles à 24px, c'est là que sont les pixels manquants. On les resserre
+     à 16px, uniquement sous `sm` et uniquement tant qu'un îlot occupe le bas. */
+  body:has(
+      :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])
+    )
+    [data-slot='auth-shell']
+    > section {
+    gap: 1rem;
   }
   body:has(
       :is([data-slot='cookie-banner'], [data-slot='a2hs-hint'], [data-slot='ios-install-hint'])

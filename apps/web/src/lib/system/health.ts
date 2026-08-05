@@ -993,6 +993,12 @@ const SERVER_CRITICAL_LABELS = [
   // ok:true, envelope not pulled) so age, ok and exitCode all stay green.
   'claude_account',
   'batch_failed',
+  // The watchdog could not PARSE a pipeline's status.json. Its own reads all
+  // fall back to defaults that satisfy no branch (`ok:false` with `code:0`), so
+  // before this label a corrupt file read exactly like a healthy tick. Losing
+  // the instrument is not the same as the pipeline being fine, and this board
+  // exists to stop the second from being inferred from the first.
+  'status_unreadable',
   'cron_file_missing',
   'cron_file_crlf',
   'cron_file_perms',
@@ -1307,6 +1313,20 @@ const LABEL_HOST_ACTIONS: Record<
     severity: HostActionSeverity;
   }
 > = {
+  status_unreadable: {
+    label: 'Worker · le statut d’un batch est illisible',
+    detail:
+      "Le fichier de statut d'un batch ne peut plus être lu : on ne sait donc PAS si ce batch a réussi ou échoué. Ce n'est pas une panne prouvée, c'est une perte d'instrument, et le tableau refuse de rester vert sur ce qu'il ne voit pas. Le prochain passage réussi réécrit ce fichier de zéro ; s'il reste illisible au passage suivant, regarde le journal du worker sur la machine.",
+    // `install` is the closest of the two available kinds: it points at the
+    // worker host, which is where the answer lives. The remediation that
+    // actually matters is in `detail` — a corrupt status file is not fixed by
+    // reinstalling, it is fixed by the next successful run overwriting it.
+    commandKind: 'install',
+    // Not `pending`: an unknown state on the machine that now owns generation
+    // is exactly what J9 exists to surface. The observation-window downgrade
+    // already turns this `pending` while the server is not master.
+    severity: 'blocked',
+  },
   'claude_auth:logged_out': {
     label: 'Worker · aucun compte Claude connecté',
     detail:

@@ -220,6 +220,19 @@ ACCOUNT_SEEN=false
 for p in "${PIPELINES[@]}"; do
   status_file="$LOG_DIR/${p}.status.json"
   [[ -r "$status_file" ]] || continue
+  # A status.json that does not PARSE makes this whole loop silent. Every read
+  # below is `jq … || echo <default>`, and those defaults conspire: `ok` falls
+  # back to false while `code` falls back to 0, and the `batch_failed` branch
+  # needs `code != 0`. So a corrupted file satisfies no branch at all and reads
+  # exactly like a healthy tick — the board stays green on a pipeline whose own
+  # status is unreadable. Validate ONCE, up front, and SAY SO when it fails: an
+  # instrument that cannot read its input must report that, never a verdict.
+  # `run-batch.sh` interpolates values into a JSON heredoc, so a value carrying
+  # a quote is enough to produce this — it is not a theoretical corruption.
+  if ! jq -e 'type == "object"' "$status_file" >/dev/null 2>&1; then
+    add_label "status_unreadable:${p}"
+    continue
+  fi
   ok="$(jq -r '.ok // false' "$status_file" 2>/dev/null || echo false)"
   code="$(jq -r '.exitCode // 0' "$status_file" 2>/dev/null || echo 0)"
   capped="$(jq -r '.quotaCapped // false' "$status_file" 2>/dev/null || echo false)"

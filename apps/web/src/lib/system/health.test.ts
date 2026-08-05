@@ -1582,6 +1582,62 @@ describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () 
   });
 
   /**
+   * Why this matters : an unreadable status.json used to be the QUIETEST failure
+   * in the whole chain. The watchdog reads every field as `jq … || echo
+   * <default>`, and those defaults conspire — `ok` falls back to false while
+   * `code` falls back to 0, and the `batch_failed` branch needs `code != 0`. So
+   * a corrupt file satisfied NO branch and read exactly like a healthy tick.
+   *
+   * `run-batch.sh` builds that file by interpolating values into a JSON
+   * heredoc, so one value carrying a quote is enough to produce it. Losing the
+   * instrument is not the same as the pipeline being fine, and this board's
+   * whole purpose is to stop the second from being inferred from the first.
+   */
+  it('refuses to stay green when a pipeline status is unreadable', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport, buildHostActionsReport: serverActions } =
+      await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['status_unreadable:weekly'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    expect(report.entries.find((e) => e.action === 'worker.watchdog.heartbeat')?.status).toBe(
+      'red',
+    );
+
+    const card = serverActions(
+      cronReport([]),
+      workerReport([
+        entry({
+          action: 'worker.watchdog.heartbeat',
+          status: 'red',
+          lastRanAt: '2026-07-10T11:40:00Z', // allow-absolute-date opaque-fixture
+          ageMs: 20 * MIN,
+          errorLabels: ['status_unreadable:weekly'],
+          watchdogVersion: SERVER_WATCHDOG_VERSION_LIVE,
+        }),
+      ]),
+    ).items[0]!;
+    expect(card.key).toBe('label:status_unreadable');
+    expect(card.severity).toBe('blocked');
+    // The pipeline name must survive onto the card: one card for the family,
+    // carrying WHICH pipeline is unreadable. Without it the operator is told
+    // "a batch" and has to go find out which.
+    expect(card.details).toContain('weekly');
+  });
+
+  /**
    * Why this matters : séances is the only entry J9 ADDED, and the 4h reasoning
    * that shaped every inherited tolerance was never applied to it. Its ticks are
    * 30 min apart and the default flips red after 2 missed ones — ~1h35 — while

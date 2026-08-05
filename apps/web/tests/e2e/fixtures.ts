@@ -23,7 +23,7 @@
  * module instead of `@playwright/test`:
  *   import { test, expect } from './fixtures';
  */
-import { test as base, type Page } from '@playwright/test';
+import { test as base, type Locator, type Page } from '@playwright/test';
 
 /** The localStorage key the CookieBanner reads (components/legal/cookie-banner.tsx). */
 const COOKIE_DISMISSED_KEY = 'fxmily.cookie.dismissed';
@@ -38,6 +38,41 @@ export async function dismissCookieBannerOn(page: Page): Promise<void> {
   await page.addInitScript((key) => {
     window.localStorage.setItem(key, '1');
   }, COOKIE_DISMISSED_KEY);
+}
+
+/**
+ * Root a content locator in the page content that is REALLY PLACED, excluding
+ * React's streaming staging area.
+ *
+ * WHY THIS EXISTS — measured, not theorised. `s7-admin-espace.spec.ts` failed
+ * three times in a row in CI (run 31001531324, shard 2/4) then passed on re-run
+ * with no code change. The failure trace shows what the DOM looked like the
+ * instant `page.goto()` returned:
+ *
+ *   <body>
+ *     <div class="…lg:pl-64">…<div id="main-content">…<main>   ← PLACED, still EMPTY
+ *     <div hidden id="S:0"><main>…the real content…</main></div>  ← STAGING
+ *
+ * React streams a Suspense boundary's HTML into a `hidden` staging div that is a
+ * DIRECT CHILD OF <body>, then an inline script relocates it into the placed
+ * slot. While that relocation happens the document holds TWO <main> elements and
+ * TWO copies of the content, so a page-rooted `main li` locator resolves to two
+ * elements → `strict mode violation`, which is FATAL (never retried away). It is
+ * also why the same run first logged `unexpected value "hidden"`: the only copy
+ * it could see at that moment was the staged one, inside `[hidden]`.
+ *
+ * Measured on a real page: `main li …` is ambiguous on at least 1 load out of 12
+ * (a 1 ms sampler necessarily misses part of the window, so that is a floor);
+ * `#main-content main li …` is ambiguous on 0/12 — and CANNOT be, since the
+ * staging div lives outside `#main-content` (see `app/layout.tsx`).
+ *
+ * Use this instead of `page.locator('main …')` / `page.getByRole('main')` for any
+ * assertion that runs right after a navigation. It is STRICTER than the raw
+ * locator, never more permissive: `.first()` would have hidden the race instead
+ * of removing it.
+ */
+export function placedMain(page: Page): Locator {
+  return page.locator('#main-content main');
 }
 
 type Fixtures = {

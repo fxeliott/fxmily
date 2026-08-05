@@ -285,12 +285,13 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     // window, all uncommented at this point (A/B annotated a page-2 OLD trade,
     // E a 26-day-old backtest — both outside the window), so the strip shows.
     await page.goto('/admin/members');
-    // Rooted in `placedMain` (fixtures.ts), NOT in the page: right after a
-    // navigation React still holds a second copy of this whole subtree in its
-    // streaming staging div (`<div hidden id="S:0">`, a direct child of <body>),
-    // so a page-rooted locator transiently resolves to TWO elements → fatal
-    // `strict mode violation`. That is the measured cause of this test failing
-    // 3× in CI run 31001531324 then passing on re-run untouched.
+    // Rooted in `placedMain` for consistency with the assertion below — NOT
+    // because this one was ever exposed. A fresh-context review corrected an
+    // earlier claim here: `getByRole` excludes hidden subtrees by default
+    // (Playwright `includeHidden` defaults to false, and its role engine walks
+    // ancestors for `display:none`), so a ROLE locator can never match inside
+    // React's `<div hidden id="S:0">` staging area in the first place. The
+    // duplication hazard is real only for CSS/text locators — see below.
     const triageStrip = placedMain(page)
       .getByRole('status')
       .filter({ hasText: 'À traiter dans la cohorte' });

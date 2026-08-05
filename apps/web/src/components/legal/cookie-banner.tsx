@@ -112,8 +112,13 @@ export function CookieBanner(): React.ReactElement | null {
         <p className="text-[13px] font-medium text-[var(--t-1)] sm:text-sm">
           Cookies techniques uniquement.
         </p>
+        {/* Une seule ligne à 375px, et c'est mesuré : à 204px de colonne, la
+            version précédente ("Aucun tracker, aucune analytics tierce.") en
+            prenait deux, ce qui poussait la bannière à 87px et laissait un lien
+            de /login encore recouvert. Chaque ligne ici coûte ~19px de contenu
+            à toutes les pages — le detail va sur la page confidentialité. */}
         <p className="mt-0.5 text-xs leading-relaxed text-[var(--t-2)]">
-          Aucun tracker, aucune analytics tierce.{' '}
+          Aucun tracker.{' '}
           {/* WCAG 2.2 SC 2.5.8 exempts a target "in a sentence or otherwise
               constrained by the line-height of non-target text" — which is
               exactly this link. Enlarging it to 24px would add a line to the

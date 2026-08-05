@@ -163,6 +163,23 @@ describe('bottom-slot reservation — les îlots fixes rendent leur place à la 
     expect(violations, `\n\n${violations.join('\n')}\n`).toEqual([]);
   });
 
+  it('ce qui suit <main> dans le flux sort aussi de la bande', () => {
+    // Défaut mesuré le 2026-08-05 à 1440×900 : rétrécir `<main>` de la bande la
+    // libérait en bas d'écran, et le pied de page légal — élément suivant du
+    // flux — s'y installait. La réservation DÉPLAÇAIT le recouvrement sur les
+    // liens que la bannière référence. Les deux moitiés du correctif :
+    const footer = readFileSync(join(SRC, 'components', 'legal', 'legal-footer.tsx'), 'utf8');
+    expect(
+      footer.includes('useBottomSlotReservation(') && footer.includes("'legal-footer'"),
+      'legal-footer.tsx ne publie plus sa hauteur : les boîtes plein-viewport ne peuvent plus la retrancher',
+    ).toBe(true);
+    expect(
+      css,
+      'globals.css ne retranche plus --slot-legal-footer : le pied de page retombe dans la bande',
+    ).toMatch(/\.min-h-dvh\s*\{[^}]*--slot-legal-footer/);
+    expect(css).toMatch(/\[data-slot='splash-hero'\]\s*\{[^}]*--slot-legal-footer/);
+  });
+
   it('la réservation existe vraiment dans globals.css (anti-garde-vide)', () => {
     // Le garde ci-dessous compare des tokens à une table ; si la table décrit
     // des règles qui n’existent pas, il valide du vide.

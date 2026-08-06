@@ -80,6 +80,17 @@ ENV_FILE="${FXMILY_WORKER_ENV:-$WORKER_DIR/worker.env}"
 # would be unset, and this gate would report FAIL on all seven pipelines with a
 # perfectly healthy cron path. Same inverse-verdict failure the CR bug produced,
 # which is the whole reason this block exists — so it is checked.
+# Where the batch transcripts go is decided HERE, from the CALLER's environment,
+# before the file below can have an opinion about it. `worker.env` is sourced
+# with `set -a`, so every key in it lands in our environment — including
+# `FXMILY_VERIFY_LOG`, which chooses that destination. One hand-typed line,
+#     FXMILY_VERIFY_LOG=/dev/stdout
+# would put every `claude --print` transcript (member journal text, and the
+# `account=` banner run-batch writes) onto our stdout, which the ops workflow
+# tails into a GitHub Actions log on a PUBLIC repository. A config file must not
+# be able to redirect the output of the thing reading it.
+VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"
+
 ENV_TMP="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
 [[ -n "$ENV_TMP" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
 trap 'rm -f "$ENV_TMP"' EXIT
@@ -98,14 +109,29 @@ fi
 # the gate would have carried on with half a config and blamed the pipelines.
 ENV_ERR="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
 [[ -n "$ENV_ERR" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
+# EXIT alone is not enough: bash does not run an EXIT trap when the shell is
+# killed by an untrapped signal, and this sweep is DESIGNED to be long-lived and
+# detached — GitHub cancelled one at 40 min on 2026-08-06, and `ops/cron/
+# fxmily-worker` wraps ticks in `timeout --kill-after`. Without TERM/INT/HUP a
+# cleartext mirror of the admin token and its five siblings survives in $TMPDIR.
+# `run-batch.sh` already traps these three for exactly this reason.
 trap 'rm -f "$ENV_TMP" "$ENV_ERR"' EXIT
+trap 'rm -f "$ENV_TMP" "$ENV_ERR"; exit 143' TERM INT HUP
 set -a
 # shellcheck disable=SC1090
 . "$ENV_TMP" 2>"$ENV_ERR"
 ENV_RC=$?
 set +a
 if [[ "$ENV_RC" -ne 0 ]] || [[ -s "$ENV_ERR" ]]; then
-  ENV_LINES="$(grep -oE 'line [0-9]+' "$ENV_ERR" 2>/dev/null | tr -dc '0-9\n' | paste -sd, - 2>/dev/null)"
+  # Anchored to bash's own `<file>: line N:` prefix, and the number is taken
+  # from THAT prefix only. `grep -oE 'line [0-9]+'` was wrong: it matches
+  # anywhere in the message, and bash quotes the offending text verbatim, so a
+  # line reading `TOKEN=abc "line 987654321"` published `1,987654321` — measured
+  # 2026-08-06, not theorised. Taking every digit run out of the anchored match
+  # is wrong too: the temp path contributes its own (`/tmp/f4.cfg` gave `4`).
+  # Bounded at 20 so a file full of errors cannot flood a public log.
+  ENV_LINES="$(grep -oE '^[^:]*: line [0-9]+:' "$ENV_ERR" 2>/dev/null |
+    sed -E 's/.*: line ([0-9]+):.*/\1/' | sort -un | head -20 | paste -sd, - 2>/dev/null)"
   echo "  FAIL   : $(basename "$ENV_FILE") is not valid shell (rc=$ENV_RC, offending line(s): ${ENV_LINES:-unknown})." >&2
   echo "  FAIL   : the message is withheld on purpose — it quotes the line, and this output can be public." >&2
   echo "  FAIL   : read the file on the host to see it. Most common cause: a value with spaces that is not quoted." >&2
@@ -130,8 +156,15 @@ ORDER=(onboarding verification seances calendar weekly monthly profile)
 declare -A PULL_ONLY=([onboarding]=1 [verification]=1 [seances]=1)
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-LOG="${FXMILY_VERIFY_LOG:-/tmp/j9-verify-$STAMP.log}"
-: >"$LOG"
+LOG="${VERIFY_LOG_REQUESTED:-/tmp/j9-verify-$STAMP.log}"
+# 0600, not the umask default. This file receives the full `claude --print`
+# transcripts of all seven pipelines — member journal text, MT5 proof content,
+# digest drafts — plus the `account=` banner carrying the Claude address, which
+# `worker.env.example` refuses to store in cleartext because it is personal data
+# (SPEC §21.5). `: >"$LOG"` created it 0644 under the host's umask 022 (measured
+# 2026-08-06), so every local account could read all of it for the hours a sweep
+# lasts. `worker.env` next to it is installed 0600; this now matches.
+(umask 077 && : >"$LOG") || { echo "cannot create $LOG" >&2; exit 1; }
 
 CLAUDE_VERSION="$(claude --version 2>&1 | head -1)"
 [[ -n "$CLAUDE_VERSION" ]] || CLAUDE_VERSION='MISSING'

@@ -48,7 +48,7 @@ require_anchor() {
 echo "== anchors (if these move, the bench is testing nothing) =="
 require_anchor '. "$ENV_TMP" 2>"$ENV_ERR"' 'stderr of the source is captured'
 require_anchor 'ENV_RC=$?' 'the exit status is read'
-require_anchor 'grep -oE '"'"'line [0-9]+'"'"' "$ENV_ERR"' 'only line numbers are extracted'
+require_anchor 'grep -oE '"'"'^[^:]*: line [0-9]+:'"'"' "$ENV_ERR"' 'line numbers come from the anchored prefix'
 require_anchor 'the message is withheld on purpose' 'the withholding is explicit to the reader'
 require_anchor 'trap '"'"'rm -f "$ENV_TMP" "$ENV_ERR"'"'"' EXIT' 'both temp files are cleaned up'
 
@@ -107,6 +107,34 @@ OUT="$(run_block "$TMP/unquoted.cfg")"
 has "$OUT" 'is not valid shell' 'unquoted: it fails'
 hasnt "$OUT" 'zzsensitivezz' 'unquoted: the value word is NOT printed'
 hasnt "$OUT" 'REACHED_END' 'unquoted: it stops'
+
+echo
+echo "== a line CRAFTED to smuggle digits through the extractor =="
+# Found by an adversarial review of this very fix, then reproduced: bash quotes
+# the offending text verbatim, and the first extractor matched `line [0-9]+`
+# ANYWHERE in that message. `TOKEN=abc "line 987654321"` therefore published
+# `1,987654321`. Narrow (digits only) but the header promised line numbers only.
+printf 'FXMILY_ADMIN_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nK=abc "line 987654321"\n' >"$TMP/craft.cfg"
+OUT="$(run_block "$TMP/craft.cfg")"
+has "$OUT" 'is not valid shell' 'crafted: it fails'
+hasnt "$OUT" '987654321' 'crafted: the smuggled digits do NOT reach the output'
+has "$OUT" 'offending line(s): 2' 'crafted: the REAL line number is still reported'
+
+echo
+echo "== the temp path must not contribute its own digits =="
+# The reviewer's proposed anchor was also wrong: taking every digit run out of
+# `^[^:]*: line N:` picks up digits from the mktemp path itself. There is no
+# clean way to force a digit into mktemp's name here, so this asserts the shape
+# of the extractor instead of the value — stated as the weaker check it is.
+require_anchor "sed -E 's/.*: line ([0-9]+):.*/\\1/'" 'the number comes from the anchored prefix only'
+require_anchor 'head -20' 'the list is bounded so it cannot flood a public log'
+
+echo
+echo "== the config file cannot choose where transcripts are written =="
+require_anchor 'VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"' 'the destination is captured BEFORE the source'
+require_anchor 'LOG="${VERIFY_LOG_REQUESTED:-/tmp/j9-verify-$STAMP.log}"' 'and used after it'
+require_anchor '(umask 077 && : >"$LOG")' 'the transcript file is created 0600, not umask default'
+require_anchor "trap 'rm -f \"\$ENV_TMP\" \"\$ENV_ERR\"; exit 143' TERM INT HUP" 'a killed sweep still wipes its cleartext copy'
 
 echo
 echo "== mutation control: without the capture, the bench MUST go red =="

@@ -151,9 +151,17 @@ jobs:
             # crashes before it can report is worse than no guard.
             DIRTY=0
             HAS_CHECKOUT=0
-            ok()   { printf '  [OK]   %s\n' "$*"; }
-            warn() { printf '  [WARN] %s\n' "$*"; }
-            bad()  { printf '  [FAIL] %s\n' "$*"; FAILED=1; }
+            # These pipe through `redact` themselves. The header of this file
+            # says "every printed line goes through redact()"; before this it
+            # was true of SIX call sites out of roughly sixty, and these three
+            # helpers — which carry almost everything host-derived, including
+            # a value read straight out of the secrets file — were not among
+            # them. A load-bearing comment that is false is worse than a
+            # missing one: the next person adds `warn "$SOMETHING"` believing
+            # it is filtered. Making the sentence true costs one pipe each.
+            ok()   { printf '  [OK]   %s\n' "$*" | redact; }
+            warn() { printf '  [WARN] %s\n' "$*" | redact; }
+            bad()  { printf '  [FAIL] %s\n' "$*" | redact; FAILED=1; }
 
             # =================================================================
             # A. Checkout — the thing `git pull` converges

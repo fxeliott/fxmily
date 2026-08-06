@@ -534,12 +534,24 @@ validation server-side with a message nobody expects.
 
 ## Optional: external dead-man switch (Healthchecks.io)
 
-The primary alert path (`/api/cron/health` → `cron-watch.yml` → GitHub issue)
-needs no third-party account and is already proven in production. Healthchecks.io
-is the **second** path, useful because it fires even if the app itself is down.
+The primary alert path is `/api/cron/health` → `cron-watch.yml` → **a red run in
+the Actions tab and GitHub's failed-workflow e-mail**. It needs no third-party
+account. It does NOT open a GitHub issue: Issues are disabled on this repo, the
+API call returned 410, and that path was removed — this paragraph used to claim
+otherwise, which is exactly the kind of doc that retires a question instead of
+answering it (see §4 above, which has said the truth since).
+
+That path has one structural limit: **every hop runs inside the app.** If the
+app is down, `/api/cron/health` does not answer "red", it does not answer at
+all — and while `cron-watch` does go red on a non-200, an app that is down takes
+the diagnosis with it. Healthchecks.io is the second path precisely because
+nothing in it depends on the app being alive.
 
 It is wired and inert: `/etc/fxmily/cron.env` declares one blank URL per
-pipeline, and a blank URL makes the wrapper skip the ping entirely.
+pipeline, and a blank URL makes the wrapper skip the ping entirely. Nothing
+reports that they are blank, so "the external channel exists" and "the external
+channel is armed" have looked identical from the outside. `worker-host-sync.yml`
+in `inspect` mode now counts them and says which of the two you are in.
 
 ```
 HEALTHCHECK_PING_URL_WORKER_ONBOARDING=https://hc-ping.com/<uuid>
@@ -558,6 +570,63 @@ the ping URLs into `/etc/fxmily/cron.env`.
 **not** cover them: its table lists the twelve host crons and no AI pipeline.
 Pointing you at it would have you run a script that provisions nothing you need
 and report success — extend it, or do it by hand, but do not assume it ran.
+
+### Arming it, end to end
+
+Creating the account is a credential gesture, so it stays manual. Everything
+after it is copy-paste. Free tier: 20 checks, 7 needed.
+
+1. Sign up at <https://healthchecks.io> and open the default project.
+2. Create **seven** checks. For each one, set the name and the schedule below —
+   the _grace_ is what stops a normal long run from paging you. Take the period
+   from `/etc/cron.d/fxmily-worker`; it is the source of truth, this table is a
+   copy.
+
+   | Check name                   | Period  | Grace |
+   | ---------------------------- | ------- | ----- |
+   | `fxmily-worker-onboarding`   | 20 min  | 4 h   |
+   | `fxmily-worker-verification` | 20 min  | 4 h   |
+   | `fxmily-worker-seances`      | 30 min  | 4 h   |
+   | `fxmily-worker-calendar`     | 1 day   | 2 d   |
+   | `fxmily-worker-weekly`       | 1 week  | 2 w   |
+   | `fxmily-worker-monthly`      | 30 days | 60 d  |
+   | `fxmily-worker-profile`      | 30 days | 60 d  |
+
+   The graces are the SAME budgets `health.ts` gives each pipeline on the board.
+   Tighter would page you every time `weekly` holds the machine-global lock; that
+   is not a hypothetical, it is the 2h lock this worker legitimately takes.
+
+3. Copy each check's ping URL and append the seven lines to `/etc/fxmily/cron.env`
+   on the host, as root:
+
+   ```bash
+   sudo tee -a /etc/fxmily/cron.env >/dev/null <<'EOF'
+   HEALTHCHECK_PING_URL_WORKER_ONBOARDING=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_VERIFICATION=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_SEANCES=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_CALENDAR=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_WEEKLY=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_MONTHLY=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_PROFILE=https://hc-ping.com/xxxxxxxx
+   EOF
+   ```
+
+   No restart is needed: `/etc/fxmily/cron.env` is sourced by every tick.
+
+4. **Prove it, do not assume it.** `verification` ticks every 5 minutes, so you
+   get an answer fast: within 5 minutes its check goes from "new" to "up" in the
+   dashboard. If it does not, the URL is wrong or the line has a CR — the wrapper
+   swallows a bad ping on purpose (an alerting channel must never take the worker
+   down with it), so the dashboard is the only place the truth shows.
+
+5. Then run `worker-host-sync.yml` in `inspect` mode. It reports **`7/7 external
+ping URLs configured`**. Anything less names how many are missing — and it
+   never prints a URL, because a populated ping URL is a capability token and
+   these run logs are public.
+
+**A ping URL is a credential.** Anyone holding it can mark the check up, i.e.
+silence the alarm. It belongs in `/etc/fxmily/cron.env` (root-owned) and nowhere
+else — never in the repo, never in a workflow log, never in a message.
 
 ---
 

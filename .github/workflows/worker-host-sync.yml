@@ -86,13 +86,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'inspect = measure (safe) | converge = git pull + install wrappers | verify = 7-pipeline dry-run'
+        description: 'inspect = measure (safe) | converge = git pull + install wrappers | verify = start the 7-pipeline dry-run (detached) | verify-status = read a sweep already running'
         required: true
         type: choice
         options:
           - inspect
           - converge
           - verify
+          - verify-status
         default: inspect
 
 permissions: {}
@@ -317,6 +318,40 @@ jobs:
             else
               bad "worker.env unreadable at ~/worker/ops/worker/worker.env"
             fi
+            # The EXTERNAL alert channel — counted, because "wired" and "armed"
+            # have looked identical from the outside since J9 shipped.
+            #
+            # Every hop of the primary alert path runs inside the app: the
+            # watchdog POSTs a heartbeat to it, `/api/cron/health` reads it, and
+            # `cron-watch.yml` polls that. An app that is down cannot report that
+            # it is down. Healthchecks.io is the only channel that survives that,
+            # and its seven URLs ship BLANK — a blank URL makes the wrapper skip
+            # the ping silently, which is correct behaviour and invisible state.
+            #
+            # A count, never a value: a populated ping URL is a capability token
+            # (whoever holds it can mark the check "up" and silence the alarm)
+            # and this log is public. `redact()` would catch it, but relying on a
+            # filter to strip a secret we chose to print is not a design.
+            HC_TOTAL=0
+            HC_SET=0
+            for k in ONBOARDING VERIFICATION SEANCES CALENDAR WEEKLY MONTHLY PROFILE; do
+              HC_TOTAL=$((HC_TOTAL + 1))
+              # Non-empty AND not a placeholder: `=` alone, or a value that is
+              # not a URL, both mean "not armed" and both have shipped as one.
+              VAL="$(awk -F= -v k="HEALTHCHECK_PING_URL_WORKER_$k" \
+                     '$1==k {print length($2)}' "$CRON_ENV" 2>/dev/null | head -1)"
+              [ -n "$VAL" ] && [ "$VAL" -ge 20 ] && HC_SET=$((HC_SET + 1))
+            done
+            if [ "$HC_SET" -eq "$HC_TOTAL" ]; then
+              ok "$HC_SET/$HC_TOTAL external ping URLs configured (values never printed)"
+            elif [ "$HC_SET" -eq 0 ]; then
+              warn "0/$HC_TOTAL external ping URLs configured — the app is the ONLY alert channel,"
+              warn "so an app that is down cannot tell you the worker is down. See RUNBOOK.md"
+              warn "§ 'external dead-man switch' for the seven-step arming procedure."
+            else
+              warn "$HC_SET/$HC_TOTAL external ping URLs configured — a PARTIAL channel is the"
+              warn "worst of the three states: it looks armed and covers only some pipelines."
+            fi
             echo "::endgroup::"
 
             # =================================================================
@@ -468,19 +503,110 @@ jobs:
             # =================================================================
             # VERIFY — the read-only 7-pipeline dry-run (Done-quand #1)
             # =================================================================
-            if [ "$MODE" = "verify" ]; then
-              echo "::group::Verify · 7-pipeline dry-run (never persists)"
-              # `--dry-run` is forced by the script itself for all seven.
-              bash "$WORKER_REPO/ops/worker/verify-worker-vps.sh" 2>&1 | redact
-              RC="${PIPESTATUS[0]}"
-              echo "::endgroup::"
-              if [ "$RC" -eq 0 ]; then
-                echo "RESULT: 7/7 pass."
-              else
-                echo "::error::verify-worker-vps.sh exited $RC — read the per-pipeline verdicts above."
-                echo "A FAIL/skipped on every pipeline means no Claude account is signed in on the host."
+            # =================================================================
+            # VERIFY — the read-only 7-pipeline dry-run (Done-quand #1)
+            # =================================================================
+            # WHY THIS IS DETACHED AND NOT A PLAIN CALL, measured 2026-08-06.
+            #
+            # The plain call was `bash verify-worker-vps.sh 2>&1 | redact`. Run
+            # 31111894121 hit `Run Command Timeout` at 40 minutes and printed
+            # ZERO per-pipeline verdicts. Two independent faults, and the second
+            # is the one that matters:
+            #
+            #   1. 40 minutes is far below an honest sweep. Seven pipelines run
+            #      SERIALLY behind the machine-global lock, each member costs a
+            #      jittered sleep with a 30 s floor (that floor IS the anti-ban
+            #      design) plus a real model call for the four generators. A
+            #      thirty-member cohort is hours, not minutes.
+            #   2. Nothing streamed. `printf` to a pipe is block-buffered, and
+            #      `sed` buffers again, so the whole transcript died with the
+            #      session. The switchover gate spent forty minutes of REAL
+            #      quota on the dedicated account and produced no evidence at
+            #      all — a gate that can consume and never report.
+            #
+            # So the sweep now outlives the SSH session (`setsid` + `nohup`), is
+            # line-buffered into a log on the host, and this step TAILS it. A run
+            # that ends without a verdict is reported as "no verdict", never as a
+            # pass: the absence of a result must not be readable as a result.
+            VERIFY_DIR="$LOG_DIR/verify"
+            VERIFY_PID_FILE="$VERIFY_DIR/current.pid"
+            VERIFY_PTR="$VERIFY_DIR/current.path"
+
+            if [ "$MODE" = "verify" ] || [ "$MODE" = "verify-status" ]; then
+              mkdir -p "$VERIFY_DIR"
+              RUNNING=0
+              if [ -r "$VERIFY_PID_FILE" ]; then
+                VPID="$(tr -dc '0-9' <"$VERIFY_PID_FILE")"
+                [ -n "$VPID" ] && kill -0 "$VPID" 2>/dev/null && RUNNING=1
               fi
-              exit "$RC"
+            fi
+
+            if [ "$MODE" = "verify" ]; then
+              # Refuse to start a SECOND sweep. Two concurrent sweeps would
+              # queue on the machine-global lock and double the quota spend for
+              # one verdict — and the second would look like it hung.
+              if [ "$RUNNING" -eq 1 ]; then
+                echo "::error title=A sweep is already running::pid $VPID. Read it with mode=verify-status instead of starting a second one."
+                exit 1
+              fi
+              STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+              VLOG="$VERIFY_DIR/verify-$STAMP.log"
+              : >"$VLOG"
+              printf '%s\n' "$VLOG" >"$VERIFY_PTR"
+              # `stdbuf -oL` so a line is readable the moment it is printed;
+              # `setsid` so the sweep survives this SSH session ending.
+              nohup setsid stdbuf -oL bash "$WORKER_REPO/ops/worker/verify-worker-vps.sh" \
+                >"$VLOG" 2>&1 </dev/null &
+              printf '%s\n' "$!" >"$VERIFY_PID_FILE"
+              VPID="$(cat "$VERIFY_PID_FILE")"
+              echo "sweep started detached (pid $VPID) — it survives this session."
+              RUNNING=1
+            fi
+
+            if [ "$MODE" = "verify" ] || [ "$MODE" = "verify-status" ]; then
+              VLOG="$(cat "$VERIFY_PTR" 2>/dev/null)"
+              if [ -z "$VLOG" ] || [ ! -r "$VLOG" ]; then
+                echo "::error title=No sweep to read::no verify log on this host yet. Run mode=verify first."
+                exit 1
+              fi
+              echo "::group::Verify · 7-pipeline dry-run (never persists)"
+              # Budget kept UNDER the 40 min `command_timeout` on purpose: this
+              # step must always get to print its own conclusion rather than be
+              # killed mid-tail, which is the failure it exists to prevent.
+              WATCH_UNTIL=$(( $(date +%s) + 1800 ))
+              SEEN=0
+              while :; do
+                TOTAL="$(wc -l <"$VLOG" 2>/dev/null || echo 0)"
+                if [ "$TOTAL" -gt "$SEEN" ]; then
+                  tail -n "+$((SEEN + 1))" "$VLOG" | head -n "$((TOTAL - SEEN))" | redact
+                  SEEN="$TOTAL"
+                fi
+                RUNNING=0
+                [ -n "${VPID:-}" ] && kill -0 "$VPID" 2>/dev/null && RUNNING=1
+                [ "$RUNNING" -eq 0 ] && break
+                [ "$(date +%s)" -ge "$WATCH_UNTIL" ] && break
+                sleep 15
+              done
+              echo "::endgroup::"
+
+              VERDICT="$(grep -E '^RESULT: [0-9]+/7' "$VLOG" | tail -1)"
+              if [ -n "$VERDICT" ]; then
+                echo "$VERDICT"
+                case "$VERDICT" in
+                  "RESULT: 7/7 pass, 0/7 fail") exit 0 ;;
+                  *)
+                    echo "::error::the sweep finished with failures — read the per-pipeline verdicts above."
+                    echo "A FAIL/skipped on every pipeline means no Claude account is signed in on the host."
+                    exit 1
+                    ;;
+                esac
+              fi
+              if [ "$RUNNING" -eq 1 ]; then
+                echo "::error title=Still running, no verdict yet::the sweep is alive (pid $VPID) and has not printed a verdict. This is NOT a worker failure — it is the ABSENCE of one. Re-run this workflow with mode=verify-status to read the rest; it will not start a second sweep."
+                exit 1
+              fi
+              echo "::error title=Sweep died without a verdict::the process is gone and no RESULT line was written. The tail above is everything it produced."
+              exit 1
             fi
 
             # =================================================================

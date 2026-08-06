@@ -360,6 +360,71 @@ jobs:
             done
             echo "::endgroup::"
 
+            # =================================================================
+            # F-bis. Did it PRODUCE anything? — J9 "Done quand" #2
+            # =================================================================
+            # Section F answers "did the batch run?". It cannot answer "did the
+            # batch make anything?", and the difference between those two is the
+            # single failure mode this jalon exists to remove: a pipeline that
+            # pulls its envelope (so the age heartbeat goes green), calls nothing,
+            # persists nothing, and reports ok=true. `status.json` records
+            # exitCode / ok / quotaCapped / skipped — not one field about output.
+            #
+            # The numbers DO exist: every pipeline prints a production summary.
+            # They live in `<batch>.log`, which this workflow has never touched
+            # and must never tail, because that file carries member content and
+            # these run logs are PUBLIC.
+            #
+            # SO THE RULE HERE IS ABSOLUTE, AND IT IS ENFORCED BY CONSTRUCTION,
+            # NOT BY CARE: every character printed by this section comes either
+            # from a literal written in this file, or from `[0-9]+`. `grep -oE`
+            # emits only what its pattern matched, and every pattern below is a
+            # fixed string with digit classes punched into it. There is no branch
+            # where a byte of member text can reach stdout — not via a filename,
+            # not via an error message, not via a partially-matched line.
+            #
+            # Scoped to the LAST run, not to the file: `<batch>.log` is
+            # append-only across runs (pruned at 14 days), so an unscoped grep
+            # would happily report a generation from six days ago as if it were
+            # this morning's. `run-batch.sh` writes `[worker] batch=<b> started=`
+            # at the top of every run — that marker is the section boundary.
+            echo "::group::F-bis · What the last run actually produced (numbers only)"
+            for p in onboarding verification seances calendar weekly monthly profile; do
+              BLOG="$LOG_DIR/${p}.log"
+              if [ ! -r "$BLOG" ]; then
+                printf '  %-13s no batch log yet\n' "$p"
+                continue
+              fi
+              # Byte-scope to the last run. `+N` is a line number, so a log with
+              # no marker at all (a very old file) falls back to line 1 rather
+              # than to an empty tail — reporting "nothing found" on a file that
+              # may hold something is a lie by omission.
+              MARK="$(grep -n "^\[worker\] batch=${p} started=" "$BLOG" 2>/dev/null | tail -1 | cut -d: -f1)"
+              SECTION="$(tail -n "+${MARK:-1}" "$BLOG" 2>/dev/null)"
+              # Every pattern: literal + [0-9]+. Nothing else can survive `-oE`.
+              EVIDENCE="$(printf '%s' "$SECTION" | grep -oE \
+                -e 'Generated: [0-9]+, errored: [0-9]+' \
+                -e 'skipped inactive: [0-9]+' \
+                -e 'skipped \(no questionnaire\): [0-9]+' \
+                -e 'already generated \(resume\): [0-9]+' \
+                -e 'Payload: [0-9]+ bytes / [0-9]+ entries' \
+                -e 'held complete=[0-9]+' \
+                -e 'awaiting media=[0-9]+' \
+                -e 'awaiting AI=[0-9]+' \
+                -e '"(total|persisted|created|updated|skipped|failed|errors|unchanged)": [0-9]+' \
+                2>/dev/null | tail -8 | tr '\n' ' ' | tr -s ' ')"
+              if [ -n "$EVIDENCE" ]; then
+                printf '  %-13s %s\n' "$p" "$EVIDENCE"
+              else
+                # Not a failure. Three legitimate causes, and the operator must
+                # not read this as "broken": an empty cohort, a dry-run
+                # short-circuit, or a pipeline whose summary shape is not in the
+                # whitelist above. Saying which is impossible from numbers alone.
+                printf '  %-13s last run printed no production number\n' "$p"
+              fi
+            done
+            echo "::endgroup::"
+
             echo "::group::G · Root reach (can converge finish by itself?)"
             # Answer this BEFORE someone runs converge, not after it fails at the
             # last step. The grant is command-specific (see the comment above

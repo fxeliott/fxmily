@@ -52,8 +52,10 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
  * - `getComputedStyle().bottom` returns the USED value in px, so `max()`,
  *   `env()` and the FAB-lift media query are all already resolved.
  *
- * Each island writes its OWN `--slot-<name>` variable and removes only that one.
- * globals.css takes the `max()` of them, so a hidden island (the hints are
+ * Each island writes its OWN variable and removes only that one: `--slot-<name>`
+ * when it sits in the bottom slot, `--slot-top-<name>` when a CSS rule has moved
+ * it to the top (it then reserves scroll room up there instead — WCAG 2.4.11).
+ * globals.css takes the `max()` of each family, so a hidden island (the hints are
  * `display:none` while the banner is up) can never clobber a visible one's value,
  * whatever order the effects run in.
  *
@@ -74,10 +76,12 @@ export function useBottomSlotReservation(
   useIsomorphicLayoutEffect(() => {
     const root = document.documentElement;
     const property = `--slot-${slot}`;
+    const propertyTop = `--slot-top-${slot}`;
     // Block body on purpose: `removeProperty` returns the old value, and an
     // expression-bodied arrow would leak that `string` past the `: void`.
     const clear = (): void => {
       root.style.removeProperty(property);
+      root.style.removeProperty(propertyTop);
     };
 
     const el = ref.current;
@@ -96,25 +100,28 @@ export function useBottomSlotReservation(
         return;
       }
       const style = window.getComputedStyle(el);
-      const bottom = Number.parseFloat(style.bottom);
-      // An island anchored at the TOP no longer occupies the bottom slot, so it
-      // must reserve NOTHING there. Without this, the published band would be
-      // its height plus the USED value of `bottom` — 173 + 667.5 = 841px of dead
-      // space at the end of every page at 393×852 (measured). The intent is read
-      // from `data-anchor`, the very attribute the CSS keys on, so the position
-      // and the space reserved for it cannot drift apart; `top < bottom` then
-      // confirms the anchoring is EFFECTIVE, since that rule only applies under
-      // 640px (checked at 800px: attribute set, top 535.5 > bottom 136, so the
-      // island reserves normally). Both are USED position values: unlike a
-      // rect they are immune to the entry animation, and stable under scroll
-      // (measured identical at scrollY 0 and 1000).
-      if (el.dataset.anchor === 'top' && Number.parseFloat(style.top) < bottom) {
-        clear();
-        return;
-      }
+      // WHERE the island sits is read from the SIGNAL the CSS rule sets when it
+      // moves it (`--slot-anchored`), never inferred from its geometry — so the
+      // position and the space reserved for it cannot drift apart.
+      //
+      // The first version compared `top < bottom` instead, and got it wrong in
+      // phone landscape: at 667×375 the used values are top 58.5 and bottom 136,
+      // so it read "anchored at the top" for an island anchored at the BOTTOM
+      // covering 48% of the screen — and dropped the reservation exactly where
+      // it mattered most. The variable that broke it was the viewport HEIGHT,
+      // not its width, so the check run at 800×852 could not see it. Caught by a
+      // fresh-context review, then reproduced on the deployed build.
+      const anchoredTop = style.getPropertyValue('--slot-anchored').trim() === 'top';
+      // The offset that matters is the one on the anchored side. Both are USED
+      // values: unlike a rect they survive the entry animation and are stable
+      // under scroll (measured identical at scrollY 0 and 1000).
+      const offset = Number.parseFloat(anchoredTop ? style.top : style.bottom);
+      // An island only ever occupies ONE slot: drop the band it no longer holds,
+      // otherwise a stale value would keep reserving space on the other side.
+      root.style.removeProperty(anchoredTop ? property : propertyTop);
       root.style.setProperty(
-        property,
-        `${Math.ceil(height + (Number.isFinite(bottom) ? bottom : 0))}px`,
+        anchoredTop ? propertyTop : property,
+        `${Math.ceil(height + (Number.isFinite(offset) ? offset : 0))}px`,
       );
     };
 

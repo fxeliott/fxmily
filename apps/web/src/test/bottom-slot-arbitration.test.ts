@@ -307,13 +307,21 @@ describe('montage de la bannière cookies — visiteurs uniquement', () => {
  * ci-dessous valide l'instrument sur des cas connus AVANT qu'on croie son
  * verdict : un calculateur faux rendrait un rapport faux avec l'air d'un vrai.
  */
-type Spec = { b: number; c: number };
+type Spec = { a: number; b: number; c: number };
 
-const SPEC_ZERO: Spec = { b: 0, c: 0 };
+const SPEC_ZERO: Spec = { a: 0, b: 0, c: 0 };
 
 function plusForte(x: Spec, y: Spec): Spec {
+  if (x.a !== y.a) return x.a > y.a ? x : y;
   if (x.b !== y.b) return x.b > y.b ? x : y;
   return x.c >= y.c ? x : y;
+}
+
+/** `x` l'emporte-t-elle sur `y` SANS dépendre de l'ordre du fichier ? */
+function strictementPlusForte(x: Spec, y: Spec): boolean {
+  if (x.a !== y.a) return x.a > y.a;
+  if (x.b !== y.b) return x.b > y.b;
+  return x.c > y.c;
 }
 
 /** Découpe une liste de sélecteurs sur les virgules de PREMIER niveau. */
@@ -337,6 +345,7 @@ function decouperListe(liste: string): string[] {
 }
 
 function specificite(selecteur: string): Spec {
+  let a = 0;
   let b = 0;
   let c = 0;
   let i = 0;
@@ -354,6 +363,13 @@ function specificite(selecteur: string): Spec {
     } else if (ch === '.') {
       b += 1;
       i = finDuMot(i + 1);
+    } else if (ch === '#') {
+      // Composante `a` — oubliée dans la première version, qui comptait
+      // `#main-content` comme un ÉLÉMENT. Ce n'est pas théorique : cet
+      // identifiant existe (`src/app/layout.tsx`), donc une règle rivale le
+      // portant battait la nôtre pendant que le garde restait VERT.
+      a += 1;
+      i = finDuMot(i + 1);
     } else if (ch === ':') {
       const pseudoElement = selecteur.charAt(i + 1) === ':';
       const debutNom = i + (pseudoElement ? 2 : 1);
@@ -370,13 +386,20 @@ function specificite(selecteur: string): Spec {
           }
         }
         // `:where()` ne compte pour rien ; `:is()`/`:has()`/`:not()` prennent la
-        // spécificité de leur argument LE PLUS FORT.
-        if (nom !== 'where') {
+        // spécificité de leur argument LE PLUS FORT ; toute AUTRE pseudo-classe
+        // fonctionnelle compte comme une pseudo-classe simple. La première
+        // version passait `:nth-child(1)` par le calcul récursif — dont
+        // l'argument n'est pas un sélecteur, donc il rendait zéro — et laissait
+        // une règle rivale l'emporter pendant que le garde restait VERT.
+        if (['is', 'has', 'not', 'matches'].includes(nom)) {
           const max = decouperListe(selecteur.slice(finNom + 1, k))
             .map(specificite)
             .reduce(plusForte, SPEC_ZERO);
+          a += max.a;
           b += max.b;
           c += max.c;
+        } else if (nom !== 'where') {
+          b += 1;
         }
         i = k + 1;
       } else {
@@ -391,7 +414,7 @@ function specificite(selecteur: string): Spec {
       i += 1;
     }
   }
-  return { b, c };
+  return { a, b, c };
 }
 
 /**
@@ -410,13 +433,47 @@ function specificiteMax(liste: string): Spec {
 
 const ILOTS = ['cookie-banner', 'a2hs-hint', 'ios-install-hint'] as const;
 
+/**
+ * Les at-rules (`@media`, `@supports`) qui englobent la position `index`.
+ *
+ * Sans elles le garde ne voit QUE le sélecteur de la règle feuille, et trois
+ * mutations qui coupent le correctif de tous les appareils réels — point de
+ * bascule ramené à `1px`, `@media print`, condition remplacée — passaient au
+ * VERT. Trou signalé par une revue en contexte frais, rejoué sur des copies.
+ */
+function contexteAtRules(css: string, index: number): string[] {
+  const contexte: string[] = [];
+  let profondeur = 0;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const ch = css.charAt(i);
+    if (ch === '}') {
+      profondeur += 1;
+    } else if (ch === '{') {
+      if (profondeur > 0) {
+        profondeur -= 1;
+        continue;
+      }
+      const debut = Math.max(css.lastIndexOf('{', i - 1), css.lastIndexOf('}', i - 1));
+      const tete = css
+        .slice(debut + 1, i)
+        .trim()
+        .replace(/\s+/g, ' ');
+      if (tete.startsWith('@')) contexte.unshift(tete);
+    }
+  }
+  return contexte;
+}
+
 /** Règles feuilles qui posent un `bottom:` (jamais `padding-bottom`) sur un îlot. */
-function reglesBottomSurIlot(css: string): { sel: string; corps: string; index: number }[] {
+function reglesBottomSurIlot(
+  css: string,
+): { sel: string; corps: string; index: number; contexte: string[] }[] {
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .map((m) => ({
       sel: (m[1] ?? '').trim().replace(/\s+/g, ' '),
       corps: m[2] ?? '',
       index: m.index ?? 0,
+      contexte: contexteAtRules(css, m.index ?? 0),
     }))
     .filter((r) => /(?:^|[;\s])bottom\s*:/.test(r.corps))
     .filter((r) => ILOTS.some((slot) => r.sel.includes(`[data-slot='${slot}']`)));
@@ -430,6 +487,7 @@ describe('ancrage haut des bandeaux d’installation — la règle doit VRAIMENT
 
   it('le calculateur de spécificité est juste sur des cas connus (valider l’instrument)', () => {
     expect(specificite("body:has([data-slot='app-bottom-nav']) [data-slot='a2hs-hint']")).toEqual({
+      a: 0,
       b: 2,
       c: 1,
     });
@@ -437,21 +495,48 @@ describe('ancrage haut des bandeaux d’installation — la règle doit VRAIMENT
       specificite(
         "body:has([data-slot='a']):has([data-slot='b']) :is([data-slot='c'], [data-slot='d'])",
       ),
-    ).toEqual({ b: 3, c: 1 });
-    expect(
-      specificite(
-        "html:has([data-slot='a']) body :is([data-slot='b'], [data-slot='c'])[data-anchor='top']",
-      ),
-    ).toEqual({ b: 3, c: 2 });
-    expect(specificite(":where([data-slot='a']) p")).toEqual({ b: 0, c: 1 });
-    expect(specificite('.x.y div')).toEqual({ b: 2, c: 1 });
-    // Le cas qui a réellement pris l'instrument en défaut : une LISTE. Sans
-    // découpage, les trois sélecteurs s'additionnaient en (6,3) au lieu de (2,1).
+    ).toEqual({ a: 0, b: 3, c: 1 });
+    expect(specificite("html[lang] body :is([data-slot='b'])[data-anchor='top']")).toEqual({
+      a: 0,
+      b: 3,
+      c: 2,
+    });
+    expect(specificite(":where([data-slot='a']) p")).toEqual({ a: 0, b: 0, c: 1 });
+    expect(specificite('.x.y div')).toEqual({ a: 0, b: 2, c: 1 });
+    // Le cas qui a pris l'instrument en défaut la première fois : une LISTE.
+    // Sans découpage, les sélecteurs s'additionnaient en (6,3) au lieu de (2,1).
     expect(
       specificiteMax(
         "body:has([data-slot='x']) [data-slot='a'], body:has([data-slot='x']) [data-slot='b']",
       ),
-    ).toEqual({ b: 2, c: 1 });
+    ).toEqual({ a: 0, b: 2, c: 1 });
+    // Les DEUX cas où il se trompait dans le sens VERT, trouvés par une revue en
+    // contexte frais : un identifiant compté comme un élément, et une
+    // pseudo-classe fonctionnelle dont l'argument n'est pas un sélecteur.
+    // `#main-content` existe (`src/app/layout.tsx`) : ce rival est réaliste.
+    expect(specificite("#main-content [data-slot='a2hs-hint']")).toEqual({ a: 1, b: 1, c: 0 });
+    expect(
+      specificite(
+        "body:has([data-slot='a']):has([data-slot='b']) :is([data-slot='c']):nth-child(1)",
+      ),
+    ).toEqual({ a: 0, b: 4, c: 1 });
+    expect(specificite('div:hover')).toEqual({ a: 0, b: 1, c: 1 });
+  });
+
+  it('le lecteur de contexte at-rule est juste sur le fichier réel (valider l’instrument)', () => {
+    // Sans lui, muter le point de bascule ou passer en `@media print` — donc
+    // couper le correctif de tout appareil réel — laissait le garde VERT.
+    expect(ancrage[0]?.contexte, 'la règle d’ancrage doit être vue SOUS son @media').toEqual([
+      '@media (max-width: 639px)',
+    ]);
+    // Et l'instrument se valide sur un échantillon dont on CONNAÎT la réponse,
+    // dans les deux sens. Le vérifier sur le fichier réel ne prouverait qu'une
+    // propriété contingente : ici, toutes les règles `bottom:` des îlots vivent
+    // sous un `@media`, donc « au moins une hors at-rule » aurait échoué sans
+    // qu'aucun instrument ne soit cassé.
+    const echantillon = 'a { bottom: 1px; }\n@media print { b { bottom: 2px; } }';
+    expect(contexteAtRules(echantillon, echantillon.indexOf('a {'))).toEqual([]);
+    expect(contexteAtRules(echantillon, echantillon.indexOf('b {'))).toEqual(['@media print']);
   });
 
   it('la règle d’ancrage existe, neutralise `bottom` et nomme les trois îlots', () => {
@@ -486,10 +571,11 @@ describe('ancrage haut des bandeaux d’installation — la règle doit VRAIMENT
     const mienne = specificiteMax(ancrage[0]?.sel ?? '');
     const perdantes = concurrentes
       .map((r) => ({ sel: r.sel, spec: specificiteMax(r.sel) }))
-      .filter((r) => !(mienne.b > r.spec.b || (mienne.b === r.spec.b && mienne.c > r.spec.c)));
+      .filter((r) => !strictementPlusForte(mienne, r.spec));
     expect(
       perdantes.map(
-        (p) => `${p.sel} → (${p.spec.b},${p.spec.c}) ≥ ancrage (${mienne.b},${mienne.c})`,
+        (p) =>
+          `${p.sel} → (${p.spec.a},${p.spec.b},${p.spec.c}) ≥ ancrage (${mienne.a},${mienne.b},${mienne.c})`,
       ),
       [
         '',
@@ -511,22 +597,72 @@ describe('ancrage haut des bandeaux d’installation — la règle doit VRAIMENT
     ).toBe(true);
   });
 
-  it('le hook de réservation lit le même `data-anchor` que le CSS', () => {
+  it('l’ancrage ne dépend d’aucun élément qui peut ne pas être là', () => {
+    const conditions = [...(ancrage[0]?.sel ?? '').matchAll(/:has\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(
+      conditions,
+      [
+        '',
+        'La première version conditionnait la règle à `html:has([data-slot="app-bottom-nav"])`.',
+        'Sur une route qui monterait un bandeau SANS la barre de navigation, il retombait',
+        'donc en bas — mesuré en production : 592..764 au lieu de 12..185, le défaut revenu',
+        'intact. Un ancrage doit tenir à ce que le document est, pas à ce qu’il contient.',
+        '',
+      ].join('\n'),
+    ).toEqual([]);
+  });
+
+  it('le hook lit le signal `--slot-anchored` posé par la règle, et ne DEVINE pas la position', () => {
     const hook = readFileSync(
       join(SRC, 'components', 'ui', 'use-bottom-slot-reservation.ts'),
       'utf8',
     );
     expect(
+      ancrage[0]?.corps,
+      'la règle doit poser `--slot-anchored: top`, sinon le hook n’a aucun signal à lire',
+    ).toMatch(/--slot-anchored\s*:\s*top/);
+    expect(
       hook,
       [
         '',
-        'Sans cette lecture, un îlot ancré en haut publie quand même sa bande dans le',
-        'slot BAS : sa hauteur plus la valeur UTILISÉE de `bottom`, soit 173 + 667,5 =',
-        '841px de vide en fin de page à 393×852. La correction déplacerait le défaut',
-        'au lieu de le fermer.',
+        'Le hook doit LIRE ce signal. La version qui DEVINAIT la position en comparant',
+        '`top < bottom` se trompait en paysage téléphone (667×375 : top 58,5 < bottom 136',
+        'pour un îlot ancré en BAS occupant 48 % de l’écran) et supprimait la réservation',
+        'là où elle comptait le plus. La variable qui cassait ce calcul était la HAUTEUR',
+        'du viewport, pas sa largeur.',
         '',
       ].join('\n'),
-    ).toContain('dataset.anchor');
+    ).toContain('--slot-anchored');
+    expect(
+      hook,
+      'un îlot ancré en haut doit publier sa bande HAUTE, que `scroll-padding-top` consomme',
+    ).toContain('--slot-top-');
+  });
+
+  it('un îlot ancré en haut ne masque pas le focus clavier (WCAG 2.2 SC 2.4.11 AA)', () => {
+    const regles = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((m) => ({ sel: (m[1] ?? '').trim().replace(/\s+/g, ' '), corps: m[2] ?? '' }))
+      .filter((r) => /(?:^|[;\s])scroll-padding-top\s*:/.test(r.corps));
+    expect(
+      regles.length,
+      [
+        '',
+        'Aucune règle `scroll-padding-top`. Mesuré sur le build déployé, `/dashboard` à',
+        '375×667, bandeau ancré en haut (12..185) : à scrollY 150 un bouton occupe 47..71,',
+        'donc ENTIÈREMENT sous le bandeau ; `focus()` ne défile pas et `elementFromPoint`',
+        'à son centre renvoie le bandeau. C’est exactement le défaut que #605 avait fermé',
+        'en BAS, rouvert en HAUT par le déplacement.',
+        '',
+      ].join('\n'),
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      regles.some((r) => r.sel.includes("[data-anchor='top']")),
+      'la règle doit être conditionnée à la présence d’un îlot ancré en haut',
+    ).toBe(true);
+    expect(
+      regles.some((r) => /--slot-top-/.test(r.corps)),
+      'la valeur doit venir de la bande RÉELLEMENT publiée, pas d’une constante : la hauteur dépend du retour à la ligne et de `env(safe-area-inset-top)`',
+    ).toBe(true);
   });
 
   it('tout composant qui déclare data-anchor="top" est un îlot que la règle nomme', () => {

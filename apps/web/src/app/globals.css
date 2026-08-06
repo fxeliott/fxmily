@@ -3292,16 +3292,31 @@ body:has(
    La règle NOMME les trois îlots, comme l'exige `bottom-slot-arbitration.test.ts`,
    mais n'atteint que ceux qui déclarent `data-anchor="top"` : la bannière cookies
    reste en bas, et un futur îlot choisit son ancrage sans revenir ici. Au-delà de
-   640px les bandeaux repassent en bas à droite (`sm:` de leur className), où ils
-   ne recouvrent rien — contrôle négatif à 800px : attribut posé et règle présente,
-   l'îlot reste en bas (top 535,5 > bottom 136).
+   640px la règle s'éteint et les îlots reprennent leur place en bas — `<A2HSHint>`
+   en bas à DROITE (variantes `sm:` de son className), `<IOSInstallHint>` centré et
+   pleine largeur, car son className ne porte AUCUNE variante `sm:` (mesuré à
+   1440×900 : a2hs x=1040..1424, ios x=496..944). Les deux copient la géométrie du
+   slot bas, pas les variantes larges — une revue en contexte frais a corrigé
+   l'affirmation inverse, qui figurait ici.
 
-   `useBottomSlotReservation` lit le MÊME attribut pour ne rien réserver en bas
-   quand l'ancrage est effectif. Sans cela la bande publiée vaudrait la hauteur du
-   bandeau plus la valeur UTILISÉE de `bottom`, soit 841px de vide en fin de page
-   à 393×852 : la correction aurait déplacé le défaut au lieu de le fermer. */
+   `html[lang]` et non `html:has([data-slot='app-bottom-nav'])` : la première
+   version conditionnait l'ancrage à la présence de la barre de navigation, si bien
+   que sur une route qui monterait un bandeau SANS barre, il retombait en bas
+   (mesuré en production : 592..764 au lieu de 12..185). `[lang]` est présent par
+   construction (WCAG 3.1.1, vérifié par les gardes d'accessibilité) et fournit la
+   même composante de spécificité sans faire dépendre la correction d'un élément
+   qui peut ne pas être là.
+
+   `--slot-anchored: top` est le SIGNAL que lit `useBottomSlotReservation` pour
+   savoir où réserver. Il est posé par la règle qui déplace l'îlot, donc les deux
+   ne peuvent pas diverger. La version précédente laissait le hook DEVINER la
+   position en comparant `top < bottom` : en paysage téléphone (667×375) elle
+   rendait « ancré en haut » pour un îlot ancré en BAS occupant 48 % de l'écran, et
+   supprimait la réservation là où elle était la plus nécessaire. La variable qui
+   cassait ce raisonnement était la HAUTEUR du viewport, pas sa largeur — un
+   contrôle mené à 800×852 ne pouvait pas la voir. */
 @media (max-width: 639px) {
-  html:has([data-slot='app-bottom-nav'])
+  html[lang]
     body
     :is(
       [data-slot='cookie-banner'],
@@ -3310,6 +3325,38 @@ body:has(
     )[data-anchor='top'] {
     top: max(0.75rem, env(safe-area-inset-top));
     bottom: auto;
+    --slot-anchored: top;
+  }
+
+  /* WCAG 2.2 SC 2.4.11 « Focus Not Obscured (Minimum) » AA — le pendant HAUT de
+     la règle `scroll-padding-bottom` plus haut, et la preuve qu'un défaut fermé
+     d'un côté peut se rouvrir de l'autre. ÉCHEC MESURÉ sur le build déployé,
+     `/dashboard` à 375×667 avec le bandeau ancré en haut (12..185) : à scrollY
+     150 un bouton occupe 47..71, donc ENTIÈREMENT sous le bandeau ; `focus()` ne
+     défile pas (scrollY reste 150, le navigateur le croit visible) et un
+     `elementFromPoint` à son centre renvoie `a2hs-hint`. `scroll-padding-top`
+     valait `auto` : rien n'atténuait le cas.
+
+     La bande est celle que l'îlot publie vraiment (`--slot-top-<nom>` = hauteur
+     mesurée + décalage haut résolu), pas une constante : la hauteur dépend du
+     retour à la ligne du texte et `env(safe-area-inset-top)` varie d'un appareil
+     à l'autre. `max()` plutôt qu'une somme, pour la même raison qu'en bas : les
+     îlots sont mutuellement exclusifs à l'exécution. */
+  html:has(
+    :is(
+      [data-slot='cookie-banner'],
+      [data-slot='a2hs-hint'],
+      [data-slot='ios-install-hint']
+    )[data-anchor='top']
+  ) {
+    scroll-padding-top: calc(
+      max(
+          var(--slot-top-cookie-banner, 0px),
+          var(--slot-top-a2hs-hint, 0px),
+          var(--slot-top-ios-install-hint, 0px)
+        ) +
+        0.75rem
+    );
   }
 }
 

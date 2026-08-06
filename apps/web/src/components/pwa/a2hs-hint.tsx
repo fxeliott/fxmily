@@ -111,18 +111,29 @@ export function A2HSHint(): React.ReactElement | null {
   };
 
   // Same bottom slot as the cookie banner, so the same duty: reserve the band
-  // instead of painting over whatever the page put there.
+  // instead of painting over whatever the page put there. On narrow viewports
+  // this banner is anchored at the TOP instead (`data-anchor` below), and the
+  // hook reads that same attribute to reserve nothing at the bottom — otherwise
+  // it would publish its height plus the USED value of `bottom`, which for a
+  // top-anchored island is nearly the whole viewport (measured: 173 + 667.5 =
+  // 841px of dead space at the end of every page, at 393×852).
   useBottomSlotReservation(hintRef, !dismissed && Boolean(deferredPrompt), 'a2hs-hint');
 
   // Show only when we actually have a captured prompt AND it isn't dismissed.
   if (dismissed || !deferredPrompt) return null;
 
+  // `data-anchor="top"` opts this island out of the bottom slot under 640px: at
+  // the bottom it covered the dashboard's primary action (359..531 over
+  // `hero-next-action` 483..568, at 375×667). The rule that applies it — and
+  // that neutralises the `bottom:` the bottom-slot arbitration sets on this
+  // island — is in globals.css, next to the other bottom-slot rules.
   return (
     <div
       ref={hintRef}
       role="region"
       aria-label="Installer l'application"
       data-slot="a2hs-hint"
+      data-anchor="top"
       className="motion-safe:animate-cookie-rise fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:inset-x-auto sm:right-4 sm:bottom-4 sm:mx-0 sm:max-w-sm sm:p-5"
     >
       <span

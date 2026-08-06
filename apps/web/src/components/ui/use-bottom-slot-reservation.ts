@@ -95,7 +95,23 @@ export function useBottomSlotReservation(
         clear();
         return;
       }
-      const bottom = Number.parseFloat(window.getComputedStyle(el).bottom);
+      const style = window.getComputedStyle(el);
+      const bottom = Number.parseFloat(style.bottom);
+      // An island anchored at the TOP no longer occupies the bottom slot, so it
+      // must reserve NOTHING there. Without this, the published band would be
+      // its height plus the USED value of `bottom` — 173 + 667.5 = 841px of dead
+      // space at the end of every page at 393×852 (measured). The intent is read
+      // from `data-anchor`, the very attribute the CSS keys on, so the position
+      // and the space reserved for it cannot drift apart; `top < bottom` then
+      // confirms the anchoring is EFFECTIVE, since that rule only applies under
+      // 640px (checked at 800px: attribute set, top 535.5 > bottom 136, so the
+      // island reserves normally). Both are USED position values: unlike a
+      // rect they are immune to the entry animation, and stable under scroll
+      // (measured identical at scrollY 0 and 1000).
+      if (el.dataset.anchor === 'top' && Number.parseFloat(style.top) < bottom) {
+        clear();
+        return;
+      }
       root.style.setProperty(
         property,
         `${Math.ceil(height + (Number.isFinite(bottom) ? bottom : 0))}px`,

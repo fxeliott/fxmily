@@ -90,7 +90,10 @@ export function IOSInstallHint() {
   const visible = !dismissed && isIosSafari() && !isStandalone();
 
   // Same bottom slot as the cookie banner, so the same duty: reserve the band
-  // instead of painting over whatever the page put there.
+  // instead of painting over whatever the page put there — except under 640px,
+  // where `data-anchor="top"` below moves this banner out of the bottom slot and
+  // the hook then reserves nothing there. Same defect and same fix as
+  // `<A2HSHint>`: the two share this geometry verbatim, so they move together.
   useBottomSlotReservation(hintRef, visible, 'ios-install-hint');
 
   if (!visible) return null;
@@ -101,6 +104,7 @@ export function IOSInstallHint() {
       role="region"
       aria-label="Installer Fxmily sur iPhone"
       data-slot="ios-install-hint"
+      data-anchor="top"
       className="motion-safe:animate-cookie-rise rounded-card-lg fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-md items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-3 shadow-[var(--sh-toast)]"
     >
       <span

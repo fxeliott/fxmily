@@ -296,3 +296,261 @@ describe('montage de la bannière cookies — visiteurs uniquement', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * Spécificité (b, c) d'un sélecteur — b = classes/attributs/pseudo-classes,
+ * c = éléments/pseudo-éléments. Ce n'est PAS un moteur CSS : juste assez pour
+ * comparer entre elles les règles de `globals.css`, qui n'emploient que des
+ * attributs, des classes, des éléments et `:has()`/`:is()`/`:where()`. Les
+ * identifiants (composante `a`) n'apparaissent nulle part dans ce fichier et ne
+ * sont donc pas comptés. Limite assumée — et c'est pourquoi le premier test
+ * ci-dessous valide l'instrument sur des cas connus AVANT qu'on croie son
+ * verdict : un calculateur faux rendrait un rapport faux avec l'air d'un vrai.
+ */
+type Spec = { b: number; c: number };
+
+const SPEC_ZERO: Spec = { b: 0, c: 0 };
+
+function plusForte(x: Spec, y: Spec): Spec {
+  if (x.b !== y.b) return x.b > y.b ? x : y;
+  return x.c >= y.c ? x : y;
+}
+
+/** Découpe une liste de sélecteurs sur les virgules de PREMIER niveau. */
+function decouperListe(liste: string): string[] {
+  const out: string[] = [];
+  let profondeur = 0;
+  let courant = '';
+  for (let i = 0; i < liste.length; i += 1) {
+    const ch = liste.charAt(i);
+    if (ch === '(') profondeur += 1;
+    if (ch === ')') profondeur -= 1;
+    if (ch === ',' && profondeur === 0) {
+      out.push(courant);
+      courant = '';
+      continue;
+    }
+    courant += ch;
+  }
+  if (courant.trim()) out.push(courant);
+  return out;
+}
+
+function specificite(selecteur: string): Spec {
+  let b = 0;
+  let c = 0;
+  let i = 0;
+  const finDuMot = (depuis: number): number => {
+    let j = depuis;
+    while (j < selecteur.length && /[\w-]/.test(selecteur.charAt(j))) j += 1;
+    return j;
+  };
+  while (i < selecteur.length) {
+    const ch = selecteur.charAt(i);
+    if (ch === '[') {
+      const fin = selecteur.indexOf(']', i);
+      b += 1;
+      i = fin === -1 ? selecteur.length : fin + 1;
+    } else if (ch === '.') {
+      b += 1;
+      i = finDuMot(i + 1);
+    } else if (ch === ':') {
+      const pseudoElement = selecteur.charAt(i + 1) === ':';
+      const debutNom = i + (pseudoElement ? 2 : 1);
+      const finNom = finDuMot(debutNom);
+      const nom = selecteur.slice(debutNom, finNom);
+      if (selecteur.charAt(finNom) === '(') {
+        let profondeur = 0;
+        let k = finNom;
+        for (; k < selecteur.length; k += 1) {
+          if (selecteur.charAt(k) === '(') profondeur += 1;
+          else if (selecteur.charAt(k) === ')') {
+            profondeur -= 1;
+            if (profondeur === 0) break;
+          }
+        }
+        // `:where()` ne compte pour rien ; `:is()`/`:has()`/`:not()` prennent la
+        // spécificité de leur argument LE PLUS FORT.
+        if (nom !== 'where') {
+          const max = decouperListe(selecteur.slice(finNom + 1, k))
+            .map(specificite)
+            .reduce(plusForte, SPEC_ZERO);
+          b += max.b;
+          c += max.c;
+        }
+        i = k + 1;
+      } else {
+        if (pseudoElement) c += 1;
+        else b += 1;
+        i = finNom;
+      }
+    } else if (/[a-zA-Z]/.test(ch)) {
+      c += 1;
+      i = finDuMot(i + 1);
+    } else {
+      i += 1;
+    }
+  }
+  return { b, c };
+}
+
+/**
+ * Spécificité d'une LISTE de sélecteurs (`A, B, C`) : en CSS chacun porte la
+ * sienne, et c'est la plus forte qui décide du sort de la déclaration.
+ *
+ * Oublier de découper donnait (6,3) pour trois sélecteurs qui valent (2,1)
+ * chacun — l'instrument mentait, et le premier jeu de « cas connus » ne l'a pas
+ * vu parce qu'aucun ne comportait de virgule. D'où le cas de liste ajouté aux
+ * cas de validation : un instrument ne se valide que sur des cas qui peuvent le
+ * faire échouer.
+ */
+function specificiteMax(liste: string): Spec {
+  return decouperListe(liste).map(specificite).reduce(plusForte, SPEC_ZERO);
+}
+
+const ILOTS = ['cookie-banner', 'a2hs-hint', 'ios-install-hint'] as const;
+
+/** Règles feuilles qui posent un `bottom:` (jamais `padding-bottom`) sur un îlot. */
+function reglesBottomSurIlot(css: string): { sel: string; corps: string; index: number }[] {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map((m) => ({
+      sel: (m[1] ?? '').trim().replace(/\s+/g, ' '),
+      corps: m[2] ?? '',
+      index: m.index ?? 0,
+    }))
+    .filter((r) => /(?:^|[;\s])bottom\s*:/.test(r.corps))
+    .filter((r) => ILOTS.some((slot) => r.sel.includes(`[data-slot='${slot}']`)));
+}
+
+describe('ancrage haut des bandeaux d’installation — la règle doit VRAIMENT gagner', () => {
+  const css = readFileSync(GLOBALS_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const regles = reglesBottomSurIlot(css);
+  const ancrage = regles.filter((r) => r.sel.includes("[data-anchor='top']"));
+  const concurrentes = regles.filter((r) => !r.sel.includes("[data-anchor='top']"));
+
+  it('le calculateur de spécificité est juste sur des cas connus (valider l’instrument)', () => {
+    expect(specificite("body:has([data-slot='app-bottom-nav']) [data-slot='a2hs-hint']")).toEqual({
+      b: 2,
+      c: 1,
+    });
+    expect(
+      specificite(
+        "body:has([data-slot='a']):has([data-slot='b']) :is([data-slot='c'], [data-slot='d'])",
+      ),
+    ).toEqual({ b: 3, c: 1 });
+    expect(
+      specificite(
+        "html:has([data-slot='a']) body :is([data-slot='b'], [data-slot='c'])[data-anchor='top']",
+      ),
+    ).toEqual({ b: 3, c: 2 });
+    expect(specificite(":where([data-slot='a']) p")).toEqual({ b: 0, c: 1 });
+    expect(specificite('.x.y div')).toEqual({ b: 2, c: 1 });
+    // Le cas qui a réellement pris l'instrument en défaut : une LISTE. Sans
+    // découpage, les trois sélecteurs s'additionnaient en (6,3) au lieu de (2,1).
+    expect(
+      specificiteMax(
+        "body:has([data-slot='x']) [data-slot='a'], body:has([data-slot='x']) [data-slot='b']",
+      ),
+    ).toEqual({ b: 2, c: 1 });
+  });
+
+  it('la règle d’ancrage existe, neutralise `bottom` et nomme les trois îlots', () => {
+    expect(
+      regles.length,
+      'aucune règle `bottom:` sur un îlot — l’extracteur est cassé, pas le CSS',
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      ancrage.length,
+      "aucune règle [data-anchor='top'] : les bandeaux sont retombés dans le slot bas, où ils recouvrent l’action principale du dashboard (mesuré : 359..531 par-dessus 483..568, à 375×667).",
+    ).toBe(1);
+    expect(
+      ancrage[0]?.corps,
+      '`top:` sans `bottom: auto` définit les DEUX bords : l’élément s’étire (mesuré 519px de haut au lieu de 173).',
+    ).toMatch(/bottom\s*:\s*auto/);
+    expect(ancrage[0]?.corps, 'la règle doit poser un `top:`, sinon elle n’ancre rien').toMatch(
+      /(?:^|[;\s])top\s*:/,
+    );
+    for (const slot of ILOTS) {
+      expect(
+        ancrage[0]?.sel,
+        `la règle doit NOMMER les trois îlots (invariant de ce fichier) — il manque ${slot}`,
+      ).toContain(`[data-slot='${slot}']`);
+    }
+  });
+
+  it('elle bat STRICTEMENT toute autre règle qui pose `bottom` sur un îlot', () => {
+    expect(
+      concurrentes.length,
+      'aucune règle concurrente trouvée — la comparaison serait vide, donc vaine',
+    ).toBeGreaterThanOrEqual(3);
+    const mienne = specificiteMax(ancrage[0]?.sel ?? '');
+    const perdantes = concurrentes
+      .map((r) => ({ sel: r.sel, spec: specificiteMax(r.sel) }))
+      .filter((r) => !(mienne.b > r.spec.b || (mienne.b === r.spec.b && mienne.c > r.spec.c)));
+    expect(
+      perdantes.map(
+        (p) => `${p.sel} → (${p.spec.b},${p.spec.c}) ≥ ancrage (${mienne.b},${mienne.c})`,
+      ),
+      [
+        '',
+        'À spécificité ÉGALE ou supérieure, l’ancrage ne gagne plus par lui-même : il',
+        'ne tiendrait que par sa position dans le fichier, et une règle ajoutée plus',
+        'bas le rendrait inerte SANS AUCUN SIGNE. Mesuré en injectant les candidats en',
+        'tête du <head>, position la plus défavorable : à égalité le bandeau s’étire',
+        '(519px), strictement au-dessus il tient sa place (173px).',
+        '',
+      ].join('\n'),
+    ).toEqual([]);
+  });
+
+  it('et elle reste la dernière du fichier — double filet si la spécificité change un jour', () => {
+    const derniereConcurrente = Math.max(...concurrentes.map((r) => r.index));
+    expect(
+      (ancrage[0]?.index ?? -1) > derniereConcurrente,
+      'la règle d’ancrage doit rester APRÈS toutes les règles `bottom:` des îlots.',
+    ).toBe(true);
+  });
+
+  it('le hook de réservation lit le même `data-anchor` que le CSS', () => {
+    const hook = readFileSync(
+      join(SRC, 'components', 'ui', 'use-bottom-slot-reservation.ts'),
+      'utf8',
+    );
+    expect(
+      hook,
+      [
+        '',
+        'Sans cette lecture, un îlot ancré en haut publie quand même sa bande dans le',
+        'slot BAS : sa hauteur plus la valeur UTILISÉE de `bottom`, soit 173 + 667,5 =',
+        '841px de vide en fin de page à 393×852. La correction déplacerait le défaut',
+        'au lieu de le fermer.',
+        '',
+      ].join('\n'),
+    ).toContain('dataset.anchor');
+  });
+
+  it('tout composant qui déclare data-anchor="top" est un îlot que la règle nomme', () => {
+    // Les commentaires de ces composants CITENT `data-anchor="top"` pour
+    // l'expliquer : sans les retirer, un fichier qui n'ancre rien serait compté
+    // comme porteur, et l'assertion « ≥ 2 » passerait au vert sans sujet réel.
+    const sansCommentaires = (src: string): string =>
+      src
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+    const porteurs = walkTsx(SRC)
+      .map((f) => sansCommentaires(readFileSync(f, 'utf8')))
+      .filter((code) => /data-anchor=["']top["']/.test(code));
+    expect(
+      porteurs.length,
+      'aucun composant ne déclare data-anchor="top" — l’extracteur est cassé, ou l’ancrage a été retiré',
+    ).toBeGreaterThanOrEqual(2);
+    const orphelins = porteurs
+      .flatMap((code) => [...code.matchAll(/data-slot=["']([^"']+)["']/g)].map((m) => m[1] ?? ''))
+      .filter((slot) => !(ILOTS as readonly string[]).includes(slot));
+    expect(
+      [...new Set(orphelins)],
+      'un composant s’ancre en haut avec un data-slot que la règle CSS ne nomme pas : il gardera son `bottom:` et s’étirera.',
+    ).toEqual([]);
+  });
+});

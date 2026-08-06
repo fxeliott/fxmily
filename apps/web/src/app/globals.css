@@ -3209,6 +3209,35 @@ body:has(
   body:has([data-slot='app-bottom-nav']) {
     padding-bottom: max(var(--bottom-slot-inset, 0px), calc(3.5rem + env(safe-area-inset-bottom)));
   }
+
+  /* WCAG 2.2 SC 2.4.11 « Focus Not Obscured (Minimum) », niveau AA — ÉCHEC
+     MESURÉ sur le build déployé, `/checkin` à 375×667 : une carte-lien occupe
+     611..644, la barre de nav 610..667. Elle est donc ENTIÈREMENT masquée, et
+     `element.focus()` ne la fait PAS remonter (scrollY reste à 0) : le
+     navigateur la considère déjà « dans » le viewport, donc il ne défile pas.
+     Résultat pour un membre au clavier : le focus disparaît sous la barre.
+
+     `scroll-padding-bottom` rétrécit la zone que le navigateur considère
+     visible, ce qui le décide à défiler. Prouvé par injection sur la page
+     réelle, avec contrôle de réversibilité :
+
+       sans la règle   focus → 611..644, sous la nav, scrollY=0, échec AA
+       avec la règle   focus → 578..611, AU-DESSUS de la nav, scrollY=33, OK
+       après retrait   focus → 611..644, retour exact à l'état initial
+
+     Le `padding-bottom` juste au-dessus règle le BAS DU DOCUMENT ; celle-ci
+     règle la POSITION D'ARRIVÉE d'un défilement. Ce sont deux garanties
+     distinctes, et c'est toute la leçon de #603/#604 : réserver de la place en
+     fin de document ne protège rien là où l'utilisateur regarde.
+
+     Limite assumée, dite plutôt qu'enterrée : la valeur reprend le dégagement
+     de la nav et NON `--bottom-slot-inset`. Cette variable est composée sur
+     `body`, que `html` — le conteneur de défilement — n'hérite pas. Un îlot
+     plus haut que la nav peut donc encore masquer une cible focalisée ; ce cas
+     relève du même chantier que les îlots eux-mêmes. */
+  html:has([data-slot='app-bottom-nav']) {
+    scroll-padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
   body:has([data-slot='app-bottom-nav']) [data-slot='log-express-fab'] {
     bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }

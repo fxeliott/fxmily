@@ -291,3 +291,61 @@ describe('bottom-slot reservation — les îlots fixes rendent leur place à la 
     expect(violations, `\n\n${violations.join('\n\n')}\n`).toEqual([]);
   });
 });
+
+/**
+ * FOCUS NON MASQUÉ — WCAG 2.2 SC 2.4.11, niveau AA.
+ *
+ * Les gardes ci-dessus protègent le BAS DU DOCUMENT : ils prouvent qu'on peut
+ * faire défiler tout le contenu hors de la bande d'îlots. Ils ne disent rien de
+ * la POSITION D'ARRIVÉE d'un défilement, et c'est par là qu'un échec normatif
+ * est passé — mesuré sur le build déployé, `/checkin` à 375×667 : une carte-lien
+ * occupe 611..644, la barre de nav 610..667, donc elle est ENTIÈREMENT masquée,
+ * et `focus()` ne la fait pas remonter (le navigateur la croit visible, il ne
+ * défile pas). `scroll-padding-bottom` rétrécit cette zone réputée visible et le
+ * décide à défiler : mesuré 611..644 → 578..611, au-dessus de la nav.
+ *
+ * Ce garde échoue si la déclaration disparaît ou cesse d'être conditionnée à la
+ * présence de la barre — la poser sans condition décalerait aussi les surfaces
+ * publiques, qui n'ont pas de barre et n'en ont pas besoin.
+ */
+describe('focus non masqué par la barre de navigation (WCAG 2.4.11 AA)', () => {
+  // Commentaires retirés : ils citent les sélecteurs en prose, et un garde qui
+  // lit sa propre documentation se prouve tout seul.
+  const css = readFileSync(GLOBALS_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('globals.css est bien lu (anti-garde-vide)', () => {
+    // Sans cette assertion, un chemin cassé rendrait le test suivant vert par
+    // vacuité : il ne trouverait rien à redire parce qu'il ne voit rien.
+    expect(css.length, 'globals.css introuvable ou vide').toBeGreaterThan(1000);
+    expect(css, 'la barre de nav n’est plus référencée du tout').toContain(
+      "[data-slot='app-bottom-nav']",
+    );
+  });
+
+  it('`scroll-padding-bottom` est déclaré, et conditionné à la barre', () => {
+    const regles = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((m) => ({ sel: (m[1] ?? '').trim().replace(/\s+/g, ' '), corps: m[2] ?? '' }))
+      .filter((r) => /(?:^|[;\s])scroll-padding-bottom\s*:/.test(r.corps));
+
+    expect(
+      regles.length,
+      [
+        'Aucune déclaration `scroll-padding-bottom` dans globals.css.',
+        'Sans elle, une cible focalisée au clavier reste ENTIÈREMENT sous la barre',
+        'de navigation (mesuré sur /checkin à 375×667 : cible 611..644, barre',
+        '610..667, et focus() ne défile pas) — échec WCAG 2.2 SC 2.4.11 niveau AA.',
+      ].join('\n'),
+    ).toBeGreaterThanOrEqual(1);
+
+    const conditionnees = regles.filter((r) => r.sel.includes("[data-slot='app-bottom-nav']"));
+    expect(
+      conditionnees.length,
+      [
+        '`scroll-padding-bottom` existe mais n’est plus conditionné à la barre de',
+        'navigation. Appliqué sans condition, il décale aussi le défilement des',
+        'surfaces publiques, qui n’ont pas de barre — une marge morte en bas de',
+        `chaque ancre. Sélecteurs trouvés : ${regles.map((r) => r.sel).join(' | ')}`,
+      ].join('\n'),
+    ).toBeGreaterThanOrEqual(1);
+  });
+});

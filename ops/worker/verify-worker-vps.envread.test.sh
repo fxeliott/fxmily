@@ -1,156 +1,187 @@
 #!/usr/bin/env bash
-# Bench for ONE block of verify-worker-vps.sh: the part that reads worker.env.
+# Bench for ONE block of verify-worker-vps.sh: the part that reads the worker
+# config file. It extracts the real block from the shipped script and EXECUTES
+# it — it does not re-implement it, and the mutation controls at the bottom
+# prove that distinction rather than asserting it.
 #
-# Why this file exists. That block runs inside a GitHub Actions job on a PUBLIC
-# repository, and until 2026-08-06 it sourced the file with our own stderr
-# attached. Measured in debian:bookworm on that date, both leaks are real:
+# History, because it is the whole justification for the shape of this file.
+# The block used to `.` (source) the config. Three defects came out of that one
+# choice, and each was reproduced before it was believed:
 #
-#   $ printf 'K=one two three-sensitive\n' > f; . f
-#   bash: two: command not found            <-- second word of the value
-#   $ printf 'this is not valid shell (\n' > f; . f
-#   f: line 1: `this is not valid shell ('  <-- the whole line, verbatim
+#   GRAMMAR   `run-batch.sh` — the only thing that reads this file in production
+#             — does not source, it parses `KEY=VALUE` with a regex. Sourcing
+#             evaluates. `TOKEN=Ab3\kQ9z…` therefore gave the pipelines 32 bytes
+#             and this gate 31. The gate would 401 on all seven and blame the
+#             pipelines for a token it had corrupted itself.
+#   BLACKOUT  the script runs under `set -u`. A value with an unquoted `$` made
+#             the source reference an unset parameter, which killed the shell
+#             INSIDE the `.` — so the error handling below it never ran. Exit 1,
+#             zero bytes of output, on a healthy host.
+#   LEAK      bash quotes the offending line verbatim on stderr, and this
+#             script's stderr reaches a PUBLIC Actions log. And `$(…)` in a
+#             hand-edited config is code execution as the worker user.
 #
-# `worker.env` holds the admin token and is hand-edited. So the block must fail
-# LOUDLY and say WHERE, while never repeating WHAT.
+# The fix was to stop sourcing. So the assertions below are about GRAMMAR PARITY
+# with run-batch.sh and about the three failures above being structurally
+# impossible, not about formatting an error message nicely.
 #
-# Like the watchdog bench, this does not re-implement the block: it extracts it
-# from the shipped script by anchored markers and runs the real text. If an
-# anchor stops matching, the test fails rather than quietly testing a copy.
+# CRITICAL: the block is executed under `set -uo pipefail`, the same options
+# verify-worker-vps.sh sets on line 52. An earlier version of this bench ran it
+# under default options, which is exactly why it could not see the blackout.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="$HERE/verify-worker-vps.sh"
+PRODUCER="$HERE/run-batch.sh"
 PASS=0
 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-ok() {
-  PASS=$((PASS + 1))
-  printf '  ok   %s\n' "$1"
-}
-no() {
-  FAIL=$((FAIL + 1))
-  printf '  FAIL %s\n' "$1"
-}
+ok() { PASS=$((PASS + 1)); printf '  ok   %s\n' "$1"; }
+no() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n' "$1"; }
 check() { if [[ "$2" == "$3" ]]; then ok "$1"; else no "$1 (expected [$3], got [$2])"; fi; }
-has() { if grep -qF -- "$2" <<<"$1"; then ok "$3"; else no "$3 — not found in output"; fi; }
+has() { if grep -qF -- "$2" <<<"$1"; then ok "$3"; else no "$3 — not found"; fi; }
 hasnt() { if grep -qF -- "$2" <<<"$1"; then no "$3 — LEAKED: found [$2]"; else ok "$3"; fi; }
 
 require_anchor() {
   if grep -qF -- "$1" "$TARGET"; then
-    ok "anchor present: $2"
+    ok "anchor: $2"
   else
-    no "ANCHOR MOVED — this test no longer covers the shipped code: $2"
+    no "ANCHOR MOVED — this bench no longer covers the shipped code: $2"
   fi
 }
 
-echo "== anchors (if these move, the bench is testing nothing) =="
-require_anchor '. "$ENV_TMP" 2>"$ENV_ERR"' 'stderr of the source is captured'
-require_anchor 'ENV_RC=$?' 'the exit status is read'
-require_anchor 'grep -oE '"'"'^[^:]*: line [0-9]+:'"'"' "$ENV_ERR"' 'line numbers come from the anchored prefix'
-require_anchor 'the message is withheld on purpose' 'the withholding is explicit to the reader'
-require_anchor 'trap '"'"'rm -f "$ENV_TMP" "$ENV_ERR"'"'"' EXIT' 'both temp files are cleaned up'
+echo "== the block must NOT evaluate the file =="
+require_anchor 'while IFS= read -r line; do' 'it parses line by line'
+require_anchor 'BASH_REMATCH[1]' 'it uses the regex capture, not the shell'
+if grep -qE '^\s*\.\s+"\$ENV_TMP"|^\s*source\s' "$TARGET"; then
+  no 'the script sources the config again — the whole class is back'
+else
+  ok 'no `source` / `.` of the config anywhere in the script'
+fi
+require_anchor 'VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"' 'the transcript destination is captured BEFORE the read'
+require_anchor '(umask 077 && : >"$LOG")' 'the transcript file is created 0600'
 
-# Extract the block: from the mktemp of ENV_TMP down to the closing `fi` of the
-# validity check. Everything above it in the real script is path setup we stub.
-# The END anchor is the `fi` that closes the VALIDITY check, not the first `fi`
-# below START — the CR check sits in between and closes first. Getting this
-# wrong extracted 7 lines that never source anything, and every assertion below
-# went red at once; that is the bench working, so the anchor is pinned tightly.
-START="$(grep -n 'ENV_TMP="\$(mktemp)"' "$TARGET" | head -1 | cut -d: -f1)"
-LASTMSG="$(grep -n 'Most common cause' "$TARGET" | head -1 | cut -d: -f1)"
-END="$(awk 'NR>'"${LASTMSG:-0}"' && /^fi$/ {print NR; exit}' "$TARGET")"
-if [[ -z "$START" || -z "$END" ]]; then
-  no "could not locate the block (start=$START end=$END)"
+# ── extract the real block ────────────────────────────────────────────────────
+# Both boundary strings are asserted as anchors: an earlier version anchored
+# only the interior, so a lost boundary silently extracted the WRONG lines and
+# every behavioural assertion below went green against code that never ran.
+START_ANCHOR='VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"'
+END_ANCHOR='  echo "  note   : CR bytes stripped'
+require_anchor "$START_ANCHOR" 'extraction START boundary'
+require_anchor "$END_ANCHOR" 'extraction END boundary'
+START="$(grep -n -F -- "$START_ANCHOR" "$TARGET" | head -1 | cut -d: -f1)"
+LASTMSG="$(grep -n -F -- "$END_ANCHOR" "$TARGET" | head -1 | cut -d: -f1)"
+if [[ -z "$START" || -z "$LASTMSG" ]]; then
+  no "could not locate the block (start=$START end=$LASTMSG)"
   echo "$PASS passed, $FAIL failed"
   exit 1
 fi
+END="$(awk 'NR>'"$LASTMSG"' && /^fi$/ {print NR; exit}' "$TARGET")"
+[[ -n "$END" ]] || END="$LASTMSG"
 ok "block located at lines $START-$END"
 sed -n "${START},${END}p" "$TARGET" >"$TMP/block.sh"
 
-run_block() {
-  # $1 = fixture path, $2 = optional sed mutation applied to the block
-  local body="$TMP/block.sh"
-  if [[ -n "${2:-}" ]]; then
-    sed "$2" "$TMP/block.sh" >"$TMP/mutated.sh"
-    body="$TMP/mutated.sh"
-  fi
+# Runs the real block under the real shell options, then prints what it loaded.
+run_block() { # $1 = config fixture
   {
+    printf 'set -uo pipefail\n'
     printf 'ENV_FILE=%q\n' "$1"
-    cat "$body"
-    printf '\necho "REACHED_END rc=$?"\n'
+    cat "$TMP/block.sh"
+    printf '\nprintf "LOADED len=%%s val=[%%s]\\n" "${#K}" "${K:-}"\n'
+    printf 'printf "SIDEEFFECT=%%s\\n" "${SIDE:-none}"\n'
+    printf 'echo "REACHED_END"\n'
   } >"$TMP/run.sh"
-  bash "$TMP/run.sh" 2>&1
+  ( cd "$TMP" && bash "$TMP/run.sh" ) 2>&1
 }
 
 echo
-echo "== a valid file loads silently and reaches the end =="
-printf 'FXMILY_ADMIN_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nFXMILY_APP_URL=https://example.invalid\n' >"$TMP/good.cfg"
-OUT="$(run_block "$TMP/good.cfg")"
-has "$OUT" 'REACHED_END' 'valid file: execution continues'
-hasnt "$OUT" 'FAIL' 'valid file: no false alarm'
+echo "== a value containing an unquoted \$ must not blackout the gate =="
+# The regression that mattered most: this used to exit 1 with zero bytes.
+printf 'K=Ab3$kQ9zLm2pXr7tVn4wYs6dGh1jFc8e\n' >"$TMP/dollar.cfg"
+OUT="$(run_block "$TMP/dollar.cfg")"
+has "$OUT" 'REACHED_END' 'dollar: the gate survives instead of dying mute'
+has "$OUT" 'len=32' 'dollar: the value is read literally, all 32 bytes'
+hasnt "$OUT" 'unbound variable' 'dollar: set -u is never tripped'
 
 echo
-echo "== a malformed line fails, names the line, hides the content =="
-printf 'FXMILY_ADMIN_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nthis is not valid shell (\n' >"$TMP/broken.cfg"
-OUT="$(run_block "$TMP/broken.cfg")"
-has "$OUT" 'is not valid shell' 'malformed: it fails'
-has "$OUT" 'offending line(s): 2' 'malformed: the line number is given'
-hasnt "$OUT" 'this is not valid shell (' 'malformed: the line itself is NOT printed'
-hasnt "$OUT" 'REACHED_END' 'malformed: it stops instead of carrying on half-loaded'
-
-echo
-echo "== an unquoted value with spaces leaks nothing =="
-printf 'FXMILY_ADMIN_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nK=one zzsensitivezz three\n' >"$TMP/unquoted.cfg"
-OUT="$(run_block "$TMP/unquoted.cfg")"
-has "$OUT" 'is not valid shell' 'unquoted: it fails'
-hasnt "$OUT" 'zzsensitivezz' 'unquoted: the value word is NOT printed'
-hasnt "$OUT" 'REACHED_END' 'unquoted: it stops'
-
-echo
-echo "== a line CRAFTED to smuggle digits through the extractor =="
-# Found by an adversarial review of this very fix, then reproduced: bash quotes
-# the offending text verbatim, and the first extractor matched `line [0-9]+`
-# ANYWHERE in that message. `TOKEN=abc "line 987654321"` therefore published
-# `1,987654321`. Narrow (digits only) but the header promised line numbers only.
-printf 'FXMILY_ADMIN_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nK=abc "line 987654321"\n' >"$TMP/craft.cfg"
-OUT="$(run_block "$TMP/craft.cfg")"
-has "$OUT" 'is not valid shell' 'crafted: it fails'
-hasnt "$OUT" '987654321' 'crafted: the smuggled digits do NOT reach the output'
-has "$OUT" 'offending line(s): 2' 'crafted: the REAL line number is still reported'
-
-echo
-echo "== the temp path must not contribute its own digits =="
-# The reviewer's proposed anchor was also wrong: taking every digit run out of
-# `^[^:]*: line N:` picks up digits from the mktemp path itself. There is no
-# clean way to force a digit into mktemp's name here, so this asserts the shape
-# of the extractor instead of the value — stated as the weaker check it is.
-require_anchor "sed -E 's/.*: line ([0-9]+):.*/\\1/'" 'the number comes from the anchored prefix only'
-require_anchor 'head -20' 'the list is bounded so it cannot flood a public log'
-
-echo
-echo "== the config file cannot choose where transcripts are written =="
-require_anchor 'VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"' 'the destination is captured BEFORE the source'
-require_anchor 'LOG="${VERIFY_LOG_REQUESTED:-/tmp/j9-verify-$STAMP.log}"' 'and used after it'
-require_anchor '(umask 077 && : >"$LOG")' 'the transcript file is created 0600, not umask default'
-require_anchor "trap 'rm -f \"\$ENV_TMP\" \"\$ENV_ERR\"; exit 143' TERM INT HUP" 'a killed sweep still wipes its cleartext copy'
-
-echo
-echo "== mutation control: without the capture, the bench MUST go red =="
-# Removing `2>"$ENV_ERR"` is exactly the pre-2026-08-06 code. If the assertions
-# above still pass against it, they are not testing anything.
-OUT="$(run_block "$TMP/broken.cfg" 's|\. "\$ENV_TMP" 2>"\$ENV_ERR"|. "$ENV_TMP"|')"
-if grep -qF 'this is not valid shell (' <<<"$OUT"; then
-  ok 'mutation: the old code DOES leak the line verbatim (assertions are live)'
+echo "== grammar parity with run-batch.sh, the only production reader =="
+# A backslash is an escape to the shell and a byte to the parser. Under the old
+# source-based reader the gate loaded 31 bytes where the pipelines loaded 32,
+# then blamed the pipelines for the 401 it had caused.
+printf 'K=Ab3\\kQ9zLm2pXr7tVn4wYs6dGh1jFc8e\n' >"$TMP/backslash.cfg"
+OUT="$(run_block "$TMP/backslash.cfg")"
+has "$OUT" 'len=32' 'backslash: 32 bytes, same as the parser in run-batch.sh'
+if [[ -r "$PRODUCER" ]] && grep -qF 'val="${val%$'"'"'\r'"'"'}"' "$PRODUCER"; then
+  ok 'run-batch.sh still strips CR before quotes (the order this copies)'
 else
-  no 'mutation: the old code did not leak — the leak assertions prove nothing'
+  no 'run-batch.sh parser changed — this copy must be re-synced with it'
 fi
-OUT="$(run_block "$TMP/unquoted.cfg" 's|\. "\$ENV_TMP" 2>"\$ENV_ERR"|. "$ENV_TMP"|')"
-if grep -qF 'zzsensitivezz' <<<"$OUT"; then
-  ok 'mutation: the old code DOES leak the value word'
+
+echo
+echo "== an apostrophe in a value is data, not a syntax error =="
+printf "K=Eliot's box\n" >"$TMP/apos.cfg"
+OUT="$(run_block "$TMP/apos.cfg")"
+has "$OUT" 'REACHED_END' 'apostrophe: accepted, as run-batch.sh accepts it'
+has "$OUT" "val=[Eliot's box]" 'apostrophe: value intact'
+
+echo
+echo "== command substitution in the file must NOT execute =="
+printf 'K=harmless\nSIDE=$(echo PWNED)\n' >"$TMP/rce.cfg"
+OUT="$(run_block "$TMP/rce.cfg")"
+hasnt "$OUT" 'SIDEEFFECT=PWNED' 'rce: $(...) is NOT evaluated'
+has "$OUT" 'REACHED_END' 'rce: and the gate carries on'
+
+echo
+echo "== CRLF and quotes are stripped, in that order =="
+printf 'K="quoted-value"\r\n' >"$TMP/crlf.cfg"
+OUT="$(run_block "$TMP/crlf.cfg")"
+has "$OUT" 'val=[quoted-value]' 'crlf: CR stripped before the closing quote'
+has "$OUT" 'CR bytes stripped' 'crlf: and the operator is told'
+
+echo
+echo "== nothing is written to stderr on a healthy read =="
+printf 'K=plain\n' >"$TMP/clean.cfg"
+ERRF="$TMP/err.txt"
+{
+  printf 'set -uo pipefail\n'
+  printf 'ENV_FILE=%q\n' "$TMP/clean.cfg"
+  cat "$TMP/block.sh"
+} >"$TMP/quiet.sh"
+bash "$TMP/quiet.sh" >/dev/null 2>"$ERRF"
+check "clean read produces zero bytes of stderr" "$(wc -c <"$ERRF" | tr -d ' ')" "0"
+
+echo
+echo "== mutation controls: the OLD reader must fail every check above =="
+# Not a mutation of this bench's own copy — a stand-in for the code that shipped
+# before, run under the same options, so the assertions are shown to be live.
+cat >"$TMP/old.sh" <<'OLD'
+set -uo pipefail
+set -a
+. "$ENV_FILE"
+set +a
+printf "LOADED len=%s val=[%s]\n" "${#K}" "${K:-}"
+printf "SIDEEFFECT=%s\n" "${SIDE:-none}"
+echo "REACHED_END"
+OLD
+OUT="$( ( export ENV_FILE="$TMP/dollar.cfg"; bash "$TMP/old.sh" ) 2>&1 )"
+if grep -qF 'REACHED_END' <<<"$OUT"; then
+  no 'mutation: the old reader survived the $ case — the blackout test proves nothing'
 else
-  no 'mutation: the old code did not leak the value word'
+  ok 'mutation: the old reader DOES die on the $ case (blackout was real)'
+fi
+OUT="$( ( export ENV_FILE="$TMP/rce.cfg"; bash "$TMP/old.sh" ) 2>&1 )"
+if grep -qF 'SIDEEFFECT=PWNED' <<<"$OUT"; then
+  ok 'mutation: the old reader DOES execute $(...) (the RCE was real)'
+else
+  no 'mutation: the old reader did not execute $(...) — the rce test proves nothing'
+fi
+OUT="$( ( export ENV_FILE="$TMP/backslash.cfg"; bash "$TMP/old.sh" ) 2>&1 )"
+if grep -qF 'len=32' <<<"$OUT"; then
+  no 'mutation: the old reader also gave 32 — the parity test proves nothing'
+else
+  ok 'mutation: the old reader gave a DIFFERENT length (grammar mismatch was real)'
 fi
 
 echo

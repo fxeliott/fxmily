@@ -63,79 +63,69 @@ ENV_FILE="${FXMILY_WORKER_ENV:-$WORKER_DIR/worker.env}"
   echo "worker.env not readable at $ENV_FILE" >&2
   exit 2
 }
-# Source through a CR-stripped copy, NOT directly.
+# Read the config with the SAME parser the production consumer uses, and do NOT
+# source it.
 #
-# `run-batch.sh` strips the CR from every token it reads, because `worker.env` is
-# hand-edited as often as it is generated and one of the two machines that read
-# it is a WINDOWS box. This script — the switchover gate, the thing that decides
-# whether "7/7" may be ticked — sourced the file raw. So a single CR would enter
-# `FXMILY_ADMIN_TOKEN`, every pipeline would take a 401, and this gate would
-# report FAIL on all seven while the real cron path worked perfectly: the exact
-# inverse verdict, on the one script whose whole job is to be believed.
+# The gate used to `.` the file. Three separate defects came out of that one
+# choice, all three found by an adversarial review on 2026-08-06 and each
+# reproduced before being believed:
 #
-# Nothing else detects it either: the watchdog only asserts `${#val} -ge 32`, and
-# 32 + CR = 33. The class was closed on one reader out of three.
-# `set -e` is not in force here, so an unchecked mktemp would leave ENV_TMP empty:
-# `tr` would then write to the CWD, `.` would source an empty path, every secret
-# would be unset, and this gate would report FAIL on all seven pipelines with a
-# perfectly healthy cron path. Same inverse-verdict failure the CR bug produced,
-# which is the whole reason this block exists — so it is checked.
+#   1. GRAMMAR MISMATCH — the inverse verdict this block exists to prevent.
+#      `run-batch.sh` does not source: it parses `KEY=VALUE` with a regex and
+#      strips CR then quotes. Sourcing EVALUATES. So `TOKEN=Ab3\kQ9z…` handed the
+#      pipelines 32 characters and handed this gate 31 — a backslash is an escape
+#      to the shell and a byte to the parser. The gate would then take a 401 on
+#      all seven and blame the pipelines for a token IT had corrupted: the very
+#      failure the CR bug caused, arriving from the opposite direction. In
+#      reverse, `NOTE=Eliot's box` is fine for the pipelines and fatal here.
+#
+#   2. BLACKOUT UNDER `set -u`, which line 52 sets. A value carrying an unquoted
+#      `$` makes the parsed file reference an unset parameter; `set -u` killed
+#      the shell INSIDE the `.`, so every line of error handling after it never
+#      ran. Measured: exit 1 with ZERO bytes of output, on a host whose cron path
+#      is perfectly healthy. The previous commit traded a leak for a blackout,
+#      which is worse — a silent gate is believed.
+#
+#   3. LEAKS AND EXECUTION — bash quotes the offending line verbatim on stderr,
+#      and this script's stderr reaches a PUBLIC Actions log; and `$(…)` in a
+#      hand-edited config is arbitrary code execution as the worker user.
+#
+# Parsing closes all three at the root rather than patching each symptom: no
+# evaluation means no message to leak, no code to execute, no `set -u` to trip,
+# and no disagreement left between this gate and the pipelines it judges. It also
+# removes the CR-stripped temp copy, so a killed sweep can no longer leave a
+# cleartext mirror of the six tokens in $TMPDIR.
+#
+# Deliberately byte-identical to `run-batch.sh` (~lines 102-131). If that parser
+# changes, this must change with it — being a copy of THE parser is the point,
+# and is not the same thing as being a second, different reader.
+#
 # Where the batch transcripts go is decided HERE, from the CALLER's environment,
-# before the file below can have an opinion about it. `worker.env` is sourced
-# with `set -a`, so every key in it lands in our environment — including
-# `FXMILY_VERIFY_LOG`, which chooses that destination. One hand-typed line,
-#     FXMILY_VERIFY_LOG=/dev/stdout
-# would put every `claude --print` transcript (member journal text, and the
-# `account=` banner run-batch writes) onto our stdout, which the ops workflow
-# tails into a GitHub Actions log on a PUBLIC repository. A config file must not
-# be able to redirect the output of the thing reading it.
+# before the file can have an opinion: `FXMILY_VERIFY_LOG=/dev/stdout` would put
+# every `claude --print` transcript — member journal text, and the `account=`
+# banner — onto our stdout, which the ops workflow tails into that same public
+# log.
 VERIFY_LOG_REQUESTED="${FXMILY_VERIFY_LOG:-}"
 
-ENV_TMP="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
-[[ -n "$ENV_TMP" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
-trap 'rm -f "$ENV_TMP"' EXIT
-tr -d '\r' <"$ENV_FILE" >"$ENV_TMP"
-if ! cmp -s "$ENV_FILE" "$ENV_TMP"; then
+ENV_CR_SEEN=false
+while IFS= read -r line; do
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+  key="${BASH_REMATCH[1]}"
+  val="${BASH_REMATCH[2]}"
+  # CR first, then quotes: in `KEY="value"\r` the CR sits AFTER the closing
+  # quote, so the other order strips neither.
+  [[ "$val" == *$'\r' ]] && ENV_CR_SEEN=true
+  val="${val%$'\r'}"
+  val="${val%\"}"; val="${val#\"}"
+  val="${val%\'}"; val="${val#\'}"
+  # Already-set environment wins, same as run-batch.sh (explicit test override).
+  if [[ -z "${!key:-}" ]]; then
+    export "$key=$val"
+  fi
+done <"$ENV_FILE"
+if [[ "$ENV_CR_SEEN" == true ]]; then
   echo "  note   : CR bytes stripped from $(basename "$ENV_FILE") while reading it" >&2
-fi
-# Sourcing writes to OUR stderr, and this script's stderr ends up in a
-# GitHub Actions log on a PUBLIC repository. Measured in a debian:bookworm
-# container on 2026-08-06, both leaks are real and neither is exotic:
-#   - a malformed line prints VERBATIM: `line 3: `this is not valid shell ('`
-#   - an unquoted value with spaces prints its second word: `two: command not found`
-# `worker.env` is hand-edited by a human under pressure, and it holds the admin
-# token. So stderr is captured, never echoed, and only LINE NUMBERS are reported.
-# The exit status is checked too: `set -e` is not in force here, so before this
-# the gate would have carried on with half a config and blamed the pipelines.
-ENV_ERR="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
-[[ -n "$ENV_ERR" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
-# EXIT alone is not enough: bash does not run an EXIT trap when the shell is
-# killed by an untrapped signal, and this sweep is DESIGNED to be long-lived and
-# detached — GitHub cancelled one at 40 min on 2026-08-06, and `ops/cron/
-# fxmily-worker` wraps ticks in `timeout --kill-after`. Without TERM/INT/HUP a
-# cleartext mirror of the admin token and its five siblings survives in $TMPDIR.
-# `run-batch.sh` already traps these three for exactly this reason.
-trap 'rm -f "$ENV_TMP" "$ENV_ERR"' EXIT
-trap 'rm -f "$ENV_TMP" "$ENV_ERR"; exit 143' TERM INT HUP
-set -a
-# shellcheck disable=SC1090
-. "$ENV_TMP" 2>"$ENV_ERR"
-ENV_RC=$?
-set +a
-if [[ "$ENV_RC" -ne 0 ]] || [[ -s "$ENV_ERR" ]]; then
-  # Anchored to bash's own `<file>: line N:` prefix, and the number is taken
-  # from THAT prefix only. `grep -oE 'line [0-9]+'` was wrong: it matches
-  # anywhere in the message, and bash quotes the offending text verbatim, so a
-  # line reading `TOKEN=abc "line 987654321"` published `1,987654321` — measured
-  # 2026-08-06, not theorised. Taking every digit run out of the anchored match
-  # is wrong too: the temp path contributes its own (`/tmp/f4.cfg` gave `4`).
-  # Bounded at 20 so a file full of errors cannot flood a public log.
-  ENV_LINES="$(grep -oE '^[^:]*: line [0-9]+:' "$ENV_ERR" 2>/dev/null |
-    sed -E 's/.*: line ([0-9]+):.*/\1/' | sort -un | head -20 | paste -sd, - 2>/dev/null)"
-  echo "  FAIL   : $(basename "$ENV_FILE") is not valid shell (rc=$ENV_RC, offending line(s): ${ENV_LINES:-unknown})." >&2
-  echo "  FAIL   : the message is withheld on purpose — it quotes the line, and this output can be public." >&2
-  echo "  FAIL   : read the file on the host to see it. Most common cause: a value with spaces that is not quoted." >&2
-  exit 1
 fi
 # Same bridge run-batch.sh applies: 4 of the 7 scripts read FXMILY_APP_URL.
 export FXMILY_APP_URL="${FXMILY_APP_URL:-${FXMILY_BASE_URL:-https://app.fxmilyapp.com}}"

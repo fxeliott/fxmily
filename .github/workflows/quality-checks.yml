@@ -17,8 +17,15 @@ name: Quality Checks
 #     by hand on the operator's box, so a core regression reached the worker
 #     silently (2026-07-08).
 #
-# All checks only read files already in the checkout (no install), so this job
-# is fast and has ZERO production side-effect. The .mjs logic is ALSO enforced
+# All checks read files already in the checkout and have ZERO production
+# side-effect. That sentence used to end "(no install), so this job is fast",
+# and the rollback drill added below makes it false: the drill pulls
+# `node:22-bookworm-slim` from Docker Hub and apt-installs jq/curl/git/tzdata
+# inside the container. Anonymous Docker Hub pulls from GitHub-hosted runners
+# share a rate limit, so this job now has a network dependency that can flake.
+# It stays worth it — the drill is the only thing that ever exercises
+# `--uninstall` — but a reader must not believe the job is hermetic. Nothing it
+# does touches production either way. The .mjs logic is ALSO enforced
 # by the Vitest suite (apps/web/src/lib/quality/*.test.ts) so a coverage run
 # catches it too — this standalone workflow gives each failure its own precise
 # red signal without needing the full test job.
@@ -37,6 +44,12 @@ on:
       # #608 shipped two shell benches under those paths and neither ever ran.
       - 'ops/cron/**'
       - 'ops/worker/**'
+      # Prose does not change behaviour, and the drill below pulls a container.
+      - '!ops/cron/**.md'
+      - '!ops/worker/**.md'
+      # Any workflow file, not just this one: a PR that deletes these steps from
+      # a sibling workflow would otherwise skip the job that would have noticed.
+      - '.github/workflows/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'
@@ -53,6 +66,12 @@ on:
       # #608 shipped two shell benches under those paths and neither ever ran.
       - 'ops/cron/**'
       - 'ops/worker/**'
+      # Prose does not change behaviour, and the drill below pulls a container.
+      - '!ops/cron/**.md'
+      - '!ops/worker/**.md'
+      # Any workflow file, not just this one: a PR that deletes these steps from
+      # a sibling workflow would otherwise skip the job that would have noticed.
+      - '.github/workflows/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'

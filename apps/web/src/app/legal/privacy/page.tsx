@@ -82,8 +82,9 @@ export default function PrivacyPolicyPage(): React.ReactElement {
 
       <p>
         Fxmily <strong>n’utilise aucun tracker tiers</strong> : pas de Google Analytics, pas de Meta
-        Pixel, pas de cookies publicitaires, pas de fingerprint. Voir le bandeau cookie affiché en
-        bas d’écran à ta première visite.
+        Pixel, pas de cookies publicitaires, pas de fingerprint. Un bandeau le rappelle sur les
+        pages publiques ; une fois connecté, cette page reste la référence, accessible depuis le
+        pied de page de chaque écran.
       </p>
 
       <h2>3. Pourquoi ces données</h2>

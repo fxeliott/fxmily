@@ -7,6 +7,7 @@ import { auth, signOut } from '@/auth';
 import { MicroObjectivePillSlot } from '@/components/coaching/micro-objective-pill';
 import { RankFooterSlot } from '@/components/leaderboard/rank-footer-slot';
 import { CookieBanner } from '@/components/legal/cookie-banner';
+import { showsCookieBanner } from '@/lib/legal/cookie-banner-visibility';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
 import { RouteFocusAnnouncer } from '@/components/route-focus-announcer';
@@ -234,7 +235,50 @@ export default async function RootLayout({
             <LogExpressFab />
             <LegalFooter />
           </TooltipProvider>
-          <CookieBanner />
+          {/*
+            Visiteurs uniquement — mesuré, pas préféré. Hit-test au centre réel,
+            build déployé, 375×667, session ouverte, scrollY=0 : la bannière
+            (`fixed`, 445..531) recouvrait l'action principale de `/dashboard`
+            (`hero-next-action` → /checkin/evening, 483..568) et une carte-lien
+            de `/journal` (402..597). Contrôle négatif : la même page avec la
+            bannière déjà fermée rend le CTA libre — c'est donc bien elle.
+
+            La variable n'est pas sa hauteur, c'est l'ancrage du slot partagé :
+            `bottom: calc(safe-area + 8.5rem)` = 136 px, soit un bord bas à 531
+            pour un centre de CTA à 525,5. Tout locataire de ce slot haut de
+            plus de 6 px échoue le hit-test — d'où l'inutilité de le rétrécir
+            (mesuré : la version compacte fait passer de 1 à 2 cibles
+            recouvertes, le coller au-dessus de la nav à 3). Sortir du flux le
+            rejette à 7222 px dans un document de 7412, donc invisible ; et
+            l'insérer en tête du flux donne 0 recouvrement mais un CLS mesuré à
+            0,1484 — au-delà du seuil « good » de 0,1 (repère Google : ce dépôt
+            ne l'impose par aucun garde). Ce chiffre vaut pour un îlot monté
+            CÔTÉ CLIENT, absent du HTML serveur, donc décalant tout de 99 px ;
+            un rendu serveur + script pré-paint (le motif de next-themes, que
+            la CSP autorise déjà) coûterait 0 — piste ouverte, non prise ici.
+
+            Ce que ce geste ferme, et rien de plus : le recouvrement PAR LA
+            BANNIÈRE. Deux autres locataires du même slot restent montés sur
+            `/dashboard` (`<A2HSHint>`, `<IOSInstallHint>`) et recouvrent pareil
+            — vérifié en reproduisant leur géométrie exacte (461..531). Leur
+            défaut PRÉEXISTE : `globals.css` ne les masquait que tant que la
+            bannière était là, donc il apparaissait dès qu'on la fermait. Le
+            retrait de la bannière l'avance, il ne le crée pas, et ne le ferme
+            pas non plus.
+
+            Ce que ça ne coûte pas : l'information. Le parcours d'un membre
+            invité ne passe ni par `/` ni par `/login` (le courriel pointe sur
+            `/onboarding/welcome`, puis `signIn()` l'amène directement sur
+            `/onboarding/photo`) — mais il ne peut pas s'inscrire sans cocher
+            `consentRgpd`, case obligatoire et non pré-cochée qui lie la
+            politique de confidentialité et les CGU. C'est une acceptation
+            tracée, pas un simple affichage. Ensuite `<LegalFooter>` rend
+            « Confidentialité » sur chacune de ses pages. SPEC §9.1 (RGPD/CNIL,
+            SPEC.md:491) : cookies strictement nécessaires en V1, donc aucun
+            bandeau bloquant obligatoire — l'info-banner y est décrit comme
+            permis, jamais comme dû.
+          */}
+          {showsCookieBanner(sessionLite) ? <CookieBanner /> : null}
         </ThemeProvider>
       </body>
     </html>

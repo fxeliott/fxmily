@@ -413,6 +413,29 @@ Step 1 alone is enough to stop the server. Steps 2–4 are the full return to th
 previous state. The uninstall deliberately **keeps** the checkout, `worker.env`,
 `~/.claude` and the logs, so re-installing is instant and no history is lost.
 
+### The drill — because a documented rollback is not a tested one
+
+Step 4 had never been run. The only machine it could be run on is the one now
+serving every member's generation, so it is exercised on a faithful copy instead:
+
+```bash
+bash ops/worker/rollback-drill.sh      # needs Docker; the container is thrown away
+```
+
+install → re-install → `--check` → `--uninstall` → `--uninstall` again → `--check`
+must now REFUSE → re-install. Thirty assertions, including a **canary**: 25 rows
+seeded into `/etc/cron.d/fxmily-app` and compared by sha256 at every step, since
+"never touches the app cron" is the installer's central promise and was until now
+only a sentence. The last step deliberately BREAKS the canary to prove the
+comparison can go red — four green comparisons are worth exactly as much as that
+one red.
+
+It states its own substitutions (the `claude` CLI, the six tokens, the app rows)
+and its own limits: it does not prove the rollback on the real host, and
+`--uninstall` does **not** revert the `FXMILY_WORKER_DRY_RUN` line it appended to
+`/etc/fxmily/cron.env` — harmless once the wrappers are gone, but "uninstalled"
+and "pristine" are not the same state.
+
 ---
 
 ## Routine maintenance

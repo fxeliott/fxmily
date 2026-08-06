@@ -623,19 +623,29 @@ after it is copy-paste. Free tier: 20 checks, 7 needed.
    from `/etc/cron.d/fxmily-worker`; it is the source of truth, this table is a
    copy.
 
-   | Check name                   | Period  | Grace |
-   | ---------------------------- | ------- | ----- |
-   | `fxmily-worker-onboarding`   | 20 min  | 4 h   |
-   | `fxmily-worker-verification` | 20 min  | 4 h   |
-   | `fxmily-worker-seances`      | 30 min  | 4 h   |
-   | `fxmily-worker-calendar`     | 1 day   | 2 d   |
-   | `fxmily-worker-weekly`       | 1 week  | 2 w   |
-   | `fxmily-worker-monthly`      | 30 days | 60 d  |
-   | `fxmily-worker-profile`      | 30 days | 60 d  |
+   | Check name                   | Period  | Grace   |
+   | ---------------------------- | ------- | ------- |
+   | `fxmily-worker-onboarding`   | 20 min  | 4 h     |
+   | `fxmily-worker-verification` | 5 min   | 4 h     |
+   | `fxmily-worker-seances`      | 30 min  | **9 h** |
+   | `fxmily-worker-calendar`     | 1 day   | 2 d     |
+   | `fxmily-worker-weekly`       | 1 week  | 2 w     |
+   | `fxmily-worker-monthly`      | 30 days | 60 d    |
+   | `fxmily-worker-profile`      | 30 days | 60 d    |
 
-   The graces are the SAME budgets `health.ts` gives each pipeline on the board.
-   Tighter would page you every time `weekly` holds the machine-global lock; that
-   is not a hypothetical, it is the 2h lock this worker legitimately takes.
+   The graces are the SAME budgets `health.ts` gives each pipeline on the board,
+   with **one deliberate exception**. Tighter would page you every time `weekly`
+   holds the machine-global lock; that is not a hypothetical, it is the 2h lock
+   this worker legitimately takes.
+
+   ⚠️ **`seances` is the exception, and getting it wrong pages you every night.**
+   Its cron is `*/30 8-23`, so it is idle from 23h30 to 08h00 **by design** — a
+   30-minute period with a 4-hour grace goes down at ~03h30 and stays down until
+   08h00, every single night, on the one channel that is supposed to survive the
+   app being down. A grace of 9 hours covers the idle window. The board solves
+   the same problem differently (it classifies `seances` on MISSED TICKS inside
+   its window rather than on raw age, `health.ts`), which is why the two numbers
+   legitimately differ here and only here.
 
 3. Copy each check's ping URL and append the seven lines to `/etc/fxmily/cron.env`
    on the host, as root:

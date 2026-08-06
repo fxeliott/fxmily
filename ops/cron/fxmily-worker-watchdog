@@ -376,6 +376,18 @@ QUOTA_STALL_HOURS="${FXMILY_WORKER_QUOTA_STALL_HOURS:-6}"
 if [[ "$QUOTA_SEEN" == "true" ]]; then
   [[ -f "$QUOTA_EPISODE" ]] || date +%s >"$QUOTA_EPISODE" 2>/dev/null || true
   episode_start="$(tr -dc '0-9' <"$QUOTA_EPISODE" 2>/dev/null || true)"
+  # AN INSTRUMENT THAT CANNOT MEASURE MUST SAY SO. Absent means the write failed
+  # (unwritable dir, disk full); EMPTY is worse and absorbing — an interrupted
+  # write leaves a zero-byte file, `-f` then reports it present so it is never
+  # rewritten, and the only `rm` sits on the "no quota state" branch which by
+  # definition does not run during the outage. Silently, forever, the escalation
+  # is off. This file already states the principle 180 lines up: "a reader that
+  # cannot classify must say so, not stay quiet".
+  if [[ -z "$episode_start" ]]; then
+    add_label 'quota_episode_unwritable'
+    # Self-heal the absorbing state: a zero-byte file is not data, it is debris.
+    rm -f "$QUOTA_EPISODE" 2>/dev/null || true
+  fi
   if [[ -n "$episode_start" ]]; then
     episode_h=$(((  $(date +%s) - episode_start ) / 3600))
     # Six hours, chosen ABOVE the five-hour subscription window on purpose: one

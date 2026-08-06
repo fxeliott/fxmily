@@ -343,9 +343,24 @@ jobs:
               # exact failure mode a dead-man switch exists to rule out. `awk`
               # tests the prefix and prints a bare 1: the VALUE never leaves awk,
               # so a ping URL still cannot reach this public log.
-              VAL="$(awk -F= -v k="HEALTHCHECK_PING_URL_WORKER_$k" \
-                     '$1==k && $2 ~ /^https:\/\/[^[:space:]]+$/ && length($2) >= 20 {print 1}' \
-                     "$CRON_ENV" 2>/dev/null | head -1)"
+              # The key match must tolerate what a hand-edited env file actually
+              # contains: `export KEY=…`, or a leading indent. `$1==k` on `-F=`
+              # matches neither, so seven genuinely armed URLs written with
+              # `export` reported "0/7 — the app is the ONLY alert channel" on a
+              # host where the channel was live. A permanent false warning is a
+              # warning people stop reading, which is the exact harm the message
+              # three lines down complains about.
+              VAL="$(awk -v k="HEALTHCHECK_PING_URL_WORKER_$k" '
+                     { line = $0
+                       sub(/^[[:space:]]*/, "", line)
+                       sub(/^export[[:space:]]+/, "", line)
+                       eq = index(line, "=")
+                       if (eq == 0) next
+                       if (substr(line, 1, eq - 1) != k) next
+                       v = substr(line, eq + 1)
+                       gsub(/\r/, "", v)
+                       if (v ~ /^https:\/\/[^[:space:]]+$/ && length(v) >= 20) print 1
+                     }' "$CRON_ENV" 2>/dev/null | head -1)"
               [ "$VAL" = "1" ] && HC_SET=$((HC_SET + 1))
             done
             if [ "$HC_SET" -eq "$HC_TOTAL" ]; then
@@ -461,7 +476,13 @@ jobs:
               # byte of the log is involved, so the digits-only property holds.
               LOG_AGE_MIN=$(((NOW - $(stat -c '%Y' "$BLOG" 2>/dev/null || echo "$NOW")) / 60))
               # Every pattern: literal + [0-9]+. Nothing else can survive `-oE`.
-              EVIDENCE="$(printf '%s' "$SECTION" | grep -oE \
+              # `-a`: a single NUL byte anywhere in the section makes GNU grep
+              # treat the input as binary and suppress every match, so a pipeline
+              # that DID produce would report "no production number". The content
+              # comes from `claude --print` and from member text through `tee`, so
+              # a NUL is not exotic. Forcing text mode cannot widen what escapes:
+              # the patterns are still literals plus [0-9]+.
+              EVIDENCE="$(printf '%s' "$SECTION" | grep -aoE \
                 -e 'Generated: [0-9]+, errored: [0-9]+' \
                 -e 'skipped inactive: [0-9]+' \
                 -e 'skipped \(no questionnaire\): [0-9]+' \

@@ -53,6 +53,17 @@ slice() {
 
 DETECT_ANCHOR='status_age_min=$(((NOW_EPOCH'
 EPISODE_ANCHOR='QUOTA_EPISODE="$LOG_DIR/quota-episode.start"'
+# The constant lives OUTSIDE the detection block (shipped line ~220, the block
+# starts at ~314). The first version of this bench retyped it into the harness,
+# and a review proved what that costs: change the shipped default from 90 to
+# 100000 and the watchdog starts treating a 20-day-old fossil as current — the
+# exact defect the "fossil is IGNORED" assertion claims to guard — while the
+# bench kept printing OK, because the harness was feeding it its own 90.
+#
+# The general lesson, which is why this comment is long: whatever the bench
+# SLICES is tested, whatever it supplies BY HAND around the slice is not. So
+# every value the block reads is now sliced too, never retyped.
+CONST_ANCHOR='QUOTA_FRESH_MIN="${FXMILY_WORKER_QUOTA_FRESH_MIN:'
 
 if slice "$TARGET" "$DETECT_ANCHOR" '^  fi$' >"$TMP/detect.sh"; then
   ok "sliced the detection block ($(wc -l <"$TMP/detect.sh" | tr -d ' ') lines of shipped text)"
@@ -78,13 +89,23 @@ else
   bad "the episode slice lost its emit — it would pass by being empty"
 fi
 
+# Slice the constant instead of retyping it. $1 lets the mutation controls point
+# this at a modified copy of the shipped file.
+slice_const() { grep -F -- "$CONST_ANCHOR" "${1:-$TARGET}" | head -1; }
+if [[ -n "$(slice_const)" ]]; then
+  ok "sliced the freshness constant from source: $(slice_const | tr -d ' ')"
+else
+  bad "ANCHOR MOVED — the freshness constant is not where this bench looks for it"
+fi
+slice_const >"$TMP/const.sh"
+
 # ── harnesses: run the shipped text, capture what it emits ───────────────────
 run_detect() { # $1 status file, $2 capped, $3 skipped, $4 initial QUOTA_SEEN
   {
     printf 'set -uo pipefail\n'
     printf 'NOW_EPOCH=$(date +%%s)\n'
-    printf 'QUOTA_FRESH_MIN="${FXMILY_WORKER_QUOTA_FRESH_MIN:-90}"\n'
-    printf 'LABELS=""\n'
+    cat "$TMP/const.sh" # sliced from the shipped file, never retyped
+    printf '\nLABELS=""\n'
     printf 'add_label() { LABELS="$LABELS$1 "; }\n'
     printf 'status_file=%q\n' "$1"
     printf 'capped=%q\n' "$2"
@@ -173,7 +194,15 @@ mutate() { # $1 sed expression -> echoes the verdict under the mutation
     printf 'SLICE_FAILED'
     return
   }
+  # The constant is re-sliced FROM THE MUTATED COPY too. Without this the
+  # threshold mutation below could not be seen, which is precisely the hole a
+  # review found on 2026-08-06.
+  slice_const "$mutated" >"$TMP/const.sh"
   run_detect "$fixture" false quota_cooldown false
+}
+restore_slices() {
+  slice "$TARGET" "$DETECT_ANCHOR" '^  fi$' >"$TMP/detect.sh"
+  slice_const >"$TMP/const.sh"
 }
 OUT="$(mutate '/\[\[ "\$status_age_min" -le "\$QUOTA_FRESH_MIN" \]\] &&/d' "$FOSSIL")"
 if [[ "$OUT" == "|false" ]]; then
@@ -187,8 +216,17 @@ if [[ "$OUT" == "claude_quota:capped |true" ]]; then
 else
   ok "renaming the emitted label changes the verdict (got <$OUT>)"
 fi
-# Restore the real slice so nothing below could run against a mutated copy.
-slice "$TARGET" "$DETECT_ANCHOR" '^  fi$' >"$TMP/detect.sh"
+# The mutation that the previous version of this bench could NOT see: raising
+# the shipped DEFAULT (not deleting the comparison) makes every fossil count.
+OUT="$(mutate 's/FXMILY_WORKER_QUOTA_FRESH_MIN:-90/FXMILY_WORKER_QUOTA_FRESH_MIN:-100000/' "$FOSSIL")"
+if [[ "$OUT" == "|false" ]]; then
+  bad "raising the shipped freshness DEFAULT did NOT change the verdict — the constant is still not tested"
+else
+  ok "raising the shipped freshness default makes the fossil count (got <$OUT>) — the constant is really tested"
+fi
+
+# Restore the real slices so nothing below could run against a mutated copy.
+restore_slices
 expect "restored: the real file still behaves correctly" "claude_quota:capped |true" "$(run_detect "$FRESH" true '' false)"
 
 echo

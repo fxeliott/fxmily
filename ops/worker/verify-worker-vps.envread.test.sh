@@ -106,18 +106,90 @@ has "$OUT" 'len=32' 'dollar: the value is read literally, all 32 bytes'
 hasnt "$OUT" 'unbound variable' 'dollar: set -u is never tripped'
 
 echo
-echo "== grammar parity with run-batch.sh, the only production reader =="
-# A backslash is an escape to the shell and a byte to the parser. Under the old
-# source-based reader the gate loaded 31 bytes where the pipelines loaded 32,
-# then blamed the pipelines for the 401 it had caused.
+echo "== grammar parity with run-batch.sh: BOTH parsers run, outputs compared =="
+# This section used to consist of one `grep` for one line of run-batch.sh. A
+# review falsified it in the smallest possible way: delete run-batch's
+# single-quote strip and the two readers genuinely diverge —
+#     run-batch -> K1=<'single'>      verify -> K1=<single>
+# — while the bench still reported "23 passed, 0 failed". A presence check on
+# one of six transformation statements cannot establish parity between two
+# parsers. So now BOTH are extracted from their own shipped file, BOTH are
+# executed on the same input, and their outputs are diffed byte for byte.
+parser_slice() { # $1 source file, $2 output file
+  local s e
+  s="$(grep -n -E '^[[:space:]]*while IFS= read -r line; do' "$1" | head -1 | cut -d: -f1)"
+  e="$(grep -n -E '^[[:space:]]*done[[:space:]]*<[[:space:]]*"\$ENV_FILE"' "$1" | head -1 | cut -d: -f1)"
+  [[ -n "$s" && -n "$e" ]] || return 1
+  sed -n "${s},${e}p" "$1" >"$2"
+}
+run_parser() { # $1 parser slice, $2 fixture -> "K1=<v>" lines for K1..K5
+  {
+    printf 'set -uo pipefail\n'
+    printf 'ENV_FILE=%q\n' "$2"
+    printf 'ENV_CR_SEEN=false\n'
+    cat "$1"
+    printf '\nfor k in K1 K2 K3 K4 K5; do printf "%%s=<%%s>\\n" "$k" "${!k-UNSET}"; done\n'
+  } >"$TMP/p.sh"
+  bash "$TMP/p.sh" 2>/dev/null
+}
+
+if [[ -r "$PRODUCER" ]] && parser_slice "$PRODUCER" "$TMP/prod.parser"; then
+  ok "extracted run-batch.sh's parser ($(wc -l <"$TMP/prod.parser" | tr -d ' ') lines of ITS shipped text)"
+else
+  no "ANCHOR MOVED — cannot extract run-batch.sh's parser; parity is untested"
+fi
+if parser_slice "$TARGET" "$TMP/gate.parser"; then
+  ok "extracted the gate's parser ($(wc -l <"$TMP/gate.parser" | tr -d ' ') lines)"
+else
+  no "ANCHOR MOVED — cannot extract the gate's parser"
+fi
+
+# One fixture per grammar hazard. Values are distinctive so a mismatch is
+# readable in the failure message.
+printf "K1='single'\nK2=\"double\"\nK3=has space\nK4=back\\\\slash\nK5=a=b=c\n" >"$TMP/par1.cfg"
+printf 'K1=trailing   \nK2=\n#K3=commented\n\n   \nK4=\tleading-tab\nK5="unclosed\n' >"$TMP/par2.cfg"
+printf 'K1="crlf-quoted"\r\nK2=crlf-bare\r\nK3=%s\r\n' "$(printf 'x')" >"$TMP/par3.cfg"
+printf 'K1=no-trailing-newline' >"$TMP/par4.cfg"
+
+PARITY_CASES=("$TMP/par1.cfg" "$TMP/par2.cfg" "$TMP/par3.cfg" "$TMP/par4.cfg")
+parity_check() { # echoes the number of diverging cases
+  local diverged=0 c a b
+  for c in "${PARITY_CASES[@]}"; do
+    a="$(run_parser "$TMP/prod.parser" "$c")"
+    b="$(run_parser "$TMP/gate.parser" "$c")"
+    if [[ "$a" != "$b" ]]; then
+      diverged=$((diverged + 1))
+      DIVERGENCE="case $(basename "$c"): run-batch[$(tr '\n' ' ' <<<"$a")] vs gate[$(tr '\n' ' ' <<<"$b")]"
+    fi
+  done
+  printf '%s' "$diverged"
+}
+DIVERGENCE=""
+D="$(parity_check)"
+if [[ "$D" == "0" ]]; then
+  ok "the two parsers agree byte for byte on all ${#PARITY_CASES[@]} grammar-hazard fixtures"
+else
+  no "the two parsers DISAGREE on $D case(s) — $DIVERGENCE"
+fi
+
+# Mutation control on the OTHER file: if run-batch's grammar changes and the
+# gate's copy does not, this section must go red. That is the whole point of it.
+if parser_slice "$PRODUCER" "$TMP/prod.parser"; then
+  sed "/val=\"\${val%\\\\'}\"/d" "$PRODUCER" >"$TMP/producer.mutated"
+  if parser_slice "$TMP/producer.mutated" "$TMP/prod.parser"; then
+    D="$(parity_check)"
+    if [[ "$D" == "0" ]]; then
+      no "mutation: run-batch's quote handling changed and parity STILL passed — the comparison is fake"
+    else
+      ok "mutation: changing run-batch's grammar makes parity FAIL (got $D divergence(s)) — the comparison is live"
+    fi
+  fi
+  parser_slice "$PRODUCER" "$TMP/prod.parser" # restore
+fi
+
 printf 'K=Ab3\\kQ9zLm2pXr7tVn4wYs6dGh1jFc8e\n' >"$TMP/backslash.cfg"
 OUT="$(run_block "$TMP/backslash.cfg")"
-has "$OUT" 'len=32' 'backslash: 32 bytes, same as the parser in run-batch.sh'
-if [[ -r "$PRODUCER" ]] && grep -qF 'val="${val%$'"'"'\r'"'"'}"' "$PRODUCER"; then
-  ok 'run-batch.sh still strips CR before quotes (the order this copies)'
-else
-  no 'run-batch.sh parser changed — this copy must be re-synced with it'
-fi
+has "$OUT" 'len=32' 'backslash: 32 bytes through the gate'
 
 echo
 echo "== an apostrophe in a value is data, not a syntax error =="

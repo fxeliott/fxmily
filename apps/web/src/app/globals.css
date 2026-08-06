@@ -3265,6 +3265,54 @@ body:has(
   }
 }
 
+/* Bandeaux d'installation ancrés EN HAUT sous 640px — défaut MESURÉ sur le build
+   déployé, pas un ajustement esthétique. `/dashboard` à 375×667 : le bandeau
+   occupait 359..531 et recouvrait `hero-next-action` (483..568), c'est-à-dire
+   l'action principale du tableau de bord ; à 393×852, 544..716 sur une
+   carte-lien (578..604). Hit-test au centre RÉEL de chaque cible, ses propres
+   boutons exclus : 1 cible recouverte dans les deux cas, 0 après ancrage, sur
+   9 cibles examinées — l'instrument n'était donc pas vide.
+
+   `bottom: auto` n'est pas un détail : c'est la moitié de la correction. Ces
+   bandeaux sont des îlots du slot bas, et les règles ci-dessus leur posent un
+   `bottom:`. Poser `top:` sans le neutraliser définit les DEUX bords et
+   l'élément s'étire d'un bout à l'autre : mesuré 12..531, 519px de haut au lieu
+   de 173.
+
+   Ce sélecteur-là, et pas un plus court : la règle doit battre le double-`:has()`
+   ci-dessus, de spécificité (0,3,1). Une version en `body:has(…)` pèse (0,3,1)
+   elle aussi — à égalité elle ne gagnerait que par sa position dans le fichier,
+   donc un jour où quelqu'un ajoute une règle plus bas, elle redeviendrait inerte
+   en silence. Vérifié en injectant les deux candidats en TÊTE du `<head>`,
+   position la plus défavorable qui soit : à égalité le bandeau s'étire (519px) ;
+   avec `html:has(…) body` (0,3,2) il tient sa place (173px). La spécificité est
+   donc MESURÉE, pas déduite du markup — c'est le piège exact qui avait rendu une
+   règle inerte en #603.
+
+   La règle NOMME les trois îlots, comme l'exige `bottom-slot-arbitration.test.ts`,
+   mais n'atteint que ceux qui déclarent `data-anchor="top"` : la bannière cookies
+   reste en bas, et un futur îlot choisit son ancrage sans revenir ici. Au-delà de
+   640px les bandeaux repassent en bas à droite (`sm:` de leur className), où ils
+   ne recouvrent rien — contrôle négatif à 800px : attribut posé et règle présente,
+   l'îlot reste en bas (top 535,5 > bottom 136).
+
+   `useBottomSlotReservation` lit le MÊME attribut pour ne rien réserver en bas
+   quand l'ancrage est effectif. Sans cela la bande publiée vaudrait la hauteur du
+   bandeau plus la valeur UTILISÉE de `bottom`, soit 841px de vide en fin de page
+   à 393×852 : la correction aurait déplacé le défaut au lieu de le fermer. */
+@media (max-width: 639px) {
+  html:has([data-slot='app-bottom-nav'])
+    body
+    :is(
+      [data-slot='cookie-banner'],
+      [data-slot='a2hs-hint'],
+      [data-slot='ios-install-hint']
+    )[data-anchor='top'] {
+    top: max(0.75rem, env(safe-area-inset-top));
+    bottom: auto;
+  }
+}
+
 /* =============================================================
  * INCREMENT 2 — WOW PRIMITIVES (S17 frontend-v2) — couche premium ADDITIVE
  * -------------------------------------------------------------

@@ -364,6 +364,24 @@ Both are closed:
   run fails. Six hours of continuous capping means the account is being drained
   faster than it refills, and no amount of waiting fixes that.
 
+**Two limits of that escalation, stated so nobody has to discover them at 2am.**
+
+_It only counts a FRESH quota state._ A status file older than
+`FXMILY_WORKER_QUOTA_FRESH_MIN` (default 90 minutes, above the 60-minute
+cooldown) is ignored for this purpose. Without that gate a `quota_cooldown`
+written by `monthly` on the 1st would still be the newest thing that file says
+on the 28th, and the episode would be held open for a MONTH on a healthy host —
+red board, 503, hourly alarm. A genuinely current cap is re-witnessed within
+minutes by `verification`, `onboarding` or `seances`, so nothing real is lost.
+
+_It measures CONTINUOUS capping, not cumulative._ One tick with no quota state
+deletes the file. An account drained in bursts — capped, cooldown, one clean
+tick because that pipeline's cohort happened to be empty, capped again — never
+reaches six continuous hours and is never reported as stalled, however little it
+actually generates. That misses a real outage; it does not invent one. Closing
+it properly needs a cumulative measure over a rolling window, which needs a
+count of what was PRODUCED, which lives in `claude-batch-core.sh`.
+
 To exercise it without waiting six hours, backdate the episode file and wait for
 the next watchdog tick:
 

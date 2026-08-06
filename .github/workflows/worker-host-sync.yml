@@ -338,9 +338,15 @@ jobs:
               HC_TOTAL=$((HC_TOTAL + 1))
               # Non-empty AND not a placeholder: `=` alone, or a value that is
               # not a URL, both mean "not armed" and both have shipped as one.
+              # SHAPE, not length. A length test counts `TODO-fill-this-in-later`
+              # as armed and reports 7/7 on a dead-man switch that is dead — the
+              # exact failure mode a dead-man switch exists to rule out. `awk`
+              # tests the prefix and prints a bare 1: the VALUE never leaves awk,
+              # so a ping URL still cannot reach this public log.
               VAL="$(awk -F= -v k="HEALTHCHECK_PING_URL_WORKER_$k" \
-                     '$1==k {print length($2)}' "$CRON_ENV" 2>/dev/null | head -1)"
-              [ -n "$VAL" ] && [ "$VAL" -ge 20 ] && HC_SET=$((HC_SET + 1))
+                     '$1==k && $2 ~ /^https:\/\/[^[:space:]]+$/ && length($2) >= 20 {print 1}' \
+                     "$CRON_ENV" 2>/dev/null | head -1)"
+              [ "$VAL" = "1" ] && HC_SET=$((HC_SET + 1))
             done
             if [ "$HC_SET" -eq "$HC_TOTAL" ]; then
               ok "$HC_SET/$HC_TOTAL external ping URLs configured (values never printed)"
@@ -436,6 +442,24 @@ jobs:
               # may hold something is a lie by omission.
               MARK="$(grep -n "^\[worker\] batch=${p} started=" "$BLOG" 2>/dev/null | tail -1 | cut -d: -f1)"
               SECTION="$(tail -n "+${MARK:-1}" "$BLOG" 2>/dev/null)"
+              # HOW OLD are these numbers? This section is headed "the LAST run",
+              # and without this line that heading is false in the one situation
+              # it matters most.
+              #
+              # `run-batch.sh` writes the scope marker at line 465 — AFTER all
+              # eight benign pre-flight skips (quota cooldown, logged out, wrong
+              # account, lock held). So a skipped tick appends NOTHING to this
+              # log while still refreshing `status.json`. During a quota outage —
+              # exactly the failure this workflow now exists to reveal — section
+              # F shows a fresh `status.json` and this section would show the
+              # generation counts of the last run that really ran, possibly days
+              # old, with no qualifier whatsoever. An adversarial review found
+              # this by EXECUTION, three times independently, while the comment
+              # above claimed to prevent it.
+              #
+              # The age comes from `stat`, a number this workflow computes — no
+              # byte of the log is involved, so the digits-only property holds.
+              LOG_AGE_MIN=$(((NOW - $(stat -c '%Y' "$BLOG" 2>/dev/null || echo "$NOW")) / 60))
               # Every pattern: literal + [0-9]+. Nothing else can survive `-oE`.
               EVIDENCE="$(printf '%s' "$SECTION" | grep -oE \
                 -e 'Generated: [0-9]+, errored: [0-9]+' \
@@ -449,7 +473,9 @@ jobs:
                 -e '"(total|persisted|created|updated|skipped|failed|errors|unchanged)": [0-9]+' \
                 2>/dev/null | tail -8 | tr '\n' ' ' | tr -s ' ')"
               if [ -n "$EVIDENCE" ]; then
-                printf '  %-13s %s\n' "$p" "$EVIDENCE"
+                # The age FIRST. An operator who reads left to right must meet
+                # "written 4320 min ago" before meeting "Generated: 26".
+                printf '  %-13s [written %smin ago] %s\n' "$p" "$LOG_AGE_MIN" "$EVIDENCE"
               else
                 # Not a failure. Three legitimate causes, and the operator must
                 # not read this as "broken": an empty cohort, a dry-run
@@ -569,6 +595,17 @@ jobs:
                 echo "::error title=No sweep to read::no verify log on this host yet. Run mode=verify first."
                 exit 1
               fi
+              # FRESHNESS OF THE VERDICT, and it is the whole point of the mode.
+              # Without it `verify-status` follows the pointer, finds last week's
+              # `RESULT: 7/7 pass`, replays the transcript byte-for-byte and exits
+              # 0 — a green tick in Actions, on a host where nothing ran, startable
+              # by anyone through workflow_dispatch. Proved by execution in an
+              # adversarial review. This commit's own premise is that "the absence
+              # of a result must not be readable as a result"; a STALE result reads
+              # as a current one, which is the same lie with a better disguise.
+              VLOG_AGE_MIN=$(((  $(date +%s) - $(stat -c '%Y' "$VLOG" 2>/dev/null || echo 0) ) / 60))
+              VERDICT_MAX_AGE_MIN="${VERDICT_MAX_AGE_MIN:-720}"
+              echo "  sweep log written $VLOG_AGE_MIN min ago (verdict is refused past $VERDICT_MAX_AGE_MIN min)"
               echo "::group::Verify · 7-pipeline dry-run (never persists)"
               # Budget kept UNDER the 40 min `command_timeout` on purpose: this
               # step must always get to print its own conclusion rather than be
@@ -590,6 +627,15 @@ jobs:
               echo "::endgroup::"
 
               VERDICT="$(grep -E '^RESULT: [0-9]+/7' "$VLOG" | tail -1)"
+              # Re-read the age AFTER the tail: a sweep that finished during the
+              # watch window has just been written, and judging it on the age
+              # measured before the wait would refuse a verdict minutes old.
+              VLOG_AGE_MIN=$(((  $(date +%s) - $(stat -c '%Y' "$VLOG" 2>/dev/null || echo 0) ) / 60))
+              if [ -n "$VERDICT" ] && [ "$VLOG_AGE_MIN" -gt "$VERDICT_MAX_AGE_MIN" ]; then
+                echo "::error title=Stale verdict, refused::the newest sweep on this host finished $VLOG_AGE_MIN min ago (limit $VERDICT_MAX_AGE_MIN). Its verdict says nothing about the host TODAY. Run mode=verify to start a fresh one."
+                echo "$VERDICT"
+                exit 1
+              fi
               if [ -n "$VERDICT" ]; then
                 echo "$VERDICT"
                 case "$VERDICT" in

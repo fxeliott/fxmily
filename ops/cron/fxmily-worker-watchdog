@@ -213,6 +213,11 @@ else
 fi
 
 # --- 4. RUNS -----------------------------------------------------------------
+NOW_EPOCH="$(date +%s)"
+# Above the 60-minute quota cooldown, below every pipeline period except the
+# three that tick in minutes — see the AGE GATE comment in the loop for why a
+# quota state read from a monthly pipeline is a fossil.
+QUOTA_FRESH_MIN="${FXMILY_WORKER_QUOTA_FRESH_MIN:-90}"
 QUOTA_SEEN=false
 # The dedicated-account guard is machine-wide, like the quota one: every
 # pipeline skips for the same reason, so reporting it once is the honest count.
@@ -290,7 +295,25 @@ for p in "${PIPELINES[@]}"; do
   # NEVER reaches red however long the cap lasts. `health.ts` asserted the
   # opposite in a comment ("if it lasts, the pull heartbeats go stale and red on
   # age"); that comment is corrected in the same change as this one.
+  #
+  # AGE GATE, and it is NOT a contradiction of the header. Step 4 ignores
+  # staleness on purpose for `ok`/`exitCode`, because "this pipeline stopped
+  # running" is measured by the age heartbeat instead. That reasoning does not
+  # carry to the quota state, and the difference is CADENCE: `monthly` ticks on
+  # the 1st, `profile` on the 2nd, `weekly` on Sunday. A `quota_cooldown` written
+  # by `monthly` on the 1st is still the newest thing that file will ever say on
+  # the 28th. Without this gate the episode below would be held open for a MONTH
+  # on a perfectly healthy host — red board, /api/cron/health 503, cron-watch
+  # failing every hour. That is strictly worse than the silence it replaces, and
+  # it was found by an adversarial review that EXECUTED this loop against a
+  # fabricated tree rather than reading it.
+  #
+  # 90 minutes, because the cooldown is 60: a cap that is genuinely current is
+  # re-witnessed within minutes by `verification` (5 min), `onboarding` (20) or
+  # `seances` (30). A quota state older than that is a fossil, not a state.
+  status_age_min=$(((NOW_EPOCH - $(stat -c '%Y' "$status_file" 2>/dev/null || echo "$NOW_EPOCH")) / 60))
   if [[ "$QUOTA_SEEN" == "false" ]] &&
+    [[ "$status_age_min" -le "$QUOTA_FRESH_MIN" ]] &&
     { [[ "$capped" == "true" ]] || [[ "$skipped" == "quota_cooldown" ]]; }; then
     add_label 'claude_quota:capped'
     QUOTA_SEEN=true
@@ -332,6 +355,22 @@ done
 # It also self-heals across a reboot or a manual `rm`: a stale file only ever
 # makes the episode look YOUNGER after a clear, never older, because the clear
 # is what deletes it.
+#
+# TWO LIMITS, STATED, because a guard whose name promises more than its proof is
+# an argument for not looking:
+#
+#   · CONTINUOUS, not cumulative. One tick with no quota state deletes the file.
+#     An account drained in bursts — capped, cooldown, one clean tick because
+#     that pipeline's cohort happened to be empty, capped again — never reaches
+#     six continuous hours and is therefore never reported as stalled, however
+#     little it actually generates. This misses a real outage; it does not
+#     invent one, so it is strictly better than today's total silence. Closing it
+#     needs a cumulative measure over a rolling window, which needs a count of
+#     what was PRODUCED, which lives in the batch core. Named, not pretended.
+#   · Best-effort write. If `$LOG_DIR` is not writable the file never appears and
+#     nothing escalates. The directory is created and owned by the installer, so
+#     this is a disk-full or permissions incident — which the host's own disk
+#     watchdog reports separately.
 QUOTA_EPISODE="$LOG_DIR/quota-episode.start"
 QUOTA_STALL_HOURS="${FXMILY_WORKER_QUOTA_STALL_HOURS:-6}"
 if [[ "$QUOTA_SEEN" == "true" ]]; then

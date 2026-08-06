@@ -86,13 +86,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'inspect = measure (safe) | converge = git pull + install wrappers | verify = 7-pipeline dry-run'
+        description: 'inspect = measure (safe) | converge = git pull + install wrappers | verify = start the 7-pipeline dry-run (detached) | verify-status = read a sweep already running'
         required: true
         type: choice
         options:
           - inspect
           - converge
           - verify
+          - verify-status
         default: inspect
 
 permissions: {}
@@ -150,9 +151,17 @@ jobs:
             # crashes before it can report is worse than no guard.
             DIRTY=0
             HAS_CHECKOUT=0
-            ok()   { printf '  [OK]   %s\n' "$*"; }
-            warn() { printf '  [WARN] %s\n' "$*"; }
-            bad()  { printf '  [FAIL] %s\n' "$*"; FAILED=1; }
+            # These pipe through `redact` themselves. The header of this file
+            # says "every printed line goes through redact()"; before this it
+            # was true of SIX call sites out of roughly sixty, and these three
+            # helpers — which carry almost everything host-derived, including
+            # a value read straight out of the secrets file — were not among
+            # them. A load-bearing comment that is false is worse than a
+            # missing one: the next person adds `warn "$SOMETHING"` believing
+            # it is filtered. Making the sentence true costs one pipe each.
+            ok()   { printf '  [OK]   %s\n' "$*" | redact; }
+            warn() { printf '  [WARN] %s\n' "$*" | redact; }
+            bad()  { printf '  [FAIL] %s\n' "$*" | redact; FAILED=1; }
 
             # =================================================================
             # A. Checkout — the thing `git pull` converges
@@ -317,6 +326,61 @@ jobs:
             else
               bad "worker.env unreadable at ~/worker/ops/worker/worker.env"
             fi
+            # The EXTERNAL alert channel — counted, because "wired" and "armed"
+            # have looked identical from the outside since J9 shipped.
+            #
+            # Every hop of the primary alert path runs inside the app: the
+            # watchdog POSTs a heartbeat to it, `/api/cron/health` reads it, and
+            # `cron-watch.yml` polls that. An app that is down cannot report that
+            # it is down. Healthchecks.io is the only channel that survives that,
+            # and its seven URLs ship BLANK — a blank URL makes the wrapper skip
+            # the ping silently, which is correct behaviour and invisible state.
+            #
+            # A count, never a value: a populated ping URL is a capability token
+            # (whoever holds it can mark the check "up" and silence the alarm)
+            # and this log is public. `redact()` would catch it, but relying on a
+            # filter to strip a secret we chose to print is not a design.
+            HC_TOTAL=0
+            HC_SET=0
+            for k in ONBOARDING VERIFICATION SEANCES CALENDAR WEEKLY MONTHLY PROFILE; do
+              HC_TOTAL=$((HC_TOTAL + 1))
+              # Non-empty AND not a placeholder: `=` alone, or a value that is
+              # not a URL, both mean "not armed" and both have shipped as one.
+              # SHAPE, not length. A length test counts `TODO-fill-this-in-later`
+              # as armed and reports 7/7 on a dead-man switch that is dead — the
+              # exact failure mode a dead-man switch exists to rule out. `awk`
+              # tests the prefix and prints a bare 1: the VALUE never leaves awk,
+              # so a ping URL still cannot reach this public log.
+              # The key match must tolerate what a hand-edited env file actually
+              # contains: `export KEY=…`, or a leading indent. `$1==k` on `-F=`
+              # matches neither, so seven genuinely armed URLs written with
+              # `export` reported "0/7 — the app is the ONLY alert channel" on a
+              # host where the channel was live. A permanent false warning is a
+              # warning people stop reading, which is the exact harm the message
+              # three lines down complains about.
+              VAL="$(awk -v k="HEALTHCHECK_PING_URL_WORKER_$k" '
+                     { line = $0
+                       sub(/^[[:space:]]*/, "", line)
+                       sub(/^export[[:space:]]+/, "", line)
+                       eq = index(line, "=")
+                       if (eq == 0) next
+                       if (substr(line, 1, eq - 1) != k) next
+                       v = substr(line, eq + 1)
+                       gsub(/\r/, "", v)
+                       if (v ~ /^https:\/\/[^[:space:]]+$/ && length(v) >= 20) print 1
+                     }' "$CRON_ENV" 2>/dev/null | head -1)"
+              [ "$VAL" = "1" ] && HC_SET=$((HC_SET + 1))
+            done
+            if [ "$HC_SET" -eq "$HC_TOTAL" ]; then
+              ok "$HC_SET/$HC_TOTAL external ping URLs configured (values never printed)"
+            elif [ "$HC_SET" -eq 0 ]; then
+              warn "0/$HC_TOTAL external ping URLs configured — the app is the ONLY alert channel,"
+              warn "so an app that is down cannot tell you the worker is down. See RUNBOOK.md"
+              warn "§ 'external dead-man switch' for the seven-step arming procedure."
+            else
+              warn "$HC_SET/$HC_TOTAL external ping URLs configured — a PARTIAL channel is the"
+              warn "worst of the three states: it looks armed and covers only some pipelines."
+            fi
             echo "::endgroup::"
 
             # =================================================================
@@ -357,6 +421,97 @@ jobs:
                 "$(jq -r '.exitCode // "?"'    "$F" 2>/dev/null)" \
                 "$(jq -r '.skipped // "-"'     "$F" 2>/dev/null)" \
                 "$(jq -r '.quotaCapped // "-"' "$F" 2>/dev/null)"
+            done
+            echo "::endgroup::"
+
+            # =================================================================
+            # F-bis. Did it PRODUCE anything? — J9 "Done quand" #2
+            # =================================================================
+            # Section F answers "did the batch run?". It cannot answer "did the
+            # batch make anything?", and the difference between those two is the
+            # single failure mode this jalon exists to remove: a pipeline that
+            # pulls its envelope (so the age heartbeat goes green), calls nothing,
+            # persists nothing, and reports ok=true. `status.json` records
+            # exitCode / ok / quotaCapped / skipped — not one field about output.
+            #
+            # The numbers DO exist: every pipeline prints a production summary.
+            # They live in `<batch>.log`, which this workflow has never touched
+            # and must never tail, because that file carries member content and
+            # these run logs are PUBLIC.
+            #
+            # SO THE RULE HERE IS ABSOLUTE, AND IT IS ENFORCED BY CONSTRUCTION,
+            # NOT BY CARE: every character printed by this section comes either
+            # from a literal written in this file, or from `[0-9]+`. `grep -oE`
+            # emits only what its pattern matched, and every pattern below is a
+            # fixed string with digit classes punched into it. There is no branch
+            # where a byte of member text can reach stdout — not via a filename,
+            # not via an error message, not via a partially-matched line.
+            #
+            # Scoped to the LAST run, not to the file: `<batch>.log` is
+            # append-only across runs (pruned at 14 days), so an unscoped grep
+            # would happily report a generation from six days ago as if it were
+            # this morning's. `run-batch.sh` writes `[worker] batch=<b> started=`
+            # at the top of every run — that marker is the section boundary.
+            echo "::group::F-bis · What the last run actually produced (numbers only)"
+            for p in onboarding verification seances calendar weekly monthly profile; do
+              BLOG="$LOG_DIR/${p}.log"
+              if [ ! -r "$BLOG" ]; then
+                printf '  %-13s no batch log yet\n' "$p"
+                continue
+              fi
+              # Byte-scope to the last run. `+N` is a line number, so a log with
+              # no marker at all (a very old file) falls back to line 1 rather
+              # than to an empty tail — reporting "nothing found" on a file that
+              # may hold something is a lie by omission.
+              MARK="$(grep -n "^\[worker\] batch=${p} started=" "$BLOG" 2>/dev/null | tail -1 | cut -d: -f1)"
+              SECTION="$(tail -n "+${MARK:-1}" "$BLOG" 2>/dev/null)"
+              # HOW OLD are these numbers? This section is headed "the LAST run",
+              # and without this line that heading is false in the one situation
+              # it matters most.
+              #
+              # `run-batch.sh` writes the scope marker at line 465 — AFTER all
+              # eight benign pre-flight skips (quota cooldown, logged out, wrong
+              # account, lock held). So a skipped tick appends NOTHING to this
+              # log while still refreshing `status.json`. During a quota outage —
+              # exactly the failure this workflow now exists to reveal — section
+              # F shows a fresh `status.json` and this section would show the
+              # generation counts of the last run that really ran, possibly days
+              # old, with no qualifier whatsoever. An adversarial review found
+              # this by EXECUTION, three times independently, while the comment
+              # above claimed to prevent it.
+              #
+              # The age comes from `stat`, a number this workflow computes — no
+              # byte of the log is involved, so the digits-only property holds.
+              LOG_AGE_MIN=$(((NOW - $(stat -c '%Y' "$BLOG" 2>/dev/null || echo "$NOW")) / 60))
+              # Every pattern: literal + [0-9]+. Nothing else can survive `-oE`.
+              # `-a`: a single NUL byte anywhere in the section makes GNU grep
+              # treat the input as binary and suppress every match, so a pipeline
+              # that DID produce would report "no production number". The content
+              # comes from `claude --print` and from member text through `tee`, so
+              # a NUL is not exotic. Forcing text mode cannot widen what escapes:
+              # the patterns are still literals plus [0-9]+.
+              EVIDENCE="$(printf '%s' "$SECTION" | grep -aoE \
+                -e 'Generated: [0-9]+, errored: [0-9]+' \
+                -e 'skipped inactive: [0-9]+' \
+                -e 'skipped \(no questionnaire\): [0-9]+' \
+                -e 'already generated \(resume\): [0-9]+' \
+                -e 'Payload: [0-9]+ bytes / [0-9]+ entries' \
+                -e 'held complete=[0-9]+' \
+                -e 'awaiting media=[0-9]+' \
+                -e 'awaiting AI=[0-9]+' \
+                -e '"(total|persisted|created|updated|skipped|failed|errors|unchanged)": [0-9]+' \
+                2>/dev/null | tail -8 | tr '\n' ' ' | tr -s ' ')"
+              if [ -n "$EVIDENCE" ]; then
+                # The age FIRST. An operator who reads left to right must meet
+                # "written 4320 min ago" before meeting "Generated: 26".
+                printf '  %-13s [written %smin ago] %s\n' "$p" "$LOG_AGE_MIN" "$EVIDENCE"
+              else
+                # Not a failure. Three legitimate causes, and the operator must
+                # not read this as "broken": an empty cohort, a dry-run
+                # short-circuit, or a pipeline whose summary shape is not in the
+                # whitelist above. Saying which is impossible from numbers alone.
+                printf '  %-13s last run printed no production number\n' "$p"
+              fi
             done
             echo "::endgroup::"
 
@@ -403,19 +558,130 @@ jobs:
             # =================================================================
             # VERIFY — the read-only 7-pipeline dry-run (Done-quand #1)
             # =================================================================
-            if [ "$MODE" = "verify" ]; then
-              echo "::group::Verify · 7-pipeline dry-run (never persists)"
-              # `--dry-run` is forced by the script itself for all seven.
-              bash "$WORKER_REPO/ops/worker/verify-worker-vps.sh" 2>&1 | redact
-              RC="${PIPESTATUS[0]}"
-              echo "::endgroup::"
-              if [ "$RC" -eq 0 ]; then
-                echo "RESULT: 7/7 pass."
-              else
-                echo "::error::verify-worker-vps.sh exited $RC — read the per-pipeline verdicts above."
-                echo "A FAIL/skipped on every pipeline means no Claude account is signed in on the host."
+            # =================================================================
+            # VERIFY — the read-only 7-pipeline dry-run (Done-quand #1)
+            # =================================================================
+            # WHY THIS IS DETACHED AND NOT A PLAIN CALL, measured 2026-08-06.
+            #
+            # The plain call was `bash verify-worker-vps.sh 2>&1 | redact`. Run
+            # 31111894121 hit `Run Command Timeout` at 40 minutes and printed
+            # ZERO per-pipeline verdicts. Two independent faults, and the second
+            # is the one that matters:
+            #
+            #   1. 40 minutes is far below an honest sweep. Seven pipelines run
+            #      SERIALLY behind the machine-global lock, each member costs a
+            #      jittered sleep with a 30 s floor (that floor IS the anti-ban
+            #      design) plus a real model call for the four generators. A
+            #      thirty-member cohort is hours, not minutes.
+            #   2. Nothing streamed. `printf` to a pipe is block-buffered, and
+            #      `sed` buffers again, so the whole transcript died with the
+            #      session. The switchover gate spent forty minutes of REAL
+            #      quota on the dedicated account and produced no evidence at
+            #      all — a gate that can consume and never report.
+            #
+            # So the sweep now outlives the SSH session (`setsid` + `nohup`), is
+            # line-buffered into a log on the host, and this step TAILS it. A run
+            # that ends without a verdict is reported as "no verdict", never as a
+            # pass: the absence of a result must not be readable as a result.
+            VERIFY_DIR="$LOG_DIR/verify"
+            VERIFY_PID_FILE="$VERIFY_DIR/current.pid"
+            VERIFY_PTR="$VERIFY_DIR/current.path"
+
+            if [ "$MODE" = "verify" ] || [ "$MODE" = "verify-status" ]; then
+              mkdir -p "$VERIFY_DIR"
+              RUNNING=0
+              if [ -r "$VERIFY_PID_FILE" ]; then
+                VPID="$(tr -dc '0-9' <"$VERIFY_PID_FILE")"
+                [ -n "$VPID" ] && kill -0 "$VPID" 2>/dev/null && RUNNING=1
               fi
-              exit "$RC"
+            fi
+
+            if [ "$MODE" = "verify" ]; then
+              # Refuse to start a SECOND sweep. Two concurrent sweeps would
+              # queue on the machine-global lock and double the quota spend for
+              # one verdict — and the second would look like it hung.
+              if [ "$RUNNING" -eq 1 ]; then
+                echo "::error title=A sweep is already running::pid $VPID. Read it with mode=verify-status instead of starting a second one."
+                exit 1
+              fi
+              STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+              VLOG="$VERIFY_DIR/verify-$STAMP.log"
+              : >"$VLOG"
+              printf '%s\n' "$VLOG" >"$VERIFY_PTR"
+              # `stdbuf -oL` so a line is readable the moment it is printed;
+              # `setsid` so the sweep survives this SSH session ending.
+              nohup setsid stdbuf -oL bash "$WORKER_REPO/ops/worker/verify-worker-vps.sh" \
+                >"$VLOG" 2>&1 </dev/null &
+              printf '%s\n' "$!" >"$VERIFY_PID_FILE"
+              VPID="$(cat "$VERIFY_PID_FILE")"
+              echo "sweep started detached (pid $VPID) — it survives this session."
+              RUNNING=1
+            fi
+
+            if [ "$MODE" = "verify" ] || [ "$MODE" = "verify-status" ]; then
+              VLOG="$(cat "$VERIFY_PTR" 2>/dev/null)"
+              if [ -z "$VLOG" ] || [ ! -r "$VLOG" ]; then
+                echo "::error title=No sweep to read::no verify log on this host yet. Run mode=verify first."
+                exit 1
+              fi
+              # FRESHNESS OF THE VERDICT, and it is the whole point of the mode.
+              # Without it `verify-status` follows the pointer, finds last week's
+              # `RESULT: 7/7 pass`, replays the transcript byte-for-byte and exits
+              # 0 — a green tick in Actions, on a host where nothing ran, startable
+              # by anyone through workflow_dispatch. Proved by execution in an
+              # adversarial review. This commit's own premise is that "the absence
+              # of a result must not be readable as a result"; a STALE result reads
+              # as a current one, which is the same lie with a better disguise.
+              VLOG_AGE_MIN=$(((  $(date +%s) - $(stat -c '%Y' "$VLOG" 2>/dev/null || echo 0) ) / 60))
+              VERDICT_MAX_AGE_MIN="${VERDICT_MAX_AGE_MIN:-720}"
+              echo "  sweep log written $VLOG_AGE_MIN min ago (verdict is refused past $VERDICT_MAX_AGE_MIN min)"
+              echo "::group::Verify · 7-pipeline dry-run (never persists)"
+              # Budget kept UNDER the 40 min `command_timeout` on purpose: this
+              # step must always get to print its own conclusion rather than be
+              # killed mid-tail, which is the failure it exists to prevent.
+              WATCH_UNTIL=$(( $(date +%s) + 1800 ))
+              SEEN=0
+              while :; do
+                TOTAL="$(wc -l <"$VLOG" 2>/dev/null || echo 0)"
+                if [ "$TOTAL" -gt "$SEEN" ]; then
+                  tail -n "+$((SEEN + 1))" "$VLOG" | head -n "$((TOTAL - SEEN))" | redact
+                  SEEN="$TOTAL"
+                fi
+                RUNNING=0
+                [ -n "${VPID:-}" ] && kill -0 "$VPID" 2>/dev/null && RUNNING=1
+                [ "$RUNNING" -eq 0 ] && break
+                [ "$(date +%s)" -ge "$WATCH_UNTIL" ] && break
+                sleep 15
+              done
+              echo "::endgroup::"
+
+              VERDICT="$(grep -E '^RESULT: [0-9]+/7' "$VLOG" | tail -1)"
+              # Re-read the age AFTER the tail: a sweep that finished during the
+              # watch window has just been written, and judging it on the age
+              # measured before the wait would refuse a verdict minutes old.
+              VLOG_AGE_MIN=$(((  $(date +%s) - $(stat -c '%Y' "$VLOG" 2>/dev/null || echo 0) ) / 60))
+              if [ -n "$VERDICT" ] && [ "$VLOG_AGE_MIN" -gt "$VERDICT_MAX_AGE_MIN" ]; then
+                echo "::error title=Stale verdict, refused::the newest sweep on this host finished $VLOG_AGE_MIN min ago (limit $VERDICT_MAX_AGE_MIN). Its verdict says nothing about the host TODAY. Run mode=verify to start a fresh one."
+                echo "$VERDICT"
+                exit 1
+              fi
+              if [ -n "$VERDICT" ]; then
+                echo "$VERDICT"
+                case "$VERDICT" in
+                  "RESULT: 7/7 pass, 0/7 fail") exit 0 ;;
+                  *)
+                    echo "::error::the sweep finished with failures — read the per-pipeline verdicts above."
+                    echo "A FAIL/skipped on every pipeline means no Claude account is signed in on the host."
+                    exit 1
+                    ;;
+                esac
+              fi
+              if [ "$RUNNING" -eq 1 ]; then
+                echo "::error title=Still running, no verdict yet::the sweep is alive (pid $VPID) and has not printed a verdict. This is NOT a worker failure — it is the ABSENCE of one. Re-run this workflow with mode=verify-status to read the rest; it will not start a second sweep."
+                exit 1
+              fi
+              echo "::error title=Sweep died without a verdict::the process is gone and no RESULT line was written. The tail above is everything it produced."
+              exit 1
             fi
 
             # =================================================================

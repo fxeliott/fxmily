@@ -309,8 +309,20 @@ What that failure looks like matters, because it is not an issue in your inbox:
 disabled on this repo, so the API call returned `410` and the workflow broke.
 It now simply exits non-zero. The signal is therefore **a red run in the Actions
 tab plus GitHub's own failed-workflow notification email**, and nothing else.
-If you want a channel that survives the app being down entirely, that is what
-the optional Healthchecks.io section below is for.
+This paragraph used to end by saying Healthchecks.io was for "a channel that
+survives the app being down". That was wrong, and wrong in a way worth keeping
+written down: `cron-watch.yml` runs on GitHub's machines and _calls_ the app, so
+the app being down is the one failure it detects best — the curl simply fails.
+
+The real gap is the opposite one, and it is not hypothetical. On 2026-08-06 from
+15:22 UTC, GitHub Actions had a major incident; every job died in `Set up job`
+with `Failed to resolve action download info`. For those hours `cron-watch` did
+not run at all, and a silent poller is indistinguishable from a healthy system.
+That is the hole Healthchecks.io fills: it is a **dead-man** switch, so it alerts
+when a ping STOPS arriving, whoever stopped sending it — including GitHub.
+
+Both channels also depend on the same worker actually being alive, so neither
+replaces reading the board. They fail independently, which is the whole point.
 
 Prove it once, deliberately:
 
@@ -335,6 +347,62 @@ Two independent paths lead to that red, and it is worth knowing which is which:
 The label path exists because age alone is blind to the worst failure mode: a
 batch that runs, pulls its envelope — refreshing the heartbeat, keeping it
 green — and then generates nothing. Age can never see that. `batch_failed` can.
+
+**The same blindness had a second door, and it was the more likely one to be
+used.** A run stopped by the Claude usage cap exits 75, which `run-batch.sh`
+remaps to 0 for cron — deliberately, so a normal pause is not reported as a
+recurring failure. But that tick had already pulled its envelope before the
+first `claude --print`, so it refreshed the heartbeat on its way to producing
+nothing; the cooldown is 60 minutes and the tightest tolerance is 240, so the
+age is renewed roughly hourly for as long as the cap lasts. `health.ts` claimed
+the opposite ("if it lasts, the pull heartbeats go stale and red on age") and
+that claim was false: a Monday-morning cap could have taken out a whole week
+with this board fully green.
+
+Worse, the label was not even continuously present. `claude_quota:capped` is
+written by the tick that HITS the cap; every tick for the following hour writes
+`skipped: quota_cooldown` instead — and nothing read that field, so for roughly
+40 minutes out of every 60 the board carried no quota label at all.
+
+Both are closed:
+
+- the watchdog raises `claude_quota:capped` on **either** state, so the pause is
+  visible continuously (amber, informational — it usually does clear by itself) ;
+- it also keeps an **episode file** (`logs/quota-episode.start`), created the
+  first tick a quota state is seen and deleted the first tick none is. Past
+  `FXMILY_WORKER_QUOTA_STALL_HOURS` (default **6**, chosen above a full 5-hour
+  subscription window) it raises `claude_quota:stalled:<n>h`, which IS critical:
+  the board goes red, `/api/cron/health` returns 503, and the hourly cron-watch
+  run fails. Six hours of continuous capping means the account is being drained
+  faster than it refills, and no amount of waiting fixes that.
+
+**Two limits of that escalation, stated so nobody has to discover them at 2am.**
+
+_It only counts a FRESH quota state._ A status file older than
+`FXMILY_WORKER_QUOTA_FRESH_MIN` (default 90 minutes, above the 60-minute
+cooldown) is ignored for this purpose. Without that gate a `quota_cooldown`
+written by `monthly` on the 1st would still be the newest thing that file says
+on the 28th, and the episode would be held open for a MONTH on a healthy host —
+red board, 503, hourly alarm. A genuinely current cap is re-witnessed within
+minutes by `verification`, `onboarding` or `seances`, so nothing real is lost.
+
+_It measures CONTINUOUS capping, not cumulative._ One tick with no quota state
+deletes the file. An account drained in bursts — capped, cooldown, one clean
+tick because that pipeline's cohort happened to be empty, capped again — never
+reaches six continuous hours and is never reported as stalled, however little it
+actually generates. That misses a real outage; it does not invent one. Closing
+it properly needs a cumulative measure over a rolling window, which needs a
+count of what was PRODUCED, which lives in `claude-batch-core.sh`.
+
+To exercise it without waiting six hours, backdate the episode file and wait for
+the next watchdog tick:
+
+```bash
+# as fxmily, on the host — the file holds a plain epoch second
+date -d '7 hours ago' +%s | sudo -u fxmily tee ~/worker/ops/worker/logs/quota-episode.start
+# the next :07/:37 tick raises claude_quota:stalled:7h IF a quota state is still
+# seen. Remove the file to end the drill; a healthy tick removes it anyway.
+```
 
 **One known limit, for the observation window only.** Both watchdogs — the PC's
 and the server's — report into the same `worker.watchdog.heartbeat` slot, and
@@ -374,6 +442,29 @@ sudo bash ~/worker/ops/worker/install-worker-vps.sh --uninstall
 Step 1 alone is enough to stop the server. Steps 2–4 are the full return to the
 previous state. The uninstall deliberately **keeps** the checkout, `worker.env`,
 `~/.claude` and the logs, so re-installing is instant and no history is lost.
+
+### The drill — because a documented rollback is not a tested one
+
+Step 4 had never been run. The only machine it could be run on is the one now
+serving every member's generation, so it is exercised on a faithful copy instead:
+
+```bash
+bash ops/worker/rollback-drill.sh      # needs Docker; the container is thrown away
+```
+
+install → re-install → `--check` → `--uninstall` → `--uninstall` again → `--check`
+must now REFUSE → re-install. Thirty assertions, including a **canary**: 25 rows
+seeded into `/etc/cron.d/fxmily-app` and compared by sha256 at every step, since
+"never touches the app cron" is the installer's central promise and was until now
+only a sentence. The last step deliberately BREAKS the canary to prove the
+comparison can go red — four green comparisons are worth exactly as much as that
+one red.
+
+It states its own substitutions (the `claude` CLI, the six tokens, the app rows)
+and its own limits: it does not prove the rollback on the real host, and
+`--uninstall` does **not** revert the `FXMILY_WORKER_DRY_RUN` line it appended to
+`/etc/fxmily/cron.env` — harmless once the wrappers are gone, but "uninstalled"
+and "pristine" are not the same state.
 
 ---
 
@@ -496,12 +587,24 @@ validation server-side with a message nobody expects.
 
 ## Optional: external dead-man switch (Healthchecks.io)
 
-The primary alert path (`/api/cron/health` → `cron-watch.yml` → GitHub issue)
-needs no third-party account and is already proven in production. Healthchecks.io
-is the **second** path, useful because it fires even if the app itself is down.
+The primary alert path is `/api/cron/health` → `cron-watch.yml` → **a red run in
+the Actions tab and GitHub's failed-workflow e-mail**. It needs no third-party
+account. It does NOT open a GitHub issue: Issues are disabled on this repo, the
+API call returned 410, and that path was removed — this paragraph used to claim
+otherwise, which is exactly the kind of doc that retires a question instead of
+answering it (see §4 above, which has said the truth since).
+
+That path has one structural limit: **every hop runs inside the app.** If the
+app is down, `/api/cron/health` does not answer "red", it does not answer at
+all — and while `cron-watch` does go red on a non-200, an app that is down takes
+the diagnosis with it. Healthchecks.io is the second path precisely because
+nothing in it depends on the app being alive.
 
 It is wired and inert: `/etc/fxmily/cron.env` declares one blank URL per
-pipeline, and a blank URL makes the wrapper skip the ping entirely.
+pipeline, and a blank URL makes the wrapper skip the ping entirely. Nothing
+reports that they are blank, so "the external channel exists" and "the external
+channel is armed" have looked identical from the outside. `worker-host-sync.yml`
+in `inspect` mode now counts them and says which of the two you are in.
 
 ```
 HEALTHCHECK_PING_URL_WORKER_ONBOARDING=https://hc-ping.com/<uuid>
@@ -520,6 +623,73 @@ the ping URLs into `/etc/fxmily/cron.env`.
 **not** cover them: its table lists the twelve host crons and no AI pipeline.
 Pointing you at it would have you run a script that provisions nothing you need
 and report success — extend it, or do it by hand, but do not assume it ran.
+
+### Arming it, end to end
+
+Creating the account is a credential gesture, so it stays manual. Everything
+after it is copy-paste. Free tier: 20 checks, 7 needed.
+
+1. Sign up at <https://healthchecks.io> and open the default project.
+2. Create **seven** checks. For each one, set the name and the schedule below —
+   the _grace_ is what stops a normal long run from paging you. Take the period
+   from `/etc/cron.d/fxmily-worker`; it is the source of truth, this table is a
+   copy.
+
+   | Check name                   | Period  | Grace   |
+   | ---------------------------- | ------- | ------- |
+   | `fxmily-worker-onboarding`   | 20 min  | 4 h     |
+   | `fxmily-worker-verification` | 5 min   | 4 h     |
+   | `fxmily-worker-seances`      | 30 min  | **9 h** |
+   | `fxmily-worker-calendar`     | 1 day   | 2 d     |
+   | `fxmily-worker-weekly`       | 1 week  | 2 w     |
+   | `fxmily-worker-monthly`      | 30 days | 60 d    |
+   | `fxmily-worker-profile`      | 30 days | 60 d    |
+
+   The graces are the SAME budgets `health.ts` gives each pipeline on the board,
+   with **one deliberate exception**. Tighter would page you every time `weekly`
+   holds the machine-global lock; that is not a hypothetical, it is the 2h lock
+   this worker legitimately takes.
+
+   ⚠️ **`seances` is the exception, and getting it wrong pages you every night.**
+   Its cron is `*/30 8-23`, so it is idle from 23h30 to 08h00 **by design** — a
+   30-minute period with a 4-hour grace goes down at ~03h30 and stays down until
+   08h00, every single night, on the one channel that is supposed to survive the
+   app being down. A grace of 9 hours covers the idle window. The board solves
+   the same problem differently (it classifies `seances` on MISSED TICKS inside
+   its window rather than on raw age, `health.ts`), which is why the two numbers
+   legitimately differ here and only here.
+
+3. Copy each check's ping URL and append the seven lines to `/etc/fxmily/cron.env`
+   on the host, as root:
+
+   ```bash
+   sudo tee -a /etc/fxmily/cron.env >/dev/null <<'EOF'
+   HEALTHCHECK_PING_URL_WORKER_ONBOARDING=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_VERIFICATION=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_SEANCES=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_CALENDAR=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_WEEKLY=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_MONTHLY=https://hc-ping.com/xxxxxxxx
+   HEALTHCHECK_PING_URL_WORKER_PROFILE=https://hc-ping.com/xxxxxxxx
+   EOF
+   ```
+
+   No restart is needed: `/etc/fxmily/cron.env` is sourced by every tick.
+
+4. **Prove it, do not assume it.** `verification` ticks every 5 minutes, so you
+   get an answer fast: within 5 minutes its check goes from "new" to "up" in the
+   dashboard. If it does not, the URL is wrong or the line has a CR — the wrapper
+   swallows a bad ping on purpose (an alerting channel must never take the worker
+   down with it), so the dashboard is the only place the truth shows.
+
+5. Then run `worker-host-sync.yml` in `inspect` mode. It reports **`7/7 external
+ping URLs configured`**. Anything less names how many are missing — and it
+   never prints a URL, because a populated ping URL is a capability token and
+   these run logs are public.
+
+**A ping URL is a credential.** Anyone holding it can mark the check up, i.e.
+silence the alarm. It belongs in `/etc/fxmily/cron.env` (root-owned) and nowhere
+else — never in the repo, never in a workflow log, never in a message.
 
 ---
 

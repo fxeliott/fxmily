@@ -87,10 +87,30 @@ tr -d '\r' <"$ENV_FILE" >"$ENV_TMP"
 if ! cmp -s "$ENV_FILE" "$ENV_TMP"; then
   echo "  note   : CR bytes stripped from $(basename "$ENV_FILE") while reading it" >&2
 fi
+# Sourcing writes to OUR stderr, and this script's stderr ends up in a
+# GitHub Actions log on a PUBLIC repository. Measured in a debian:bookworm
+# container on 2026-08-06, both leaks are real and neither is exotic:
+#   - a malformed line prints VERBATIM: `line 3: `this is not valid shell ('`
+#   - an unquoted value with spaces prints its second word: `two: command not found`
+# `worker.env` is hand-edited by a human under pressure, and it holds the admin
+# token. So stderr is captured, never echoed, and only LINE NUMBERS are reported.
+# The exit status is checked too: `set -e` is not in force here, so before this
+# the gate would have carried on with half a config and blamed the pipelines.
+ENV_ERR="$(mktemp)" || { echo "  FAIL   : mktemp failed — cannot read $ENV_FILE safely" >&2; exit 1; }
+[[ -n "$ENV_ERR" ]] || { echo "  FAIL   : mktemp returned an empty path" >&2; exit 1; }
+trap 'rm -f "$ENV_TMP" "$ENV_ERR"' EXIT
 set -a
 # shellcheck disable=SC1090
-. "$ENV_TMP"
+. "$ENV_TMP" 2>"$ENV_ERR"
+ENV_RC=$?
 set +a
+if [[ "$ENV_RC" -ne 0 ]] || [[ -s "$ENV_ERR" ]]; then
+  ENV_LINES="$(grep -oE 'line [0-9]+' "$ENV_ERR" 2>/dev/null | tr -dc '0-9\n' | paste -sd, - 2>/dev/null)"
+  echo "  FAIL   : $(basename "$ENV_FILE") is not valid shell (rc=$ENV_RC, offending line(s): ${ENV_LINES:-unknown})." >&2
+  echo "  FAIL   : the message is withheld on purpose — it quotes the line, and this output can be public." >&2
+  echo "  FAIL   : read the file on the host to see it. Most common cause: a value with spaces that is not quoted." >&2
+  exit 1
+fi
 # Same bridge run-batch.sh applies: 4 of the 7 scripts read FXMILY_APP_URL.
 export FXMILY_APP_URL="${FXMILY_APP_URL:-${FXMILY_BASE_URL:-https://app.fxmilyapp.com}}"
 

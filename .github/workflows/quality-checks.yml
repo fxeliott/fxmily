@@ -32,6 +32,11 @@ on:
       - 'apps/web/tests/e2e/**'
       - 'apps/web/src/**'
       - 'ops/scripts/**'
+      # J9 — `ops/cron/**` and `ops/worker/**` were NOT here, so a PR touching
+      # only the watchdog or the switchover gate skipped this job entirely. PR
+      # #608 shipped two shell benches under those paths and neither ever ran.
+      - 'ops/cron/**'
+      - 'ops/worker/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'
@@ -43,6 +48,11 @@ on:
       - 'apps/web/tests/e2e/**'
       - 'apps/web/src/**'
       - 'ops/scripts/**'
+      # J9 — `ops/cron/**` and `ops/worker/**` were NOT here, so a PR touching
+      # only the watchdog or the switchover gate skipped this job entirely. PR
+      # #608 shipped two shell benches under those paths and neither ever ran.
+      - 'ops/cron/**'
+      - 'ops/worker/**'
       - 'scripts/check-no-absolute-dates-in-tests.mjs'
       - 'scripts/check-e2e-copy-sync.mjs'
       - '.github/workflows/quality-checks.yml'
@@ -62,7 +72,10 @@ jobs:
     name: Test-suite guardrails
     if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 5 -> 12: the rollback drill pulls a debian image and runs a full
+    # install/uninstall/reinstall cycle. The read-only checks still finish in
+    # seconds; this ceiling only has to cover the container step.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -88,3 +101,22 @@ jobs:
       - name: Local-worker batch core unit tests
         # Deterministic by design: mock `claude` on PATH, no network, no jq/curl.
         run: bash ops/scripts/lib/claude-batch-core.test.sh
+
+      # ── J9 — the two benches that had no runner ────────────────────────────
+      # Both were written, committed, and green on one operator's machine. That
+      # is not a gate: a test nobody executes cannot go red, which is the exact
+      # failure this PR was opened to fix one layer down. Both are pure bash,
+      # read only files in the checkout, and carry their own mutation controls.
+      - name: Watchdog quota-escalation bench (emitter)
+        run: bash ops/cron/fxmily-worker-watchdog.quota.test.sh
+
+      - name: Switchover gate — worker.env reader bench
+        # Proves a malformed config line fails LOUDLY and is never echoed: this
+        # job's log is public, and sourcing prints the offending line verbatim.
+        run: bash ops/worker/verify-worker-vps.envread.test.sh
+
+      - name: Rollback drill (install / uninstall / refuse / reinstall)
+        # Runs in a throwaway debian container, never against a real host. It is
+        # the only thing that exercises `--uninstall`, the path an operator only
+        # ever reaches in an emergency. Docker is preinstalled on ubuntu-latest.
+        run: bash ops/worker/rollback-drill.sh

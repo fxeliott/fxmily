@@ -309,8 +309,20 @@ What that failure looks like matters, because it is not an issue in your inbox:
 disabled on this repo, so the API call returned `410` and the workflow broke.
 It now simply exits non-zero. The signal is therefore **a red run in the Actions
 tab plus GitHub's own failed-workflow notification email**, and nothing else.
-If you want a channel that survives the app being down entirely, that is what
-the optional Healthchecks.io section below is for.
+This paragraph used to end by saying Healthchecks.io was for "a channel that
+survives the app being down". That was wrong, and wrong in a way worth keeping
+written down: `cron-watch.yml` runs on GitHub's machines and _calls_ the app, so
+the app being down is the one failure it detects best — the curl simply fails.
+
+The real gap is the opposite one, and it is not hypothetical. On 2026-08-06 from
+15:22 UTC, GitHub Actions had a major incident; every job died in `Set up job`
+with `Failed to resolve action download info`. For those hours `cron-watch` did
+not run at all, and a silent poller is indistinguishable from a healthy system.
+That is the hole Healthchecks.io fills: it is a **dead-man** switch, so it alerts
+when a ping STOPS arriving, whoever stopped sending it — including GitHub.
+
+Both channels also depend on the same worker actually being alive, so neither
+replaces reading the board. They fail independently, which is the whole point.
 
 Prove it once, deliberately:
 

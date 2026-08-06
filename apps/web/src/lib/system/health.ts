@@ -981,11 +981,35 @@ const WORKER_SERVER_INSTALLED_AT = '2026-08-02T12:00:00Z';
  *                         the board already prints a `blocked` card for it — not
  *                         escalating here left that card next to a green row.
  *
- * Deliberately NOT here: `claude_quota:capped` (benign, self-resolving via the
- * cooldown — and if it lasts, the pull heartbeats go stale and red on age).
+ *   - `claude_quota:stalled` the quota pause is no longer transient. See below
+ *                         for why the sentence this replaces was false.
+ *
+ * Deliberately NOT here: `claude_quota:capped`. A pause that clears inside one
+ * window resolves on its own, and a board that reddens on every normal pause is
+ * a board nobody reads.
+ *
+ * THE REASON THAT USED TO BE GIVEN FOR THAT EXCLUSION WAS WRONG, and it was the
+ * load-bearing half of it: "if it lasts, the pull heartbeats go stale and red on
+ * age". They do not, and they cannot. A capped tick PULLS its envelope before
+ * the first `claude --print` — the comment above `batch_failed` says so in the
+ * same file — so the tick that fails is the tick that refreshes
+ * `<pipeline>.batch.pulled`. The quota cooldown is 60 minutes
+ * (`run-batch.sh:190`) and the tightest tolerance below is 240 minutes, so the
+ * heartbeat is renewed roughly hourly, forever, and the age can never reach red
+ * no matter how many days the cap lasts. A cap on a Monday morning could take
+ * out the whole week with this board fully green.
+ *
+ * Duration is therefore measured where it can be — the server watchdog holds an
+ * episode file and emits `claude_quota:stalled:<n>h` past six hours — and that
+ * label, not the pause itself, is what belongs in this list.
  */
 const SERVER_CRITICAL_LABELS = [
   'claude_auth:logged_out',
+  // NOT `claude_quota` (the family): that would catch `claude_quota:capped` too
+  // and reintroduce the noise the exclusion above exists to avoid. Only the
+  // stalled variant escalates, and the family matcher's `:` boundary is what
+  // keeps the two apart.
+  'claude_quota:stalled',
   // The worker is running on an account it was not dedicated to, or the guard
   // is configured and cannot identify the session at all. Both mean the same
   // thing operationally — the pipelines are skipping, nothing is generated —
@@ -1383,6 +1407,15 @@ const LABEL_HOST_ACTIONS: Record<
     commandKind: 'login',
     // Benign + self-resolving (cooldown then next quota window) → informational.
     severity: 'pending',
+  },
+  'claude_quota:stalled': {
+    label: 'Worker · quota Claude bloqué depuis des heures',
+    detail:
+      "Le compte Claude du worker est en pause quota depuis plus de six heures d'affilée, soit au-delà d'une fenêtre d'abonnement complète, qui se serait déjà rechargée. Ce n'est plus une pause, c'est un arrêt : plus aucun profil, digest, calendrier ni vérification n'est produit, et les membres attendent sans que rien ne le leur dise. Le compte est consommé plus vite qu'il ne se recharge : vérifie que rien d'autre ne l'utilise, ou connecte un compte réellement dédié au worker.",
+    commandKind: 'login',
+    // `blocked`, unlike its transient sibling above: past six hours nothing is
+    // going to resolve this by waiting, and the decision to take is a human one.
+    severity: 'blocked',
   },
 
   // ── J9 follow-up — the seven families that had NO entry at all ─────────────

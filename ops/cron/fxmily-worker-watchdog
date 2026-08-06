@@ -271,9 +271,27 @@ for p in "${PIPELINES[@]}"; do
         ;;
     esac
   fi
-  if [[ "$capped" == "true" && "$QUOTA_SEEN" == "false" ]]; then
-    # Benign + self-resolving: the cooldown stamp makes every following tick a
-    # no-op until the quota window reopens. Reported once, machine-wide.
+  # QUOTA — two states, one meaning, and only one of them was being read.
+  #
+  # `quotaCapped:true` is written by the tick that HIT the cap. `skipped:
+  # "quota_cooldown"` is written by every tick for the 60 minutes that follow
+  # (run-batch.sh:190) — and that is the state the machine is in for most of
+  # each hour. Reading only the first meant the board carried NO quota label at
+  # all for roughly 40 minutes out of every 60, and then flickered one on.
+  #
+  # This is the same defect PR #594 closed one field over: `skipped` was
+  # "written by run-batch.sh and read by NOBODY". It was fixed for
+  # `account_unexpected` and left open for its sibling.
+  #
+  # WHY THE BOARD CANNOT FALL BACK ON AGE HERE, which is what made the silence
+  # total rather than partial: a capped tick PULLS its envelope before the first
+  # `claude --print`, so it refreshes `<pipeline>.batch.pulled` itself. The
+  # cooldown is 60 min and the tightest server tolerance is 240 min, so the age
+  # NEVER reaches red however long the cap lasts. `health.ts` asserted the
+  # opposite in a comment ("if it lasts, the pull heartbeats go stale and red on
+  # age"); that comment is corrected in the same change as this one.
+  if [[ "$QUOTA_SEEN" == "false" ]] &&
+    { [[ "$capped" == "true" ]] || [[ "$skipped" == "quota_cooldown" ]]; }; then
     add_label 'claude_quota:capped'
     QUOTA_SEEN=true
   fi
@@ -296,6 +314,43 @@ for p in "${PIPELINES[@]}"; do
     fi
   fi
 done
+
+# --- 4-bis. Is the quota pause still TRANSIENT? ------------------------------
+# A cap that clears inside one window is a pause and must stay non-critical: it
+# resolves on its own, and a board that goes red on every normal pause is a
+# board nobody reads. A cap that is STILL there hours later is an outage with a
+# calm name — members wait, nothing is generated, and every other signal on the
+# board reads healthy for the reasons written above the label.
+#
+# The duration is measured HERE and nowhere else, because this is the only
+# component that observes the whole machine on a fixed cadence. The episode file
+# is created on the first tick that sees a quota state and REMOVED on the first
+# tick that sees none — so its age is exactly "how long the board has been
+# continuously in a quota state". Nothing is asked of run-batch.sh or of the
+# batch core, and no counter can drift: the file either exists or it does not.
+#
+# It also self-heals across a reboot or a manual `rm`: a stale file only ever
+# makes the episode look YOUNGER after a clear, never older, because the clear
+# is what deletes it.
+QUOTA_EPISODE="$LOG_DIR/quota-episode.start"
+QUOTA_STALL_HOURS="${FXMILY_WORKER_QUOTA_STALL_HOURS:-6}"
+if [[ "$QUOTA_SEEN" == "true" ]]; then
+  [[ -f "$QUOTA_EPISODE" ]] || date +%s >"$QUOTA_EPISODE" 2>/dev/null || true
+  episode_start="$(tr -dc '0-9' <"$QUOTA_EPISODE" 2>/dev/null || true)"
+  if [[ -n "$episode_start" ]]; then
+    episode_h=$(((  $(date +%s) - episode_start ) / 3600))
+    # Six hours, chosen ABOVE the five-hour subscription window on purpose: one
+    # exhausted window refills by itself and must not cry wolf, while still
+    # being capped after six hours means the account is being drained faster
+    # than it refills — which no cooldown will ever fix, and which the operator
+    # has to know about because the fix is a decision, not a retry.
+    if [[ "$episode_h" -ge "$QUOTA_STALL_HOURS" ]]; then
+      add_label "claude_quota:stalled:${episode_h}h"
+    fi
+  fi
+else
+  rm -f "$QUOTA_EPISODE" 2>/dev/null || true
+fi
 
 # --- 5. LOCK -----------------------------------------------------------------
 if [[ -d "$LOCK_DIR" ]]; then

@@ -1460,6 +1460,104 @@ describe('getWorkerHealthReport — J9 server profile (WORKER_HOST=server)', () 
   });
 
   /**
+   * Why this matters : this is the SAME blind spot as the test above, reached by
+   * the one door that was left open — and the door was held open by a sentence
+   * in `health.ts` that was simply false.
+   *
+   * `claude_quota:capped` is excluded from the critical labels, and the stated
+   * reason was "if it lasts, the pull heartbeats go stale and red on age". They
+   * never do. A capped tick PULLS its envelope BEFORE the first `claude --print`
+   * — the comment above `batch_failed` says exactly that — so the tick that
+   * fails is the tick that refreshes the heartbeat. The cooldown is 60 minutes
+   * (`run-batch.sh:190`) and the tightest tolerance here is 240, so the age is
+   * renewed roughly hourly for as long as the cap lasts. A Monday-morning cap
+   * could take out a whole week with this board fully green.
+   *
+   * The exclusion itself stays right — a pause that clears inside one window
+   * must not cry wolf. What was missing is DURATION, which the server watchdog
+   * now measures with an episode file and reports as `claude_quota:stalled:<n>h`
+   * past six hours (beyond a full subscription window, so a normal pause can
+   * never reach it).
+   *
+   * The next test is this one's negative control, and the pair is the point: if
+   * a future edit escalates the `claude_quota` FAMILY instead of the stalled
+   * variant, this one still passes and the next one goes red.
+   */
+  it('turns the board red when the quota pause has stalled past a full window', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      // Fresh, because the capped ticks refreshed it themselves on their way to
+      // failing. This is the trap, reproduced.
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 2, errorLabels: ['claude_quota:capped', 'claude_quota:stalled:7h'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    expect(watchdog?.status).toBe('red');
+    expect(watchdog?.errorLabels).toContain('claude_quota:stalled:7h');
+    // Same proof as the batch_failed test: the pull heartbeat is green, so the
+    // red cannot have come from age.
+    expect(report.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe(
+      'green',
+    );
+    expect(report.overall).toBe('red');
+  });
+
+  /**
+   * Why this matters : the negative control of the test above, in the SERVER
+   * profile where the escalation actually lives. A transient cap is a pause, not
+   * an incident — it clears at the next window, and a board that reddens on
+   * every normal pause is a board nobody reads.
+   *
+   * Mutate `SERVER_CRITICAL_LABELS` to carry the bare family `claude_quota`
+   * instead of `claude_quota:stalled` and THIS test goes red while the previous
+   * one stays green. That asymmetry is the whole guarantee.
+   */
+  it('keeps the board amber (not red) on a quota pause that has NOT stalled', async () => {
+    const now = new Date('2026-08-05T12:00:00.000Z'); // allow-absolute-date injected-clock-anchor
+    const { getWorkerHealthReport: serverReport } = await importServerHealth();
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      {
+        action: 'worker.watchdog.heartbeat',
+        metadata: { errors: 1, errorLabels: ['claude_quota:capped'] },
+      },
+    ]);
+
+    const report = await serverReport(now);
+    const watchdog = report.entries.find((e) => e.action === 'worker.watchdog.heartbeat');
+
+    expect(watchdog?.status).toBe('amber');
+    expect(watchdog?.errorLabels).toEqual(['claude_quota:capped']);
+  });
+
+  /**
    * Why this matters : the mirror image. During observation nobody is logged in
    * to `claude` yet, so the four generators fail on EVERY tick by construction.
    * Escalating then would paint the board red for the entire planned migration,

@@ -336,6 +336,44 @@ The label path exists because age alone is blind to the worst failure mode: a
 batch that runs, pulls its envelope — refreshing the heartbeat, keeping it
 green — and then generates nothing. Age can never see that. `batch_failed` can.
 
+**The same blindness had a second door, and it was the more likely one to be
+used.** A run stopped by the Claude usage cap exits 75, which `run-batch.sh`
+remaps to 0 for cron — deliberately, so a normal pause is not reported as a
+recurring failure. But that tick had already pulled its envelope before the
+first `claude --print`, so it refreshed the heartbeat on its way to producing
+nothing; the cooldown is 60 minutes and the tightest tolerance is 240, so the
+age is renewed roughly hourly for as long as the cap lasts. `health.ts` claimed
+the opposite ("if it lasts, the pull heartbeats go stale and red on age") and
+that claim was false: a Monday-morning cap could have taken out a whole week
+with this board fully green.
+
+Worse, the label was not even continuously present. `claude_quota:capped` is
+written by the tick that HITS the cap; every tick for the following hour writes
+`skipped: quota_cooldown` instead — and nothing read that field, so for roughly
+40 minutes out of every 60 the board carried no quota label at all.
+
+Both are closed:
+
+- the watchdog raises `claude_quota:capped` on **either** state, so the pause is
+  visible continuously (amber, informational — it usually does clear by itself) ;
+- it also keeps an **episode file** (`logs/quota-episode.start`), created the
+  first tick a quota state is seen and deleted the first tick none is. Past
+  `FXMILY_WORKER_QUOTA_STALL_HOURS` (default **6**, chosen above a full 5-hour
+  subscription window) it raises `claude_quota:stalled:<n>h`, which IS critical:
+  the board goes red, `/api/cron/health` returns 503, and the hourly cron-watch
+  run fails. Six hours of continuous capping means the account is being drained
+  faster than it refills, and no amount of waiting fixes that.
+
+To exercise it without waiting six hours, backdate the episode file and wait for
+the next watchdog tick:
+
+```bash
+# as fxmily, on the host — the file holds a plain epoch second
+date -d '7 hours ago' +%s | sudo -u fxmily tee ~/worker/ops/worker/logs/quota-episode.start
+# the next :07/:37 tick raises claude_quota:stalled:7h IF a quota state is still
+# seen. Remove the file to end the drill; a healthy tick removes it anyway.
+```
+
 **One known limit, for the observation window only.** Both watchdogs — the PC's
 and the server's — report into the same `worker.watchdog.heartbeat` slot, and
 the board reads the most recent row. They tick at the same :07/:37, so during

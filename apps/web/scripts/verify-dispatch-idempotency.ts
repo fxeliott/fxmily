@@ -21,14 +21,30 @@
  * Le script REFUSE de tourner ailleurs que sur localhost : il écrit et
  * supprime des lignes, ce qui n'a rien à faire sur une base de production.
  *
- * Instancie son propre `PrismaClient` (pattern des autres scripts du dépôt) :
- * `@/lib/db` est `server-only` et tsx ne peut pas charger cette barrière RSC.
+ * ## Il exerce le VRAI code, il ne le recopie pas
+ *
+ * Le premier jet refrappait la requête SQL et redéclarait la durée du bail,
+ * avec un commentaire « réplique EXACTE ». Une revue en contexte frais a
+ * montré ce que cela valait : le banc prouvait la sémantique
+ * `ON CONFLICT … WHERE` de Postgres, pas le code qui part en production —
+ * modifier le bail dans le vrai module ne le faisait pas broncher.
+ *
+ * Il importe donc `lib/email/dispatch-claim-core`, où vit l'unique écriture de
+ * la requête, et lui passe son propre client. `@/lib/db` reste hors d'atteinte
+ * (barrière `server-only`) ; c'est justement pour ça que le cœur prend le
+ * client en paramètre.
  */
 
 import { randomUUID } from 'node:crypto';
 
 import { PrismaPg } from '@prisma/adapter-pg';
 
+import {
+  DISPATCH_CLAIM_STALE_AFTER_MS,
+  claimEmailDispatchOn,
+  markDispatchDeliveredOn,
+  releaseEmailDispatchOn,
+} from '../src/lib/email/dispatch-claim-core';
 import { PrismaClient } from '../src/generated/prisma/client';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -41,26 +57,17 @@ if (!/@(localhost|127\.0\.0\.1)[:/]/.test(DATABASE_URL)) {
   process.exit(1);
 }
 
-/** Doit rester aligné sur `DISPATCH_CLAIM_STALE_AFTER_MS`. */
-const STALE_MS = 30 * 60 * 1000;
+/** La MÊME constante que la production — plus de doublon à maintenir. */
+const STALE_MS = DISPATCH_CLAIM_STALE_AFTER_MS;
 const TYPE = 'monthly_debrief_ready';
 const PERIOD = '2026-08-01';
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL }) });
 
-/** Réplique EXACTE de la requête de `lib/email/dispatch-claim.ts`. */
+/** Appelle le code de production, sur cette base-ci. */
 async function claim(userId: string, now: Date = new Date()): Promise<string | null> {
-  const staleBefore = new Date(now.getTime() - STALE_MS);
-  const rows = await db.$queryRaw<{ id: string }[]>`
-    INSERT INTO email_dispatch_claims (id, user_id, type, period, claimed_at, created_at)
-    VALUES (${randomUUID()}, ${userId}, ${TYPE}, ${PERIOD}, ${now}, ${now})
-    ON CONFLICT (user_id, type, period) DO UPDATE
-      SET claimed_at = ${now}
-      WHERE email_dispatch_claims.delivered_at IS NULL
-        AND email_dispatch_claims.claimed_at < ${staleBefore}
-    RETURNING id
-  `;
-  return rows[0]?.id ?? null;
+  const result = await claimEmailDispatchOn(db, { userId, type: TYPE, period: PERIOD, now });
+  return result.ok ? result.claimId : null;
 }
 
 let failures = 0;
@@ -97,7 +104,9 @@ try {
     throw new Error('aucune réservation accordée : le banc ne peut rien prouver');
 
   // --- 2. Envoi confirmé -> toute relance est refusée, même après le bail.
-  await db.emailDispatchClaim.update({ where: { id: winner }, data: { deliveredAt: new Date() } });
+  // La confirmation passe par le code de production, pas par un `update` à la
+  // main : c'est `markDispatchDeliveredOn` qui doit rendre la ligne définitive.
+  await markDispatchDeliveredOn(db, winner);
   check('2. apres confirmation, une relance immediate est refusee', await claim(userId), null);
   check(
     '2b. apres confirmation, une relance TRES tardive reste refusee',
@@ -105,20 +114,32 @@ try {
     null,
   );
 
+  // --- 2c. Une réservation CONFIRMÉE ne se libère pas : `releaseEmailDispatch`
+  // ne doit jamais effacer un envoi déjà parti (sinon le membre serait
+  // re-notifié à la prochaine passe).
+  await releaseEmailDispatchOn(db, winner);
+  check(
+    '2c. la liberation ne touche pas un envoi confirme',
+    await db.emailDispatchClaim.count({ where: { userId, deliveredAt: { not: null } } }),
+    1,
+  );
+
   // --- 3. Envoi échoué : la réservation est libérée, la relance repasse.
-  await db.emailDispatchClaim.deleteMany({ where: { userId, deliveredAt: { not: null } } });
+  // Remise en scène (pas le comportement testé) : on repart d'une base propre.
+  await db.emailDispatchClaim.deleteMany({ where: { userId } });
+  const toRelease = await claim(userId);
+  if (toRelease === null) throw new Error('réservation initiale refusée : le banc est faussé');
+  await releaseEmailDispatchOn(db, toRelease);
   const afterRelease = await claim(userId);
   check('3. apres liberation, la relance obtient la reservation', afterRelease !== null, true);
   if (afterRelease === null) throw new Error('libération non reprise : la suite serait fausse');
 
   // --- 4. Réservation abandonnée : reprenable une fois le bail expiré…
-  await db.emailDispatchClaim.update({
-    where: { id: afterRelease },
-    data: { claimedAt: new Date(Date.now() - STALE_MS - 60_000) },
-  });
+  // On décale l'HORLOGE passée au code plutôt que de trafiquer la ligne : la
+  // reprise doit venir de la requête elle-même, pas d'une mise en scène.
   check(
     '4. une reservation abandonnee est reprise apres le bail',
-    (await claim(userId)) !== null,
+    (await claim(userId, new Date(Date.now() + STALE_MS + 60_000))) !== null,
     true,
   );
 

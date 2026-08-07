@@ -262,6 +262,47 @@ tick, not here.
 
 So: 7/7, and at least one `PASS/generated` among the four generators that had work.
 
+**This bar was cleared on 2026-08-07.** Run `31150625063`, on the real host:
+
+```
+onboarding    PASS/pull-only  (1s)     weekly   PASS/generated  (1113s, 7 generated)
+verification  PASS/pull-only  (2s)     monthly  PASS/generated  (3158s, 18 generated)
+seances       PASS/pull-only  (1s)     profile  PASS/generated  (1792s, 11 generated)
+calendar      PASS/empty      (1s)
+RESULT: 7/7 pass, 0/7 fail
+```
+
+Three `PASS/generated`, not one. Note the durations: the sweep took just over
+**100 minutes of real generation**, which is why the next two paragraphs exist.
+
+#### The verdict expires. Do not start a sweep you cannot come back to.
+
+`verify-status` refuses a verdict older than `VERDICT_MAX_AGE_MIN` (default 720,
+i.e. 12 hours) and tells you to start a fresh sweep. That refusal is correct — a
+week-old `7/7` says nothing about the host today — but it means an unread verdict
+is a **destroyed** one: the 100 minutes above have to be spent again. The verdict
+proving J9 was read at **346 of those 720 minutes**, with under six hours to
+spare, and only because someone went looking for it.
+
+So: launch `mode=verify` when you can read `mode=verify-status` the same day.
+Overnight is fine; a Friday evening is not.
+
+#### The launcher taking 40 minutes is NOT a bug. Do not "fix" it.
+
+`mode=verify` reliably burns the full `Run Command Timeout` before returning,
+even though the sweep itself is correctly detached (`nohup setsid … &`, and the
+sweep provably survives the session ending — that is the whole point of the
+detach). Measured on 2026-08-06/07: the delay is the **host under load** while
+seven pipelines call the model. On an idle host the same code path returns in
+**under 30 seconds**. Two runs, same script, same host: 40 min during the sweep,
+under 30 s afterwards.
+
+A future reader will see "launcher hangs 40 min" and reach for the launcher. The
+launcher is not the problem, and rewriting it would trade a working detach for a
+new bug. If you want the wall-clock back, the lever is the sweep's serial design
+and its 30-second floor per member — and that floor **is** the anti-ban guarantee,
+so it does not move.
+
 ### 3 · Hand over
 
 ```bash

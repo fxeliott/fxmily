@@ -33,16 +33,24 @@
  *
  * ## Ce que cette constante gouverne, et pourquoi c'est la MÊME partout
  *
- *   • `tradeOpenSchema.enteredAt`  — entrée dans le futur ;
- *   • `tradeCloseSchema.exitedAt`  — sortie dans le futur ;
- *   • `scripts/data-hygiene.ts`    — le seuil au-delà duquel un
- *     `exited_at > closed_at` cesse d'être une dérive d'horloge ordinaire pour
- *     devenir une aberration à corriger.
+ *   • `tradeOpenSchema.enteredAt`      — entrée dans le futur ;
+ *   • `tradeCloseSchema.exitedAt`      — sortie dans le futur ;
+ *   • `trainingTradeCreateSchema`      — même règle pour un backtest, qui se
+ *     déclarait « EXACT mirror » tout en gardant l'ancienne heure ;
+ *   • `scripts/data-hygiene.ts`        — le seuil au-delà duquel un
+ *     `exited_at > GREATEST(closed_at, entered_at)` cesse d'être une dérive
+ *     d'horloge ordinaire pour devenir une aberration à corriger.
  *
  * Les deux premières doivent être ÉGALES, sans quoi un trade accepté à
  * l'ouverture peut devenir inclôturable (`closeTrade` exige
- * `exitedAt >= enteredAt`). La troisième doit être la même, sans quoi l'outil
+ * `exitedAt >= enteredAt`). La dernière doit être la même, sans quoi l'outil
  * d'hygiène « corrigerait » des lignes parfaitement normales.
+ *
+ * ⚠️ Cette liste est vérifiée par revue, pas par un test : si un cinquième
+ * site apparaît sans y figurer, rien ne le signalera. Le garde qui compte
+ * vraiment est ailleurs — l'invariant « aucun trade inclôturable »
+ * (`trade.test.ts`) interroge les schémas au lieu de lire cette constante,
+ * donc il tombe dès que deux d'entre eux divergent.
  *
  * Ce module ne dépend de RIEN : c'est ce qui permet au script de l'importer
  * sans traîner Zod ni les alias `@/` que `tsx` ne résout pas.

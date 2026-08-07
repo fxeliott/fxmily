@@ -310,10 +310,13 @@ export const MONTHLY_DEBRIEF_DISPATCH_TYPE = 'monthly_debrief_ready';
  * non-délivrance silencieuse que le « marquer d'abord » aurait provoquée, et
  * que la version précédente refusait à juste titre.
  *
- * Le marquage `sentToMemberAt` reste écrit : il n'est plus le garde-fou, il
- * redevient ce qu'il aurait toujours dû être — un enregistrement lisible de
- * l'état d'envoi. Son échec est toujours signalé (`dispatch_stamp_failed`),
- * mais il ne peut plus provoquer de renvoi.
+ * Le marquage `sentToMemberAt` n'est plus le garde-fou contre le doublon — la
+ * réservation l'est. Il redevient ce qu'il aurait toujours dû être : un
+ * enregistrement de l'état d'envoi, écrit UNIQUEMENT si l'email est
+ * effectivement parti. Écrit inconditionnellement, il mentait à ses deux
+ * lecteurs — l'appelant, qui ne redispatche que sur `null`, et `overdue.ts`,
+ * qui compte un membre couvert dès qu'il est renseigné. Son échec est toujours
+ * signalé (`dispatch_stamp_failed`), mais il ne peut plus provoquer de renvoi.
  *
  * Résidu restant, borné et assumé : un processus tué APRÈS l'acceptation par
  * Resend et AVANT la confirmation de la réservation. Voir
@@ -389,11 +392,27 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
     // fired here, so a lost stamp = a re-notify next run. Surface it as a
     // distinct warning instead of letting it ride the generic outer catch —
     // the residual is documented + accepted at V1 scale, but never silent.
+    //
+    // J10-6 — `sentToMemberAt` n'est écrit QUE si l'email est parti. Il était
+    // écrit inconditionnellement, et l'unique appelant ne redispatche que sur
+    // `sentToMemberAt === null` (voir plus bas) : un envoi refusé sans
+    // exception — cap quotidien Resend atteint, destinataire supprimé, les
+    // deux rendent `delivered: false` sans lever — marquait donc le membre
+    // comme notifié alors qu'il n'avait RIEN reçu. La libération de la
+    // réservation, juste au-dessus, ne pouvait mener à aucune relance : la
+    // porte d'entrée restait fermée. `overdue.ts` lit la même colonne, donc
+    // l'alerte d'exploitation ne partait pas non plus.
+    //
+    // Laisser la colonne à `null` rouvre les deux : la prochaine exécution
+    // réessaie, et tant qu'elle échoue le membre est compté comme découvert.
+    // Le push, lui, est estampillé dans tous les cas — il est parti, et sa
+    // duplication éventuelle est bénigne par conception (tag-coalesced,
+    // décision verrouillée §25.2).
     try {
       await db.monthlyDebrief.update({
         where: { id: row.id },
         data: {
-          sentToMemberAt: new Date(),
+          ...(email.delivered ? { sentToMemberAt: new Date() } : {}),
           sentToMemberEmail: email.delivered ? user.email : null,
           pushEnqueuedAt: pushId !== null ? new Date() : null,
         },

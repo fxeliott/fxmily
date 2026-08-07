@@ -11,7 +11,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { createReflectionEntryAction, type ReflectActionState } from '@/app/reflect/actions';
 import { Alert } from '@/components/alert';
@@ -100,12 +100,23 @@ interface DraftState {
 
 const DRAFT_STORAGE_KEY = 'fxmily:reflection:draft:v1';
 
-function todayUTC(): string {
-  // Use UTC consistently (cf. BUG-1 fix in weekly-review-wizard). The
-  // Zod refine for `reflectionEntrySchema.date` validates `[-14d, +1d]`
-  // against UTC midnight, so we anchor here too. The window is wide
-  // enough to absorb any sub-day TZ drift for FR users.
-  return new Date().toISOString().slice(0, 10);
+/**
+ * La date vient du SERVEUR (`reflect/new/page.tsx`), plus de `new Date()`.
+ *
+ * L'ancienne version lisait l'horloge de l'appareil et la postait dans un
+ * champ caché. `reflectionEntrySchema.date` la valide contre l'horloge du
+ * serveur (fenêtre −14 j / +1 j) : un téléphone déréglé de deux jours faisait
+ * refuser la soumission sur une valeur que le membre n'avait jamais saisie et
+ * qu'aucun écran n'affiche. Le commentaire d'origine parlait de « TZ drift » —
+ * la dérive de FUSEAU, qui tient effectivement dans la fenêtre ; le risque
+ * réel était la dérive d'HORLOGE, qui ne s'y trouve pas.
+ *
+ * Ses deux frères (`weekly-review`, `training-debrief`) recevaient déjà leur
+ * ancre temporelle du serveur ; celui-ci était le seul resté en arrière.
+ */
+export interface ReflectionWizardProps {
+  /** Date du jour (`YYYY-MM-DD`, UTC), dérivée serveur. */
+  today: string;
 }
 
 function emptyDraft(date: string): DraftState {
@@ -139,9 +150,9 @@ function isStepValid(step: StepIndex, draft: DraftState): boolean {
   return value.trim().length >= min && value.length <= max;
 }
 
-export function ReflectionWizard() {
+export function ReflectionWizard({ today }: ReflectionWizardProps) {
   const reduceMotion = useReducedMotion();
-  const initialDate = useMemo(() => todayUTC(), []);
+  const initialDate = today;
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(initialDate));
   const [step, setStep] = useState<StepIndex>(0);
   const [hydrated, setHydrated] = useState(false);
@@ -181,6 +192,36 @@ export function ReflectionWizard() {
   const formError = (state as ReflectActionState | null)?.error;
   const stepValid = isStepValid(step, draft);
 
+  // Un refus serveur ramène le membre sur l'étape qui PORTE le champ refusé.
+  //
+  // Sans cela, le membre soumet toujours depuis la dernière étape, tandis que
+  // l'erreur est peinte sur une étape antérieure qu'il ne voit pas : l'écran
+  // ne bouge pas, aucun message n'apparaît, le bouton reste actif. Il
+  // réappuie indéfiniment. Le cas est atteignable sans rien faire d'anormal —
+  // `requiredAbcdField` refuse les caractères de largeur nulle, et le liant
+  // U+200D d'un emoji composé (👩‍💻) en est un, alors que la validation
+  // d'étape locale ne contrôle que la longueur.
+  //
+  // L'index est cherché dans STEP_DEFS, la MÊME constante qui borne `step` et
+  // qui produit les libellés de progression : il ne peut donc pas désigner une
+  // étape qui n'existe pas. C'est la leçon du wizard de journal, où deux
+  // listes parallèles avaient divergé et où l'index hors bornes démontait le
+  // composant entier.
+  //
+  // On route UNE FOIS par réponse serveur (`state` est une nouvelle référence
+  // à chaque soumission), jamais à chaque rendu : sinon le membre qui navigue
+  // ensuite serait ramené de force et resterait prisonnier de l'étape fautive.
+  const routedFor = useRef<unknown>(null);
+  useEffect(() => {
+    if (!state || state === routedFor.current) return;
+    routedFor.current = state;
+    const fieldErrors = (state as ReflectActionState).fieldErrors;
+    if (!fieldErrors) return;
+    const firstBad = STEP_DEFS.findIndex((d) => fieldErrors[d.field] !== undefined);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (firstBad >= 0) setStep(firstBad as StepIndex);
+  }, [state]);
+
   function update<K extends keyof DraftState>(key: K, value: DraftState[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -209,6 +250,17 @@ export function ReflectionWizard() {
       {formError === 'unknown' ? (
         <Alert tone="danger">
           {`Quelque chose s'est mal passé côté serveur. Réessaie dans un instant.`}
+        </Alert>
+      ) : null}
+      {/* `invalid_input` est déclaré par l'action (`app/reflect/actions.ts:28`)
+          et renvoyé (`:78`), mais n'était rendu NULLE PART : un refus serveur
+          laissait l'écran strictement inchangé. Le membre n'avait aucun moyen
+          de savoir que sa soumission avait été rejetée, ni pourquoi. */}
+      {formError === 'invalid_input' ? (
+        <Alert tone="danger">
+          {errors?.date
+            ? `${errors.date} Cette date est calculée automatiquement. Si le message persiste, vérifie la date et l'heure de ton appareil, puis recharge la page.`
+            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée : corrige-la, puis enregistre à nouveau.`}
         </Alert>
       ) : null}
 

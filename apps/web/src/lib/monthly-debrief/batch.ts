@@ -8,6 +8,7 @@ import {
   markDispatchDelivered,
   releaseEmailDispatch,
 } from '@/lib/email/dispatch-claim';
+import { EmailDeliveryError } from '@/lib/email/client';
 import { sendMonthlyDebriefReadyEmail } from '@/lib/email/send';
 import { enqueueMonthlyDebriefNotification } from '@/lib/notifications/enqueue';
 import {
@@ -318,9 +319,17 @@ export const MONTHLY_DEBRIEF_DISPATCH_TYPE = 'monthly_debrief_ready';
  * qui compte un membre couvert dès qu'il est renseigné. Son échec est toujours
  * signalé (`dispatch_stamp_failed`), mais il ne peut plus provoquer de renvoi.
  *
- * Résidu restant, borné et assumé : un processus tué APRÈS l'acceptation par
- * Resend et AVANT la confirmation de la réservation. Voir
- * `DISPATCH_CLAIM_STALE_AFTER_MS`.
+ * Résidu restant, borné et assumé — DEUX cas, tous deux couverts par
+ * l'expiration du bail (`DISPATCH_CLAIM_STALE_AFTER_MS`) :
+ *   1. un processus tué APRÈS l'acceptation par Resend et AVANT la
+ *      confirmation de la réservation ;
+ *   2. un dépassement du délai d'envoi, où la requête poursuit sa route et
+ *      peut délivrer l'email — la réservation reste alors volontairement en
+ *      vol plutôt que d'être libérée (cf. `EmailDeliveryError.maybeDelivered`).
+ *
+ * Le second cas mérite d'être écrit ici : une première version libérait la
+ * réservation sur TOUTE exception, ce qui rendait le résidu non borné sur le
+ * chemin du timeout — pendant que cette note affirmait le contraire.
  */
 async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): Promise<void> {
   try {
@@ -386,7 +395,17 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
         debrief: serialized,
       });
     } catch (sendErr) {
-      await releaseEmailDispatch(claim.claimId);
+      // …SAUF quand l'envoi a pu ABOUTIR malgré l'erreur. Le dépassement de
+      // délai n'annule pas la requête vers Resend : elle continue et peut
+      // délivrer. Libérer la réservation dans ce cas retirerait le seul
+      // garde-fou contre un DOUBLE envoi au membre, ce que ce mécanisme
+      // existe précisément pour empêcher. La réservation reste alors en vol
+      // et expire d'elle-même (`DISPATCH_CLAIM_STALE_AFTER_MS`) — c'est le
+      // résidu borné que documente la note plus haut, et il reste borné.
+      const maybeDelivered = sendErr instanceof EmailDeliveryError ? sendErr.maybeDelivered : false;
+      if (!maybeDelivered) {
+        await releaseEmailDispatch(claim.claimId);
+      }
       throw sendErr;
     }
 

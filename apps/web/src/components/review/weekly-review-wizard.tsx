@@ -50,14 +50,28 @@ import { cn } from '@/lib/utils';
 interface StepDef {
   title: string;
   icon: LucideIcon;
+  /**
+   * Les champs que CETTE étape affiche — donc les seuls dont l'erreur y est
+   * visible. Sert à ramener le membre sur l'étape du champ refusé par le
+   * serveur ; sans quoi il soumet depuis l'étape 5 pendant que le message est
+   * peint sur l'étape 2, qu'il ne voit pas.
+   *
+   * La liste vit ICI, dans la constante qui borne déjà `step` et qui produit
+   * `STEP_LABELS` : une seule source, donc aucun index hors bornes possible.
+   * Une liste parallèle, elle, finit toujours par diverger — c'est ce qui a
+   * démonté le wizard de journal en J10.
+   */
+  fields: readonly (keyof DraftState)[];
 }
 
 const STEP_DEFS: readonly StepDef[] = [
-  { title: 'Cette semaine', icon: Eye },
-  { title: 'Ta plus grande victoire', icon: Sparkles },
-  { title: 'Ton plus grand piège', icon: Lightbulb },
-  { title: 'Ce qui a marché', icon: Check },
-  { title: 'Leçon + focus', icon: Target },
+  // `weekStart` vient d'une prop serveur et n'est pas éditable : on le rattache
+  // quand même à l'étape qui l'affiche, pour que son refus mène quelque part.
+  { title: 'Cette semaine', icon: Eye, fields: ['weekStart'] },
+  { title: 'Ta plus grande victoire', icon: Sparkles, fields: ['biggestWin'] },
+  { title: 'Ton plus grand piège', icon: Lightbulb, fields: ['biggestMistake'] },
+  { title: 'Ce qui a marché', icon: Check, fields: ['bestPractice'] },
+  { title: 'Leçon + focus', icon: Target, fields: ['lessonLearned', 'nextWeekFocus'] },
 ];
 
 const STEP_LABELS: readonly string[] = STEP_DEFS.map((s) => s.title);
@@ -264,6 +278,31 @@ export function WeeklyReviewWizard({ weekStart, prefill }: WeeklyReviewWizardPro
     setStep(next);
   }
 
+  // Un refus serveur ramène le membre sur l'étape qui PORTE le champ refusé.
+  //
+  // Le membre soumet TOUJOURS depuis la dernière étape, alors que l'erreur est
+  // rendue sur l'étape du champ. Sans ce routage, l'écran ne bouge pas, aucun
+  // message n'apparaît, le bouton reste actif : il réappuie sans fin.
+  //
+  // Et le cas est atteignable sans rien faire d'anormal : le schéma serveur
+  // refuse les caractères de largeur nulle (`weekly-review.ts`), or le liant
+  // U+200D d'un emoji composé (👩‍💻, 👨‍👩‍👧) en est un — tandis que la validation
+  // d'étape locale ne contrôle QUE la longueur du texte.
+  //
+  // On route une seule fois par réponse serveur (`state` change de référence à
+  // chaque soumission) : router à chaque rendu emprisonnerait le membre sur
+  // l'étape fautive dès qu'il tenterait d'en sortir.
+  const routedFor = useRef<unknown>(null);
+  useEffect(() => {
+    if (!state || state === routedFor.current) return;
+    routedFor.current = state;
+    const fieldErrors = (state as WeeklyReviewActionState).fieldErrors;
+    if (!fieldErrors) return;
+    const firstBad = STEP_DEFS.findIndex((d) => d.fields.some((f) => fieldErrors[f] !== undefined));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (firstBad >= 0) setStep(firstBad as StepIndex);
+  }, [state]);
+
   function update<K extends keyof DraftState>(key: K, value: DraftState[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -291,6 +330,17 @@ export function WeeklyReviewWizard({ weekStart, prefill }: WeeklyReviewWizardPro
       {formError === 'unknown' ? (
         <Alert tone="danger">
           {`Quelque chose s'est mal passé côté serveur. Réessaie dans un instant.`}
+        </Alert>
+      ) : null}
+      {/* `invalid_input` est déclaré par l'action (`app/review/actions.ts:41`)
+          et renvoyé (`:99`), mais n'était rendu NULLE PART : un refus laissait
+          l'écran strictement inchangé, sans que rien n'indique au membre que
+          sa revue n'avait pas été enregistrée. */}
+      {formError === 'invalid_input' ? (
+        <Alert tone="danger">
+          {errors?.weekStart
+            ? `${errors.weekStart} Cette semaine est déterminée automatiquement : recharge la page pour repartir sur la bonne.`
+            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée : corrige-la, puis enregistre à nouveau.`}
         </Alert>
       ) : null}
 

@@ -23,6 +23,28 @@ export default async function NewReflectionPage() {
     redirect('/login');
   }
 
+  // La date d'une réflexion est dérivée ICI, sur le serveur, et passée au
+  // wizard — comme `weekStart` l'est déjà pour la revue hebdomadaire
+  // (`review/new/page.tsx:95`) et le débrief d'entraînement.
+  //
+  // POURQUOI. Le wizard la fabriquait avec `new Date()`, c'est-à-dire avec
+  // l'horloge de l'APPAREIL, et la postait dans un champ caché que le membre
+  // ne peut ni voir ni corriger. Or `reflectionEntrySchema.date` la valide
+  // contre l'horloge du SERVEUR, dans une fenêtre de −14 j à +1 j. Un
+  // téléphone en avance de deux jours — date mal réglée, batterie vide,
+  // remise à zéro — faisait donc refuser la soumission sur une valeur que le
+  // membre n'a jamais saisie : il écrivait ses quatre réponses, appuyait sur
+  // « Enregistrer », et rien ne se passait.
+  //
+  // Élargir la fenêtre aurait déplacé le mur sans le supprimer. La faire
+  // dériver du serveur ferme la classe entière : les deux horloges comparées
+  // sont désormais la même.
+  //
+  // Sémantique inchangée (UTC) pour rester iso-comportemental avec ce que le
+  // schéma valide. `dynamic = 'force-dynamic'` (ci-dessus) garantit que cette
+  // date est recalculée à chaque affichage et jamais figée dans un cache.
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
     <V18ThemeScope>
       <V18Aurora />
@@ -37,7 +59,7 @@ export default async function NewReflectionPage() {
         </nav>
 
         <V18CbtDisclaimerBanner />
-        <ReflectionWizard />
+        <ReflectionWizard today={today} />
       </main>
     </V18ThemeScope>
   );

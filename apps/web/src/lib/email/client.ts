@@ -36,10 +36,26 @@ export interface SendEmailParams {
 
 export class EmailDeliveryError extends Error {
   readonly providerError: unknown;
-  constructor(message: string, providerError: unknown) {
+  /**
+   * L'envoi a peut-être ABOUTI malgré l'erreur.
+   *
+   * Ce n'est vrai que du dépassement de délai : la requête vers Resend n'est
+   * pas annulée quand la course expire, elle continue et peut parfaitement
+   * délivrer l'email. Un refus explicite du fournisseur, lui, est un échec
+   * certain.
+   *
+   * La distinction n'est pas cosmétique. Un appelant qui protège l'unicité par
+   * une réservation doit LIBÉRER sur un échec certain — sans quoi le membre
+   * attend le mois suivant pour une panne passagère — et NE PAS libérer sur
+   * celui-ci, sous peine d'envoyer deux fois le même email. Sans drapeau, il
+   * faudrait comparer un message d'erreur, ce qui casse au premier reformulage.
+   */
+  readonly maybeDelivered: boolean;
+  constructor(message: string, providerError: unknown, maybeDelivered = false) {
     super(message);
     this.name = 'EmailDeliveryError';
     this.providerError = providerError;
+    this.maybeDelivered = maybeDelivered;
   }
 }
 
@@ -154,7 +170,11 @@ export async function sendEmail({
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () =>
-        reject(new EmailDeliveryError(`Resend send timed out after ${SEND_TIMEOUT_MS}ms`, null)),
+        reject(
+          // `maybeDelivered: true` — la requête n'est PAS annulée ici, elle
+          // poursuit sa route et peut délivrer l'email après coup.
+          new EmailDeliveryError(`Resend send timed out after ${SEND_TIMEOUT_MS}ms`, null, true),
+        ),
       SEND_TIMEOUT_MS,
     );
   });

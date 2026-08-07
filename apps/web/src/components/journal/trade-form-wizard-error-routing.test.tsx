@@ -197,4 +197,36 @@ describe('refus serveur sur un champ d’une étape antérieure', () => {
 
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Étape 6 sur 6');
   });
+
+  it('ne route PAS vers l’entrée de clôture, que ce wizard ne rend pas', async () => {
+    // LE cas que la borne existe pour couvrir, et le seul qui la sollicite.
+    //
+    // Une revue adverse a mesuré que les trois cas précédents la laissaient
+    // inerte : `findIndex` rencontre toujours un champ d'une étape rendue avant
+    // d'atteindre l'entrée 6, ou n'en trouve aucun. Retirer la borne les
+    // laissait tous les trois verts — elle était présentée comme testée sans
+    // l'être. C'est exactement la forme de défaut que ce fichier documente.
+    //
+    // `exitedAt` n'appartient QU'À l'entrée 6 (le groupe du flux de clôture,
+    // qu'aucun panneau d'ouverture n'affiche). Sans la borne, le wizard
+    // naviguerait vers l'index 6, `STEP_ICONS[6]` vaudrait `undefined`, et le
+    // rendu de `<StepIcon />` démonterait le composant entier.
+    vi.mocked(createTradeAction).mockResolvedValue({
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { exitedAt: 'Date dans le futur.' },
+    } as never);
+
+    seedValidDraft();
+    render(<TradeFormWizard timezone="Europe/Paris" />);
+    await walkToSubmit();
+
+    // Le wizard tient debout — s'il était démonté, ce `progressbar` n'existerait
+    // plus et l'assertion suivante lèverait avant même de comparer.
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Étape 6 sur 6');
+    // Et le membre n'est pas laissé sans rien : la bannière nomme le refus.
+    expect(screen.getAllByRole('alert').some((el) => /invalides/i.test(el.textContent ?? ''))).toBe(
+      true,
+    );
+  });
 });

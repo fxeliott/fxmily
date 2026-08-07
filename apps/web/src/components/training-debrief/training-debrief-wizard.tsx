@@ -43,13 +43,29 @@ import { cn } from '@/lib/utils';
 interface StepDef {
   title: string;
   icon: LucideIcon;
+  /**
+   * Les champs que CETTE étape affiche — donc les seuls dont l'erreur y est
+   * visible. Sert à ramener le membre sur l'étape du champ refusé par le
+   * serveur, puisqu'il soumet toujours depuis la dernière.
+   *
+   * La liste vit ICI, dans la constante qui borne déjà `step` et qui produit
+   * `STEP_LABELS` : une seule source, donc aucun index hors bornes possible.
+   */
+  fields: readonly (keyof DraftState)[];
 }
 
 const STEP_DEFS: readonly StepDef[] = [
-  { title: 'Première force de process', icon: Sparkles },
-  { title: 'Deuxième force de process', icon: Sparkles },
-  { title: 'Un micro-ajustement', icon: Wrench },
-  { title: 'La leçon transversale', icon: Target },
+  {
+    title: 'Première force de process',
+    icon: Sparkles,
+    // `weekStart` vient d'une prop serveur et n'est éditable nulle part : on
+    // le rattache à la première étape pour que son refus mène quelque part
+    // plutôt que nulle part.
+    fields: ['processStrengthOne', 'weekStart'],
+  },
+  { title: 'Deuxième force de process', icon: Sparkles, fields: ['processStrengthTwo'] },
+  { title: 'Un micro-ajustement', icon: Wrench, fields: ['microAdjustment'] },
+  { title: 'La leçon transversale', icon: Target, fields: ['transversalLesson'] },
 ];
 
 const STEP_LABELS: readonly string[] = STEP_DEFS.map((s) => s.title);
@@ -163,6 +179,24 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
   const formError = (state as TrainingDebriefActionState | null)?.error;
   const stepValid = isStepValid(step, draft);
 
+  // Un refus serveur ramène le membre sur l'étape qui PORTE le champ refusé.
+  // Sans cela : soumission depuis la dernière étape, erreur peinte sur une
+  // étape antérieure invisible, écran figé, bouton toujours actif. Atteignable
+  // via les caractères de largeur nulle que le schéma refuse (le liant U+200D
+  // d'un emoji composé) et que la validation d'étape locale ne regarde pas.
+  // Une seule fois par réponse serveur, sinon le membre reste prisonnier de
+  // l'étape fautive dès qu'il tente d'en sortir.
+  const routedFor = useRef<unknown>(null);
+  useEffect(() => {
+    if (!state || state === routedFor.current) return;
+    routedFor.current = state;
+    const fieldErrors = (state as TrainingDebriefActionState).fieldErrors;
+    if (!fieldErrors) return;
+    const firstBad = STEP_DEFS.findIndex((d) => d.fields.some((f) => fieldErrors[f] !== undefined));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (firstBad >= 0) setStep(firstBad as StepIndex);
+  }, [state]);
+
   function update<K extends keyof DraftState>(key: K, value: DraftState[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -193,6 +227,16 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
       {formError === 'unknown' ? (
         <Alert tone="danger">
           {`Quelque chose s'est mal passé côté serveur. Réessaie dans un instant.`}
+        </Alert>
+      ) : null}
+      {/* `invalid_input` est déclaré par l'action
+          (`app/training/debrief/actions.ts:30`) et renvoyé (`:80`), mais
+          n'était rendu NULLE PART : un refus laissait l'écran inchangé. */}
+      {formError === 'invalid_input' ? (
+        <Alert tone="danger">
+          {errors?.weekStart
+            ? `${errors.weekStart} Cette semaine est déterminée automatiquement : recharge la page pour repartir sur la bonne.`
+            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée : corrige-la, puis enregistre à nouveau.`}
         </Alert>
       ) : null}
 

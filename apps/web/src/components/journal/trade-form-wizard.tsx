@@ -331,8 +331,19 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
         // vidait (`goToStep` sans `keepErrors`). Le membre tournait en rond
         // sans jamais voir ce qui bloquait. Le motif existe déjà juste
         // au-dessus pour les questions de discipline ; il manquait ici.
-        const firstBadStep = WIZARD_STEPS.findIndex((fields) =>
-          fields.some((f) => result.fieldErrors?.[f] !== undefined),
+        // ⚠️ Borne DURE sur les panneaux réellement rendus par CE wizard.
+        // `WIZARD_STEPS` porte 7 entrées : la 7ᵉ décrit le groupe de champs du
+        // flux de CLÔTURE et n'a aucun panneau ici (`STEP_TITLES`/`STEP_ICONS`
+        // en comptent 6). Le premier jet balayait les 7 et castait en
+        // `StepIndex` — le cast écrasait précisément la garde de type qui
+        // aurait dû l'arrêter. Un refus serveur sur `notes`, champ présent
+        // dans la 7ᵉ entrée, envoyait donc `goToStep(6)`, `STEP_ICONS[6]`
+        // valait `undefined`, et le rendu de `<StepIcon />` DÉTRUISAIT le
+        // wizard. Le correctif avait transformé une erreur invisible en crash.
+        const lastRenderedStep = STEP_TITLES.length - 1;
+        const firstBadStep = WIZARD_STEPS.findIndex(
+          (fields, index) =>
+            index <= lastRenderedStep && fields.some((f) => result.fieldErrors?.[f] !== undefined),
         );
         if (firstBadStep >= 0 && firstBadStep !== step) {
           goToStep(firstBadStep as StepIndex, { keepErrors: true });
@@ -1092,14 +1103,27 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
           rows={3}
           maxLength={2000}
           placeholder="Setup, contexte, déclencheur…"
+          aria-invalid={fieldErrors.notes ? 'true' : undefined}
           className={cn(
             'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
-            'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            fieldErrors.notes
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
             'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         />
+        {/* Ce champ n'affichait AUCUNE erreur. Le serveur peut pourtant le
+            refuser — `notesSchema` rejette les caractères bidi/largeur nulle,
+            qu'un simple copier-coller depuis une page web ou un emoji composé
+            (le liant U+200D de 👩‍💻) suffit à introduire. Le membre voyait
+            alors sa sauvegarde échouer sans qu'aucun écran ne nomme la cause. */}
+        {fieldErrors.notes ? (
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
+            {fieldErrors.notes}
+          </p>
+        ) : null}
       </div>
     </div>
   );

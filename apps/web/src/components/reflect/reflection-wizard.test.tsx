@@ -48,6 +48,10 @@ vi.mock('framer-motion', async () => {
 
 import { ReflectionWizard } from './reflection-wizard';
 
+/** Date fixe : le wizard reçoit désormais sa date du serveur, plus de l'horloge
+ * de la machine qui exécute le test — le rendu est donc déterministe. */
+const TODAY = '2026-08-07';
+
 function setTextareaReactValue(textarea: HTMLTextAreaElement, value: string): void {
   const tracker = (textarea as unknown as { _valueTracker?: { setValue: (v: string) => void } })
     ._valueTracker;
@@ -84,7 +88,7 @@ beforeEach(() => {
 
 describe('ReflectionWizard — initial render', () => {
   it("renders step A (L'événement déclencheur) on first mount", () => {
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
     // Step A is the trigger event.
     expect(screen.getByRole('heading', { name: /L'événement déclencheur/ })).toBeInTheDocument();
     // Step A has a textarea (every ABCD step does).
@@ -98,7 +102,7 @@ describe('ReflectionWizard — initial render', () => {
 
 describe('ReflectionWizard — step navigation', () => {
   it('disables Suivant on step A until triggerEvent reaches 10 chars', () => {
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(screen.getByRole('button', { name: /Suivant/ })).toBeDisabled();
 
@@ -111,7 +115,7 @@ describe('ReflectionWizard — step navigation', () => {
   });
 
   it('advances step A → step B (Belief) on Suivant click after valid input', () => {
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
     setTextareaReactValue(
       screen.getByRole('textbox') as HTMLTextAreaElement,
       'NFP miss at 13h30 GMT, price spike during break.',
@@ -133,13 +137,13 @@ describe('ReflectionWizard — localStorage draft hydration', () => {
     };
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
 
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(textarea.value).toBe('NFP miss yesterday — saw the spike post hoc.');
   });
 
   it('persists draft to localStorage after the user types', () => {
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
     setTextareaReactValue(
       screen.getByRole('textbox') as HTMLTextAreaElement,
       'Triggered by the unexpected market spike.',
@@ -153,7 +157,7 @@ describe('ReflectionWizard — localStorage draft hydration', () => {
 
 describe('ReflectionWizard — terminal step (D)', () => {
   it('shows the "Enregistrer cette réflexion" submit button on step D', () => {
-    render(<ReflectionWizard />);
+    render(<ReflectionWizard today={TODAY} />);
 
     // Walk A → B → C → D, filling each step with valid input.
     const steps = [

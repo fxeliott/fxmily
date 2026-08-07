@@ -211,7 +211,7 @@ export const tradeOpenSchema = z
       // J10 correctif n°2 — la marge était d'une heure. Elle est ramenée à la
       // MÊME tolérance de dérive d'horloge que la clôture : au-delà, le trade
       // devenait inclôturable (voir `CLOCK_SKEW_TOLERANCE_MS`).
-      .refine((d) => d.getTime() <= Date.now() + CLOCK_SKEW_TOLERANCE_MS, {
+      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
         message: 'Date dans le futur.',
       }),
     entryPrice: positivePrice,

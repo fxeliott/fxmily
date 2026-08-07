@@ -36,10 +36,35 @@
  * Aucune conversion rétroactive n'a été appliquée aux lignes existantes, et
  * c'est délibéré : une conversion exacte n'existe pas, donc réécrire
  * l'historique remplacerait une donnée honnête (« 2 tasses, déclarées ») par
- * une donnée inventée (« 250 ml, calculés »). Avant le **2026-08-07**, les
- * deux magasins coexistent sans lien ; après, tout lecteur qui a besoin de les
- * comparer passe par `resolveDailyCaffeine` et reçoit la provenance avec la
- * valeur.
+ * une donnée inventée (« 250 ml, calculés »). Les deux magasins coexistent
+ * sans lien ; tout lecteur qui a besoin de les comparer passe par
+ * `resolveDailyCaffeine` et reçoit la provenance avec la valeur.
+ *
+ * ## ⚠️ État EXACT du câblage au 2026-08-07 — ce que ce module ne fait pas
+ *
+ * Une revue en contexte frais a corrigé une affirmation trop généreuse de la
+ * première rédaction. La vérité mesurée, appelant par appelant :
+ *
+ *   • Les deux lecteurs analytiques (`analytics/habit-trade-correlation`,
+ *     `habit/pillars`) ne lisent QUE le suivi TRACK, en tasses, et ne
+ *     convertissaient déjà rien avant ce jalon. Passer par
+ *     `caffeineFromHabitLog(...).cups` ne change donc AUCUNE valeur — c'est
+ *     voulu : le but est qu'il n'existe qu'un seul endroit où le ratio est
+ *     écrit, pas de modifier une corrélation affichée aux membres.
+ *   • `resolveDailyCaffeine`, `caffeineFromCheckin`, `caffeineMlToCups` et
+ *     `caffeineCupsToMl` n'ont **aucun appelant** hors de ce module et de ses
+ *     tests. Ils sont la pièce prête, pas la pièce posée.
+ *   • Conséquence, et c'est le défaut RÉEL qui reste ouvert :
+ *     `DailyCheckin.caffeineMl` est saisi par le membre et **affiché**
+ *     (`components/checkin/checkin-day-list.tsx`), mais n'entre dans aucune
+ *     analyse. Un membre qui ne déclare sa caféine qu'au check-in du soir a
+ *     une corrélation caféine vide alors qu'il a répondu.
+ *
+ * Fermer ce défaut-là demande de changer la signature d'`extractHabitScalar`
+ * et le chargeur qui l'alimente, donc de toucher aux `n` et aux seuils de
+ * significativité des corrélations montrées aux membres. C'est un travail
+ * d'intégration, pas un travail d'unités : il sort du périmètre de ce jalon et
+ * est remonté comme tel plutôt que bâclé en fin de course.
  */
 
 /** Unités dans lesquelles la caféine est déclarée quelque part dans l'app. */

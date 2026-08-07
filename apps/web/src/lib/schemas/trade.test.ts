@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  EXIT_CLOCK_SKEW_TOLERANCE_MS,
+  CLOCK_SKEW_TOLERANCE_MS,
   TRADE_TAG_SLUGS,
   TRADE_TAGS_MAX_PER_TRADE,
   isTradeTagSlug,
@@ -271,7 +271,7 @@ describe('tradeCloseSchema', () => {
   it('accepts an exit within the clock-skew margin (a browser clock runs fast)', () => {
     // Sans cette marge, le membre verrait son PROPRE pré-remplissage rejeté
     // sur une machine mal synchronisée — un refus contre lequel il ne peut rien.
-    const skewed = new Date(Date.now() + EXIT_CLOCK_SKEW_TOLERANCE_MS - 5_000);
+    const skewed = new Date(Date.now() + CLOCK_SKEW_TOLERANCE_MS - 5_000);
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: skewed }).success).toBe(true);
   });
 
@@ -279,11 +279,62 @@ describe('tradeCloseSchema', () => {
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: new Date() }).success).toBe(true);
   });
 
-  it('keeps the skew margin far below the entry tolerance it was copied from', () => {
-    // Garde structurelle : si quelqu'un ré-élargit la borne de sortie à
-    // l'heure de l'entrée, ce test tombe avant que des durées fausses ne
-    // reviennent en base.
-    expect(EXIT_CLOCK_SKEW_TOLERANCE_MS).toBeLessThanOrEqual(5 * 60 * 1000);
+  it('keeps the skew margin far below the hour it replaced', () => {
+    // Garde structurelle : si quelqu'un ré-élargit la borne à l'heure d'avant,
+    // ce test tombe avant que des durées fausses ne reviennent en base.
+    expect(CLOCK_SKEW_TOLERANCE_MS).toBeLessThanOrEqual(5 * 60 * 1000);
+  });
+
+  /**
+   * J10 correctif n°2, second tour — L'INVARIANT « aucun trade inclôturable ».
+   *
+   * Le premier jet ne resserrait que la sortie (2 min) en laissant l'entrée à
+   * 60 min, et documentait la conséquence comme « assumée et bornée ». Une
+   * revue en contexte frais a montré ce que ça vaut côté membre : dater son
+   * entrée 20 minutes en avant — que le schéma d'ouverture ACCEPTAIT — rendait
+   * le trade inclôturable, puisque `closeTrade` exige `exitedAt >= enteredAt`
+   * et que la clôture refusait tout ce qui dépasse `now + 2 min`. Aucune
+   * valeur saisissable ne satisfaisait les deux, et l'écran disait seulement
+   * « La sortie ne peut pas être dans le futur ».
+   *
+   * Une tolérance commune ferme le piège par construction. Ce test ne lit
+   * AUCUNE constante : il interroge les deux schémas sur une série d'instants
+   * et exige que tout ce que l'ouverture accepte, la clôture l'accepte aussi.
+   * Écrit avec `CLOCK_SKEW_TOLERANCE_MS` il aurait comparé la règle à
+   * elle-même et serait resté vert le jour où l'entrée repasserait à une
+   * heure — précisément le défaut qu'il existe pour empêcher.
+   */
+  it('leaves no un-closable trade: whatever opening accepts, closing accepts', () => {
+    const offsetsMin = [0, 1, 2, 3, 5, 10, 20, 30, 45, 60, 90];
+    const openable: number[] = [];
+
+    for (const min of offsetsMin) {
+      const at = new Date(Date.now() + min * 60 * 1000);
+      if (!tradeOpenSchema.safeParse({ ...baseOpen, enteredAt: at }).success) continue;
+      openable.push(min);
+      // `exitedAt = enteredAt` est la seule valeur toujours disponible au
+      // membre, puisque `closeTrade` exige `exitedAt >= enteredAt`. Si elle
+      // est refusée, le trade est définitivement inclôturable.
+      expect(
+        tradeCloseSchema.safeParse({ ...baseClose, exitedAt: at }).success,
+        `une entrée à +${min} min est acceptée à l'ouverture mais inclôturable`,
+      ).toBe(true);
+    }
+
+    // Contrôle de falsification : si plus aucune entrée n'était acceptée, la
+    // boucle ci-dessus ne prouverait rien en restant verte.
+    expect(openable.length).toBeGreaterThan(0);
+  });
+
+  it('rejects an entry beyond the shared skew margin (it was one hour)', () => {
+    const tooFar = new Date(Date.now() + 20 * 60 * 1000);
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, enteredAt: tooFar });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Le refus arrive à l'OUVERTURE, quand le membre saisit la date et peut
+      // la corriger — pas à la clôture, où il n'aurait plus aucun recours.
+      expect(result.error.issues.some((i) => i.message === 'Date dans le futur.')).toBe(true);
+    }
   });
 
   // Tour 13 — free-text explanation attached to the exit screen. Same OPTIONAL,

@@ -196,11 +196,13 @@ export function extractHabitScalar(kind: HabitKind, value: unknown): number | nu
     case 'caffeine': {
       const r = caffeineValueSchema.safeParse(value);
       // J10 correctif n°3 — la lecture passe par `lib/habit/caffeine`, seul
-      // endroit de l'app qui sait ce qu'est une « tasse » et qui connaît
-      // l'autre magasin de caféine (`DailyCheckin.caffeineMl`, en millilitres).
-      // La valeur rendue reste en TASSES et ne change pas d'un iota : le
-      // scalaire de corrélation garde son échelle, le module n'ajoute que la
-      // traçabilité de l'unité. Voir `caffeine.test.ts` pour la preuve.
+      // endroit de l'app où le ratio tasse ↔ millilitre est écrit.
+      // ⚠️ Ce point d'appel ne réconcilie RIEN : il lit le suivi TRACK et lui
+      // seul. La valeur rendue reste en TASSES et ne change pas d'un iota —
+      // c'est l'intention, pas un effet de bord : le but est qu'un futur
+      // convertisseur ne puisse pas naître ailleurs. La caféine déclarée au
+      // check-in du soir (`DailyCheckin.caffeineMl`) n'entre toujours dans
+      // aucune corrélation : voir l'en-tête de `lib/habit/caffeine`.
       return r.success ? caffeineFromHabitLog(r.data.cups).cups : null;
     }
     case 'sport': {

@@ -140,6 +140,26 @@ try {
           `(exited_at ramené à closed_at). Relance avec --apply pour appliquer.`,
       );
     } else {
+      // Journal AVANT écriture : l'ancienne valeur n'existe nulle part
+      // ailleurs, et un `UPDATE` en masse ne se défait pas. Ces lignes sont la
+      // seule façon de revenir en arrière si la décision se révélait mauvaise —
+      // elles sont donc imprimées, à conserver avec la sortie de la commande.
+      const doomed = await db.$queryRaw<{ id: string; exited_at: Date; closed_at: Date }[]>`
+        SELECT id, exited_at, closed_at
+        FROM trades
+        WHERE closed_at IS NOT NULL
+          AND exited_at IS NOT NULL
+          AND exited_at > closed_at
+        ORDER BY id
+      `;
+      console.log('\nLignes modifiées (anciennes valeurs — à conserver pour un retour arrière) :');
+      for (const row of doomed) {
+        console.log(
+          `  ${row.id}  exited_at ${row.exited_at.toISOString()} -> ${row.closed_at.toISOString()}`,
+        );
+      }
+      if (doomed.length === 0) console.log('  (aucune)');
+
       const updated = await db.$executeRaw`
         UPDATE trades
         SET exited_at = closed_at

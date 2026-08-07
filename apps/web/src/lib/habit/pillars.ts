@@ -82,9 +82,10 @@ function pillarScalar(kind: HabitKind, value: unknown): number | null {
       // (le pare-feu §21.5 interdit aux modules de rapport d'importer
       // `@/lib/analytics`), et corriger l'un sans l'autre aurait laissé la
       // moitié du défaut en place. Les deux passent désormais par
-      // `lib/habit/caffeine`, seul module qui sait ce qu'est une tasse et qui
-      // connaît l'autre magasin (`DailyCheckin.caffeineMl`, en millilitres).
-      // La valeur rendue reste en TASSES, à l'identique.
+      // `lib/habit/caffeine`, seul endroit où le ratio est écrit.
+      // ⚠️ Aucune réconciliation ici non plus : la valeur rendue reste en
+      // TASSES, à l'identique, et la caféine du check-in reste hors analyse.
+      // L'en-tête de `lib/habit/caffeine` dit exactement ce qui manque.
       return r.success ? caffeineFromHabitLog(r.data.cups).cups : null;
     }
     case 'sport': {

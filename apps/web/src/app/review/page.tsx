@@ -15,7 +15,7 @@ import { echoProfileDims } from '@/lib/coaching/trade-echo';
 import { buildReviewSubmitEcho } from '@/lib/coaching/submit-echo';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
-import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
+import { currentParisWeekStart, findCurrentWeekReview } from '@/lib/weekly-review/week';
 import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const dynamic = 'force-dynamic';
@@ -65,7 +65,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
   // P2 fix (mindset-landing parity `mindset/page.tsx:51`) — once this week's
   // review exists, the primary CTA says "resume" instead of pretending the
   // review is still to do (the wizard opens prefilled + upsert updates it).
-  const hasCurrentWeekReview = findCurrentWeekReview(recent, currentWeekStartUTC()) !== null;
+  const hasCurrentWeekReview = findCurrentWeekReview(recent, currentParisWeekStart()) !== null;
   const ctaLabel = hasCurrentWeekReview ? 'Reprendre ma revue hebdo' : 'Faire ma revue hebdo';
 
   // F2 — submission timestamps render in the MEMBER's timezone. Built once per

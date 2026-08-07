@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { env } from '@/lib/env';
-import { sendEmail } from '@/lib/email/client';
+import { sendEmail, type EmailSendResult } from '@/lib/email/client';
 import { AccessApprovedEmail } from '@/lib/email/templates/access-approved';
 import { AdminDailyBriefEmail } from '@/lib/email/templates/admin-daily-brief';
 import { AccessRejectedEmail } from '@/lib/email/templates/access-rejected';
@@ -732,7 +732,7 @@ export async function sendMonthlyDebriefReadyEmail({
   to,
   recipientFirstName,
   debrief,
-}: SendMonthlyDebriefReadyParams): Promise<{ id: string | null; delivered: boolean }> {
+}: SendMonthlyDebriefReadyParams): Promise<EmailSendResult> {
   const debriefUrl = buildMemberMonthlyDebriefUrl(debrief.id);
   const monthLabel = formatMonthLabelFr(debrief.monthStart);
   const recipient = recipientFirstName?.trim() || 'Trader';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CLOCK_SKEW_TOLERANCE_MS } from '@/lib/schemas/clock-skew';
 import { tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { EMOTION_MAX_PER_MOMENT, isEmotionSlug } from '@/lib/trading/emotions';
@@ -206,7 +207,11 @@ export const tradeOpenSchema = z
       // Re-evaluated on every parse — `Date.now()` captured here is fixed at
       // module-load time otherwise, which would make a long-running server
       // reject increasingly old "now" timestamps.
-      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
+      //
+      // J10 correctif n°2 — la marge était d'une heure. Elle est ramenée à la
+      // MÊME tolérance de dérive d'horloge que la clôture : au-delà, le trade
+      // devenait inclôturable (voir `CLOCK_SKEW_TOLERANCE_MS`).
+      .refine((d) => d.getTime() <= Date.now() + CLOCK_SKEW_TOLERANCE_MS, {
         message: 'Date dans le futur.',
       }),
     entryPrice: positivePrice,
@@ -280,14 +285,51 @@ export const tradeOpenSchema = z
 export type TradeOpenInput = z.infer<typeof tradeOpenSchema>;
 
 /**
+ * J10 correctif n°2 — la tolérance de dérive d'horloge, définie en un seul
+ * endroit (`lib/schemas/clock-skew`) et ré-exportée ici pour les appelants
+ * historiques.
+ *
+ * ## Pourquoi elle vaut des deux côtés
+ *
+ * La première rédaction gardait 60 minutes côté ENTRÉE et 2 minutes côté
+ * SORTIE, en écrivant noir sur blanc que le trade serait alors inclôturable
+ * jusqu'à ce que l'horloge rattrape — « assumé et borné ». Une revue en
+ * contexte frais a refusé l'arbitrage, et elle a eu raison : un membre qui
+ * date son entrée 20 minutes en avant tombe sur une IMPASSE. `closeTrade`
+ * exige `exitedAt >= enteredAt` (`lib/trades/service.ts`) et la clôture exige
+ * `exitedAt <= now + skew` : aucune valeur ne satisfait les deux. Il voit
+ * « La sortie ne peut pas être dans le futur » sans qu'aucun écran ne lui dise
+ * d'attendre. Documenter un piège ne le désamorce pas.
+ *
+ * Une seule tolérance ferme l'impasse **par construction** : si
+ * `enteredAt <= now + skew`, alors `exitedAt = enteredAt` est toujours une
+ * clôture recevable. C'est aussi plus juste sur le fond — le journal
+ * enregistre des positions PRISES (il exige un prix d'entrée et une taille de
+ * lot), pas des ordres en attente ; une entrée dans le futur produit une durée
+ * négative dès la clôture. L'invariant est verrouillé par un test qui ne lit
+ * aucune constante.
+ *
+ * La valeur elle-même, et sa source, sont justifiées dans `clock-skew.ts`.
+ */
+export { CLOCK_SKEW_TOLERANCE_MS };
+
+/**
  * Post-exit block (step 7, or close-out flow on /journal/[id]/close).
  */
 export const tradeCloseSchema = z
   .object({
     exitedAt: z.coerce
       .date({ message: 'Date de sortie invalide.' })
-      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
-        message: 'Date dans le futur.',
+      // J10 correctif n°2 — la tolérance était de 60 minutes, la même que côté
+      // ENTRÉE. Elle n'y a pas le même sens : on peut saisir une entrée qu'on
+      // vient de prendre avec une horloge en avance, on ne peut pas clôturer
+      // une position dans le futur. Combinée au pré-remplissage
+      // `max(now, entrée + 1 h)`, elle laissait passer une sortie jusqu'à une
+      // heure devant l'horloge du serveur — donc des durées de trade négatives
+      // ou fantaisistes, qui polluent l'attribution de session, les moyennes de
+      // durée et tout ce que l'IA en déduit.
+      .refine((d) => d.getTime() <= Date.now() + CLOCK_SKEW_TOLERANCE_MS, {
+        message: 'La sortie ne peut pas être dans le futur.',
       }),
     exitPrice: positivePrice,
     outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),

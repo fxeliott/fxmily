@@ -40,6 +40,7 @@
  */
 
 import { localDateOf, shiftLocalDate, type LocalDateString } from '@/lib/checkin/timezone';
+import { caffeineFromHabitLog } from '@/lib/habit/caffeine';
 import {
   caffeineValueSchema,
   type HabitKind,
@@ -166,7 +167,8 @@ export interface HabitTradeCorrelationResult {
  *   - sleep / sport / meditation -> minutes converted/kept as the natural
  *     unit (sleep -> hours; sport / meditation -> minutes).
  *   - nutrition -> meals count.
- *   - caffeine -> cups.
+ *   - caffeine -> cups, via `lib/habit/caffeine` (J10-3 : ce module est le seul
+ *     à connaître les DEUX magasins de caféine de l'app et leurs unités).
  *
  * Returns `null` (never throws) when the payload doesn't match the
  * canonical Zod shape for that kind — a malformed row is excluded from
@@ -193,7 +195,15 @@ export function extractHabitScalar(kind: HabitKind, value: unknown): number | nu
     }
     case 'caffeine': {
       const r = caffeineValueSchema.safeParse(value);
-      return r.success ? r.data.cups : null;
+      // J10 correctif n°3 — la lecture passe par `lib/habit/caffeine`, seul
+      // endroit de l'app où le ratio tasse ↔ millilitre est écrit.
+      // ⚠️ Ce point d'appel ne réconcilie RIEN : il lit le suivi TRACK et lui
+      // seul. La valeur rendue reste en TASSES et ne change pas d'un iota —
+      // c'est l'intention, pas un effet de bord : le but est qu'un futur
+      // convertisseur ne puisse pas naître ailleurs. La caféine déclarée au
+      // check-in du soir (`DailyCheckin.caffeineMl`) n'entre toujours dans
+      // aucune corrélation : voir l'en-tête de `lib/habit/caffeine`.
+      return r.success ? caffeineFromHabitLog(r.data.cups).cups : null;
     }
     case 'sport': {
       const r = sportValueSchema.safeParse(value);

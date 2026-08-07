@@ -43,12 +43,29 @@ export class EmailDeliveryError extends Error {
   }
 }
 
+/**
+ * Résultat d'un envoi.
+ *
+ * `permanent` distingue un refus DÉFINITIF (adresse en liste de suppression :
+ * hard bounce ou plainte — réessayer ne changera jamais rien et abîme la
+ * réputation d'envoi) d'un refus TRANSITOIRE (budget quotidien épuisé, panne).
+ * Les deux rendaient `delivered: false` sans se distinguer, ce qui obligeait
+ * les appelants à traiter « adresse morte » comme « réessaie demain » — donc à
+ * relancer indéfiniment, ou à abandonner un envoi récupérable.
+ */
+export interface EmailSendResult {
+  id: string | null;
+  delivered: boolean;
+  /** `true` uniquement si réessayer est SANS ESPOIR. Absent = réessayable. */
+  permanent?: boolean;
+}
+
 export async function sendEmail({
   to,
   subject,
   react,
   text,
-}: SendEmailParams): Promise<{ id: string | null; delivered: boolean }> {
+}: SendEmailParams): Promise<EmailSendResult> {
   if (!resendClient) {
     // Dev fallback. We deliberately log the plain-text body so links are
     // clickable from the terminal.
@@ -80,7 +97,10 @@ export async function sendEmail({
       reportWarning('email.send', 'suppressed recipient skipped', {
         reason: 'suppressed',
       });
-      return { id: null, delivered: false };
+      // Définitif : cette adresse ne recevra plus rien tant qu'elle est sur la
+      // liste. Un appelant qui réessaie chaque jour ne fait que produire du
+      // bruit — il doit pouvoir en décider, donc on le lui dit.
+      return { id: null, delivered: false, permanent: true };
     }
   } catch (error) {
     // Fail-open : a suppression-store outage must not block transactional mail.

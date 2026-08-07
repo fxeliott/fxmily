@@ -10,7 +10,7 @@ import {
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
-import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
+import { currentParisWeekStart, findCurrentWeekReview } from '@/lib/weekly-review/week';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ export default async function NewWeeklyReviewPage() {
   // LAST review. Fetch the 2 newest and pick the most recent strictly BEFORE
   // this week's Monday, so re-editing the current week's review never echoes its
   // own focus back. Read-only, zero new column (reuses listMyRecentReviews).
-  const thisWeek = currentWeekStartUTC();
+  const thisWeek = currentParisWeekStart();
   const recent = await listMyRecentReviews(session.user.id, 2);
   const previousFocus = recent.find((r) => r.weekStart < thisWeek)?.nextWeekFocus ?? null;
 
@@ -87,7 +87,12 @@ export default async function NewWeeklyReviewPage() {
 
         <WeeklyFocusRecall focus={previousFocus} />
 
-        <WeeklyReviewWizard {...(prefill ? { prefill } : {})} />
+        {/* J10-1 — `weekStart` est dérivé SERVEUR (ancre Europe/Paris), jamais
+            recalculé depuis l'horloge du navigateur : parité avec les wizards
+            mindset / training-debrief / calendrier, dont le canon note que le
+            `lastMondayUTC` UTC-naïf de REFLECT n'avait délibérément pas été
+            porté. C'était le dernier porteur ; il ne l'est plus. */}
+        <WeeklyReviewWizard weekStart={thisWeek} {...(prefill ? { prefill } : {})} />
       </main>
     </V18ThemeScope>
   );

@@ -96,13 +96,21 @@ vi.setConfig({ testTimeout: 15000 });
 
 const DRAFT_KEY = 'fxmily:weekly-review:draft:v1';
 
+/**
+ * J10-1 — le wizard ne calcule plus la semaine : elle lui est passée par la
+ * page serveur (`currentParisWeekStart()`, ancre Europe/Paris). Un lundi fixe
+ * rend ces tests indépendants de l'horloge de la machine qui les exécute —
+ * l'ancien calcul client les rendait sensibles au fuseau du runner CI.
+ */
+const WEEK_START = '2026-06-29'; // lundi
+
 beforeEach(() => {
   window.localStorage.clear();
 });
 
 describe('WeeklyReviewWizard — initial render', () => {
   it('renders step 1 / 5 (informational "Cette semaine") on first mount', () => {
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     // The step header eyebrow is the canonical step indicator.
     expect(screen.getByText('Étape 1 sur 5')).toBeInTheDocument();
     // Step 1 title — process-language, no P&L.
@@ -118,7 +126,7 @@ describe('WeeklyReviewWizard — initial render', () => {
 
 describe('WeeklyReviewWizard — step navigation', () => {
   it('advances step 1 → step 2 (biggestWin textarea) on Suivant click', () => {
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
     expect(screen.getByText('Étape 2 sur 5')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ta plus grande victoire' })).toBeInTheDocument();
@@ -127,7 +135,7 @@ describe('WeeklyReviewWizard — step navigation', () => {
   });
 
   it('disables Suivant on step 2 until biggestWin reaches 10 chars (REVIEW_TEXT_MIN_CHARS)', () => {
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(screen.getByRole('button', { name: /Suivant/ })).toBeDisabled();
@@ -153,7 +161,7 @@ describe('WeeklyReviewWizard — localStorage draft hydration', () => {
     };
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
 
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     // Navigate to step 2 to see the textarea seeded with the draft.
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
 
@@ -165,7 +173,7 @@ describe('WeeklyReviewWizard — localStorage draft hydration', () => {
   });
 
   it('persists draft to localStorage after the user types', () => {
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
 
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
@@ -188,7 +196,7 @@ describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', (
   };
 
   it('seeds the textareas with the existing review answers', () => {
-    render(<WeeklyReviewWizard prefill={prefill} />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} prefill={prefill} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(textarea.value).toBe('Prefilled win pulled from the existing review row.');
@@ -201,7 +209,7 @@ describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', (
       DRAFT_KEY,
       JSON.stringify({ biggestWin: 'Draft edit typed after the first submission.' }),
     );
-    render(<WeeklyReviewWizard prefill={prefill} />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} prefill={prefill} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2 (biggestWin)
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       'Draft edit typed after the first submission.',
@@ -215,7 +223,7 @@ describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', (
 
   it('falls back to the prefill when the stored draft field is empty', () => {
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ biggestWin: '' }));
-    render(<WeeklyReviewWizard prefill={prefill} />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} prefill={prefill} />);
     fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       'Prefilled win pulled from the existing review row.',
@@ -223,7 +231,7 @@ describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', (
   });
 
   it('renders a null bestPractice prefill as an empty optional step', () => {
-    render(<WeeklyReviewWizard prefill={prefill} />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} prefill={prefill} />);
     const next = () => fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
     next(); // → step 2 (prefilled, valid)
     next(); // → step 3 (prefilled, valid)
@@ -235,7 +243,7 @@ describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', (
 
 describe('WeeklyReviewWizard — terminal step (5)', () => {
   it('shows the "Enregistrer ma revue" submit button on step 5', () => {
-    render(<WeeklyReviewWizard />);
+    render(<WeeklyReviewWizard weekStart={WEEK_START} />);
     const next = () => fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
 
     // Step 1 (informational, always valid).

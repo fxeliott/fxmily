@@ -11,7 +11,7 @@ import {
   Target,
   type LucideIcon,
 } from 'lucide-react';
-import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { submitWeeklyReviewAction, type WeeklyReviewActionState } from '@/app/review/actions';
 import { Alert } from '@/components/alert';
@@ -87,18 +87,6 @@ export interface WeeklyReviewPrefill {
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:weekly-review:draft:v1';
-
-function lastMondayUTC(): string {
-  // Use UTC consistently — the server-side Zod refine in `weeklyReviewSchema`
-  // validates via `d.getUTCDay() === 1`. Computing with local `getDay()` +
-  // `setDate()` would desync for users east of UTC (Tokyo Mon 06:00 JST =
-  // Sun 21:00 UTC, etc.) and for FR users at Sun 23:30 around DST shifts.
-  // Code-review #1 BUG-1 fix 2026-05-14.
-  const d = new Date();
-  const offset = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
-  d.setUTCDate(d.getUTCDate() - offset);
-  return d.toISOString().slice(0, 10);
-}
 
 function addDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
@@ -198,13 +186,29 @@ function isStepValid(step: StepIndex, draft: DraftState): boolean {
 }
 
 interface WeeklyReviewWizardProps {
+  /**
+   * J10-1 — lundi (`YYYY-MM-DD`) de la semaine à réviser, dérivé SERVEUR par
+   * `currentParisWeekStart()` (`lib/weekly-review/week.ts`).
+   *
+   * Cette prop remplace l'ancien calcul client `lastMondayUTC()`. Deux raisons,
+   * la seconde étant celle qui faussait des données :
+   *   1. Autorité serveur — l'horloge du navigateur n'a pas à décider de quelle
+   *      semaine parle un upsert `(userId, weekStart)`. C'est le canon déjà
+   *      appliqué aux wizards mindset (§27.7), training-debrief (§23.7) et
+   *      calendrier (§26), où il est noté que le `lastMondayUTC` de REFLECT
+   *      n'avait délibérément PAS été porté.
+   *   2. Fuseau — l'ancre était UTC alors que l'app vit en Europe/Paris. Le
+   *      lundi entre 00 h 00 et 02 h 00 heure de Paris, le wizard proposait la
+   *      semaine précédente et pouvait donc écraser une revue déjà rendue.
+   */
+  weekStart: string;
   /** Existing review for this week → editing (upsert), P2 fix. */
   prefill?: WeeklyReviewPrefill;
 }
 
-export function WeeklyReviewWizard({ prefill }: WeeklyReviewWizardProps = {}) {
+export function WeeklyReviewWizard({ weekStart, prefill }: WeeklyReviewWizardProps) {
   const reduceMotion = useReducedMotion();
-  const initialWeekStart = useMemo(() => lastMondayUTC(), []);
+  const initialWeekStart = weekStart;
   const [draft, setDraft] = useState<DraftState>(() => baseDraft(initialWeekStart, prefill));
   const [step, setStep] = useState<StepIndex>(0);
   const [hydrated, setHydrated] = useState(false);

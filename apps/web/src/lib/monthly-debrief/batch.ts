@@ -3,6 +3,11 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { parseLocalDate } from '@/lib/checkin/timezone';
+import {
+  claimEmailDispatch,
+  markDispatchDelivered,
+  releaseEmailDispatch,
+} from '@/lib/email/dispatch-claim';
 import { sendMonthlyDebriefReadyEmail } from '@/lib/email/send';
 import { enqueueMonthlyDebriefNotification } from '@/lib/notifications/enqueue';
 import {
@@ -275,6 +280,13 @@ export function buildMonthlyBatchUserPrompt(entry: MonthlyBatchSnapshotEntry): s
 type PersistedMonthlyDebriefRow = Parameters<typeof toSerializedMonthlyDebrief>[0];
 
 /**
+ * J10-6 — clé de type de la réservation d'envoi. Volontairement identique au
+ * slug de notification (`monthly_debrief_ready`) pour qu'une réservation en
+ * base se relie sans effort à la file de push et aux préférences membre.
+ */
+export const MONTHLY_DEBRIEF_DISPATCH_TYPE = 'monthly_debrief_ready';
+
+/**
  * V1.4 §25 — notify the member their monthly debrief is ready: enqueue the
  * `monthly_debrief_ready` push + send the member email, then stamp the
  * dispatch state on the row. Best-effort by design: ANY failure (missing
@@ -283,21 +295,32 @@ type PersistedMonthlyDebriefRow = Parameters<typeof toSerializedMonthlyDebrief>[
  * called when `sentToMemberAt === null` (idempotent, no re-spam in steady
  * state — the J-M2 upsert `update` branch never resets the dispatch cols).
  *
- * ⚠️ Residual at-least-once window (code-reviewer T2-1, accepted at V1
- * 30-member single-admin manual-batch scale — mirrors the weekly canon
- * `weekly-report/service.ts` posture). The order is push → email → stamp.
- * An external email send cannot be transactionally tied to the DB stamp, so
- * if the final stamp `update` throws (e.g. pool exhaustion in the narrow gap
- * after the email returns), `sentToMemberAt` stays null and the next batch
- * re-run re-enters this path → ONE duplicate notification. The duplicate
- * push is benign (the SW coalesces by `tag: type`, replacing the prior
- * notif — see `dispatcher.ts buildPayload`); only a single duplicate email
- * is the real residual, and it is made OBSERVABLE by the distinct
- * `dispatch_stamp_failed` Sentry warning below (not a silent re-spam). A
- * true exactly-once fix (transactional outbox) would also have to touch the
- * weekly pipeline → out of §25 scope, tracked as a V2 decision. "Stamp
- * first" is deliberately NOT used: it would trade this rare dup for silent
- * non-delivery, which is worse for a notify feature.
+ * ## J10 correctif n°6 — la fenêtre at-least-once est FERMÉE
+ *
+ * L'ordre était push → email → marquage. Si le marquage échouait (une panne de
+ * base dans l'intervalle étroit après le retour de Resend), `sentToMemberAt`
+ * restait `null` et la relance suivante du batch renvoyait un DEUXIÈME email au
+ * membre. C'était documenté ici comme un résidu accepté ; ce n'en est plus un.
+ *
+ * Une **réservation** (`lib/email/dispatch-claim`) est désormais écrite AVANT
+ * l'envoi, sur la clé `(userId, 'monthly_debrief_ready', monthStart)` protégée
+ * par une contrainte unique. Un second passage la heurte et s'arrête. Si
+ * l'envoi échoue vraiment, la réservation est libérée pour que la relance
+ * réessaie — c'est ce qui permet de fermer le doublon sans retomber dans la
+ * non-délivrance silencieuse que le « marquer d'abord » aurait provoquée, et
+ * que la version précédente refusait à juste titre.
+ *
+ * Le marquage `sentToMemberAt` n'est plus le garde-fou contre le doublon — la
+ * réservation l'est. Il redevient ce qu'il aurait toujours dû être : un
+ * enregistrement de l'état d'envoi, écrit UNIQUEMENT si l'email est
+ * effectivement parti. Écrit inconditionnellement, il mentait à ses deux
+ * lecteurs — l'appelant, qui ne redispatche que sur `null`, et `overdue.ts`,
+ * qui compte un membre couvert dès qu'il est renseigné. Son échec est toujours
+ * signalé (`dispatch_stamp_failed`), mais il ne peut plus provoquer de renvoi.
+ *
+ * Résidu restant, borné et assumé : un processus tué APRÈS l'acceptation par
+ * Resend et AVANT la confirmation de la réservation. Voir
+ * `DISPATCH_CLAIM_STALE_AFTER_MS`.
  */
 async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): Promise<void> {
   try {
@@ -308,6 +331,27 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
     if (user === null) return;
 
     const serialized = toSerializedMonthlyDebrief(row);
+
+    // J10-6 — la réservation part AVANT tout envoi. Un second passage (relance
+    // du batch après un marquage perdu, ou deux exécutions concurrentes) la
+    // heurte et sort sans rien envoyer.
+    const claim = await claimEmailDispatch({
+      userId: row.userId,
+      type: MONTHLY_DEBRIEF_DISPATCH_TYPE,
+      period: serialized.monthStart,
+    });
+    if (!claim.ok) {
+      if (claim.reason === 'in_flight') {
+        // Deux exécutions du batch se marchent dessus : information
+        // d'exploitation, pas incident. « already_delivered » est l'état
+        // nominal en régime permanent et ne mérite aucun bruit.
+        reportWarning('monthly_debrief.batch', 'dispatch_already_in_flight', {
+          userId: row.userId,
+          monthStart: serialized.monthStart,
+        });
+      }
+      return;
+    }
 
     const pushId = await enqueueMonthlyDebriefNotification(row.userId, {
       debriefId: row.id,
@@ -332,17 +376,68 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
       debrief: serialized,
     });
 
+    // J10-6 — l'envoi est confirmé (ou libéré) AVANT le marquage, parce que
+    // c'est la réservation, pas le marquage, qui décide s'il y aura un second
+    // envoi. Un email non délivré libère la place : la prochaine exécution
+    // réessaiera au lieu d'abandonner le membre en silence.
+    // Trois sorts possibles, et ils n'appellent pas la même suite.
+    //
+    // `permanent` = l'adresse est en liste de suppression (hard bounce,
+    // plainte). Réessayer est SANS ESPOIR et abîme la réputation d'envoi. Sans
+    // cette distinction, le correctif « ne pas marquer un envoi qui n'est pas
+    // parti » transformait une adresse morte en **alerte quotidienne
+    // perpétuelle** : `overdue.ts` compte ce membre découvert, l'admin relance,
+    // le même refus revient. Un signal que rien ne peut résoudre finit ignoré,
+    // et emporte les vrais avec lui.
+    const permanentlyUndeliverable = email.delivered === false && email.permanent === true;
+
+    if (email.delivered) {
+      await markDispatchDelivered(claim.claimId);
+    } else if (permanentlyUndeliverable) {
+      // La réservation est CONFIRMÉE : plus aucune tentative, elles seraient
+      // toutes refusées de la même façon.
+      await markDispatchDelivered(claim.claimId);
+      reportWarning('monthly_debrief.batch', 'member_email_undeliverable', {
+        userId: row.userId,
+        monthStart: serialized.monthStart,
+      });
+    } else {
+      await releaseEmailDispatch(claim.claimId);
+    }
+
     // Dispatch state is the SSOT observability record (SPEC §25.3 — no
     // dedicated email audit slug; `notification.enqueued` covers the push).
     // Isolated try/catch (code-reviewer T2-1): push + email have already
     // fired here, so a lost stamp = a re-notify next run. Surface it as a
     // distinct warning instead of letting it ride the generic outer catch —
     // the residual is documented + accepted at V1 scale, but never silent.
+    //
+    // J10-6 — `sentToMemberAt` n'est écrit QUE si l'email est parti. Il était
+    // écrit inconditionnellement, et l'unique appelant ne redispatche que sur
+    // `sentToMemberAt === null` (voir plus bas) : un envoi refusé sans
+    // exception — cap quotidien Resend atteint, destinataire supprimé, les
+    // deux rendent `delivered: false` sans lever — marquait donc le membre
+    // comme notifié alors qu'il n'avait RIEN reçu. La libération de la
+    // réservation, juste au-dessus, ne pouvait mener à aucune relance : la
+    // porte d'entrée restait fermée. `overdue.ts` lit la même colonne, donc
+    // l'alerte d'exploitation ne partait pas non plus.
+    //
+    // Laisser la colonne à `null` rouvre les deux : la prochaine exécution
+    // réessaie, et tant qu'elle échoue le membre est compté comme découvert.
+    // Le push, lui, est estampillé dans tous les cas — il est parti, et sa
+    // duplication éventuelle est bénigne par conception (tag-coalesced,
+    // décision verrouillée §25.2).
     try {
       await db.monthlyDebrief.update({
         where: { id: row.id },
         data: {
-          sentToMemberAt: new Date(),
+          // Marqué si l'email est parti — ou s'il ne partira JAMAIS : dans les
+          // deux cas il n'y a plus rien à tenter, et laisser la colonne à
+          // `null` produirait une relance quotidienne sans issue.
+          // `sentToMemberEmail` reste `null` pour l'adresse morte : la ligne
+          // dit alors « traité, mais rien n'est arrivé », et l'avertissement
+          // `member_email_undeliverable` porte le diagnostic.
+          ...(email.delivered || permanentlyUndeliverable ? { sentToMemberAt: new Date() } : {}),
           sentToMemberEmail: email.delivered ? user.email : null,
           pushEnqueuedAt: pushId !== null ? new Date() : null,
         },

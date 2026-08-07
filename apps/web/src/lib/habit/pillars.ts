@@ -1,3 +1,4 @@
+import { caffeineFromHabitLog } from '@/lib/habit/caffeine';
 import {
   caffeineValueSchema,
   type HabitKind,
@@ -76,7 +77,16 @@ function pillarScalar(kind: HabitKind, value: unknown): number | null {
     }
     case 'caffeine': {
       const r = caffeineValueSchema.safeParse(value);
-      return r.success ? r.data.cups : null;
+      // J10 correctif n°3 — JUMEAU du lecteur de `lib/analytics/
+      // habit-trade-correlation.ts`. Deux extracteurs de scalaire coexistent
+      // (le pare-feu §21.5 interdit aux modules de rapport d'importer
+      // `@/lib/analytics`), et corriger l'un sans l'autre aurait laissé la
+      // moitié du défaut en place. Les deux passent désormais par
+      // `lib/habit/caffeine`, seul endroit où le ratio est écrit.
+      // ⚠️ Aucune réconciliation ici non plus : la valeur rendue reste en
+      // TASSES, à l'identique, et la caféine du check-in reste hors analyse.
+      // L'en-tête de `lib/habit/caffeine` dit exactement ce qui manque.
+      return r.success ? caffeineFromHabitLog(r.data.cups).cups : null;
     }
     case 'sport': {
       const r = sportValueSchema.safeParse(value);

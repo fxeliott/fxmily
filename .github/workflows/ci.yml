@@ -148,6 +148,12 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
+          # Identifiants d'un conteneur ÉPHÉMÈRE, créé et détruit avec le job,
+          # joignable uniquement depuis `localhost` du runner. Ce n'est pas un
+          # secret et ça ne doit pas en devenir un : un `secrets.` ici ne
+          # protégerait rien et rendrait le workflow illisible. Même convention
+          # que `docker-compose.dev.yml`. Le dépôt étant public, la remarque
+          # est écrite plutôt que supposée.
           POSTGRES_USER: fxmily
           POSTGRES_PASSWORD: fxmily_ci
           POSTGRES_DB: fxmily_ci

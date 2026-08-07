@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CLOCK_SKEW_TOLERANCE_MS } from '@/lib/schemas/clock-skew';
 import { TRADINGVIEW_URL_MAX, tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { TRADING_PAIRS } from '@/lib/trading/pairs';
@@ -125,12 +126,20 @@ const checklistItemSchema = z
   })
   .optional();
 
-/** Backtest entry timestamp — EXACT mirror of `trade.ts` `enteredAt`
- * (plain instant, NOT a calendar day: no civil-window applies). */
+/**
+ * Backtest entry timestamp — mirror of `trade.ts` `enteredAt` (plain instant,
+ * NOT a calendar day: no civil-window applies).
+ *
+ * J10 — la tolérance suit la même constante que le journal réel. Elle traînait
+ * encore l'heure d'avant tout en se déclarant « EXACT mirror », ce qui aurait
+ * laissé dater un backtest 45 minutes en avant pendant qu'un trade réel était
+ * refusé. Aucun piège de clôture ici (un backtest n'a pas de sortie datée
+ * contrainte), mais deux règles qui se disent identiques doivent l'être.
+ */
 const enteredAtSchema = z.coerce
   .date({ message: 'Date invalide.' })
   .min(new Date('2000-01-01'), { message: 'Date trop ancienne.' })
-  .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
+  .refine((d) => d.getTime() <= Date.now() + CLOCK_SKEW_TOLERANCE_MS, {
     message: 'Date dans le futur.',
   });
 

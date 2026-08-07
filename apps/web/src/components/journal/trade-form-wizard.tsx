@@ -316,7 +316,28 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
         clearDraft();
         return;
       }
-      if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      if (result.fieldErrors) {
+        setFieldErrors(result.fieldErrors);
+        // J10 — ramener le membre AU champ que le serveur a refusé.
+        //
+        // Client et serveur ne comparent pas à la même horloge : `enteredAt`
+        // est pré-rempli avec celle de l'APPAREIL, et `validateStep` la
+        // re-compare à cette même horloge — donc un appareil en avance de
+        // quelques minutes passe le client et se fait refuser par le serveur,
+        // sur une valeur que le membre n'a jamais touchée.
+        //
+        // Sans ce routage, l'erreur était injouable : elle se posait sur
+        // l'étape 5, qui ne contient pas ce champ, et revenir en arrière la
+        // vidait (`goToStep` sans `keepErrors`). Le membre tournait en rond
+        // sans jamais voir ce qui bloquait. Le motif existe déjà juste
+        // au-dessus pour les questions de discipline ; il manquait ici.
+        const firstBadStep = WIZARD_STEPS.findIndex((fields) =>
+          fields.some((f) => result.fieldErrors?.[f] !== undefined),
+        );
+        if (firstBadStep >= 0 && firstBadStep !== step) {
+          goToStep(firstBadStep as StepIndex, { keepErrors: true });
+        }
+      }
       setServerError(serverErrorMessage(result));
     });
   };

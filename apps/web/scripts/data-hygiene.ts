@@ -18,13 +18,22 @@
  *
  * ## Ce qui est considéré comme faux, et pourquoi
  *
- * `exitedAt > closedAt` : la sortie DÉCLARÉE est postérieure à l'instant où le
- * membre a ENREGISTRÉ la clôture. C'est impossible dans le monde réel — on ne
- * peut pas enregistrer une sortie avant qu'elle ait eu lieu. C'est la trace
- * exacte du défaut corrigé par ce jalon : le formulaire pré-remplissait
+ * `exitedAt > closedAt + tolérance` : la sortie DÉCLARÉE est postérieure à
+ * l'instant où le membre a ENREGISTRÉ la clôture, au-delà de ce qu'une horloge
+ * mal réglée explique. C'est impossible dans le monde réel — on ne peut pas
+ * enregistrer une sortie avant qu'elle ait eu lieu. C'est la trace exacte du
+ * défaut corrigé par ce jalon : le formulaire pré-remplissait
  * `max(maintenant, entrée + 1 h)`, donc tout trade clôturé moins d'une heure
  * après son ouverture repartait avec une sortie dans le futur si le membre ne
  * corrigeait pas la valeur.
+ *
+ * ⚠️ La tolérance n'est PAS un détail, et elle n'est pas redéclarée ici : elle
+ * vient de `lib/schemas/clock-skew`, la même que celle qui autorise la saisie.
+ * Sans elle, ce script traiterait comme aberrante toute clôture normale faite
+ * depuis un appareil en avance de quelques minutes — il « corrigerait » des
+ * lignes saines, ce qui est exactement ce qu'un outil d'hygiène ne doit jamais
+ * faire. Un seuil plus large que la saisie serait tout aussi faux dans l'autre
+ * sens : il laisserait passer des aberrations réelles.
  *
  * ## Ce que la correction fait, et ce qu'elle ne peut pas faire
  *
@@ -44,6 +53,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { PrismaClient } from '../src/generated/prisma/client';
+import { CLOCK_SKEW_TOLERANCE_MS } from '../src/lib/schemas/clock-skew';
 
 const command = process.argv[2];
 const apply = process.argv.includes('--apply');
@@ -61,6 +71,9 @@ if (DATABASE_URL === undefined || DATABASE_URL === '') {
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL }) });
 
+/** Même tolérance que la saisie — voir l'en-tête. Exprimée en secondes pour SQL. */
+const SKEW_SECONDS = CLOCK_SKEW_TOLERANCE_MS / 1000;
+
 /** Trades dont la sortie déclarée est postérieure à leur enregistrement. */
 async function countFutureExits(): Promise<number> {
   const rows = await db.$queryRaw<{ n: bigint }[]>`
@@ -68,7 +81,7 @@ async function countFutureExits(): Promise<number> {
     FROM trades
     WHERE closed_at IS NOT NULL
       AND exited_at IS NOT NULL
-      AND exited_at > closed_at
+      AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
   `;
   return Number(rows[0]?.n ?? 0);
 }
@@ -86,7 +99,8 @@ async function describeFutureExits(): Promise<void> {
       COUNT(*)::bigint AS n,
       MAX(EXTRACT(EPOCH FROM (exited_at - closed_at)) / 60)::float AS max_minutes
     FROM trades
-    WHERE closed_at IS NOT NULL AND exited_at IS NOT NULL AND exited_at > closed_at
+    WHERE closed_at IS NOT NULL AND exited_at IS NOT NULL
+      AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
     GROUP BY 1
     ORDER BY 1
   `;
@@ -149,7 +163,7 @@ try {
         FROM trades
         WHERE closed_at IS NOT NULL
           AND exited_at IS NOT NULL
-          AND exited_at > closed_at
+          AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
         ORDER BY id
       `;
       console.log('\nLignes modifiées (anciennes valeurs — à conserver pour un retour arrière) :');
@@ -165,11 +179,24 @@ try {
         SET exited_at = closed_at
         WHERE closed_at IS NOT NULL
           AND exited_at IS NOT NULL
-          AND exited_at > closed_at
+          AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
       `;
       const after = await countFutureExits();
       console.log(`\nAPPLIQUÉ : ${updated} ligne(s) mises à jour`);
       console.log(`APRÈS  : ${after} trade(s) restants (attendu : 0)`);
+
+      // Le journal et l'écriture sont deux allers-retours distincts : une ligne
+      // devenue éligible entre les deux serait écrasée SANS figurer au journal,
+      // ce qui viderait de son sens la promesse « voici de quoi revenir en
+      // arrière ». Les deux comptes existent déjà — les comparer rend le trou
+      // visible au lieu de le laisser muet.
+      if (updated !== doomed.length) {
+        console.error(
+          `FAIL: ${updated} ligne(s) écrites mais ${doomed.length} journalisée(s). ` +
+            `Des lignes ont changé pendant l'opération : le journal ci-dessus est INCOMPLET.`,
+        );
+        process.exit(1);
+      }
       if (after !== 0) {
         console.error('FAIL: des écarts subsistent après correction.');
         process.exit(1);

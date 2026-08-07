@@ -23,8 +23,11 @@ import { formatDateTimeLocalInput } from '@/lib/timezones';
  *
  * Le plancher à `enteredAt` n'est pas décoratif : `closeTrade` rejette
  * `exitedAt < enteredAt` (`lib/trades/service.ts`) et `tradeOpenSchema` tolère
- * une entrée datée jusqu'à une heure en avant. Sans ce plancher, un tel trade
- * ouvrirait un formulaire structurellement invalide.
+ * une entrée datée légèrement en avant — de la valeur exacte de
+ * `CLOCK_SKEW_TOLERANCE_MS`, la même que la clôture depuis le J10. Sans ce
+ * plancher, un tel trade ouvrirait un formulaire structurellement invalide ;
+ * avec l'égalité des deux tolérances, `exitedAt = enteredAt` est toujours une
+ * clôture recevable.
  */
 export function defaultExitInstant(enteredAt: Date, now: Date = new Date()): Date {
   return new Date(Math.max(now.getTime(), enteredAt.getTime()));

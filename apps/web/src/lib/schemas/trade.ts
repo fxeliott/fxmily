@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CLOCK_SKEW_TOLERANCE_MS } from '@/lib/schemas/clock-skew';
 import { tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { EMOTION_MAX_PER_MOMENT, isEmotionSlug } from '@/lib/trading/emotions';
@@ -284,43 +285,33 @@ export const tradeOpenSchema = z
 export type TradeOpenInput = z.infer<typeof tradeOpenSchema>;
 
 /**
- * J10 correctif n°2 — tolérance de DÉRIVE D'HORLOGE sur `exitedAt`, et rien
- * d'autre.
+ * J10 correctif n°2 — la tolérance de dérive d'horloge, définie en un seul
+ * endroit (`lib/schemas/clock-skew`) et ré-exportée ici pour les appelants
+ * historiques.
  *
- * Le mur horaire est `now` : une position ne se clôture pas dans le futur. Mais
- * l'instant soumis est construit à partir de l'horloge du NAVIGATEUR (le champ
- * `datetime-local` est pré-rempli côté client), puis réinterprété par le
- * serveur dans le fuseau du membre. Deux horloges, donc un écart possible de
- * quelques secondes à quelques minutes sur une machine mal synchronisée. Sans
- * marge, un membre qui ne touche à rien verrait son propre pré-remplissage
- * rejeté — le pire des refus, puisqu'il ne peut rien y faire.
+ * ## Pourquoi elle vaut des deux côtés
  *
- * 2 minutes couvrent la dérive ordinaire et restent trop courtes pour laisser
- * passer une saisie volontairement future (l'ancienne valeur, 60 minutes,
- * laissait passer une heure entière). La dérive de FUSEAU, elle, est déjà
- * neutralisée en amont : le wizard interprète l'heure murale dans le fuseau du
- * membre avant de valider (`trade-form-wizard.tsx`, correctif F2).
- *
- * ## Pourquoi elle vaut aussi pour l'ENTRÉE
- *
- * La première rédaction gardait 60 minutes côté entrée et écrivait, noir sur
- * blanc, que le trade serait alors inclôturable jusqu'à ce que l'horloge
- * rattrape — « assumé et borné ». Une revue en contexte frais a refusé
- * l'arbitrage, et elle a eu raison : un membre qui date son entrée 20 minutes
- * en avant tombe sur une IMPASSE. `closeTrade` exige `exitedAt >= enteredAt`
- * (`lib/trades/service.ts`) et le schéma de clôture exige
- * `exitedAt <= now + 2 min` : aucune valeur ne satisfait les deux. Il voit
+ * La première rédaction gardait 60 minutes côté ENTRÉE et 2 minutes côté
+ * SORTIE, en écrivant noir sur blanc que le trade serait alors inclôturable
+ * jusqu'à ce que l'horloge rattrape — « assumé et borné ». Une revue en
+ * contexte frais a refusé l'arbitrage, et elle a eu raison : un membre qui
+ * date son entrée 20 minutes en avant tombe sur une IMPASSE. `closeTrade`
+ * exige `exitedAt >= enteredAt` (`lib/trades/service.ts`) et la clôture exige
+ * `exitedAt <= now + skew` : aucune valeur ne satisfait les deux. Il voit
  * « La sortie ne peut pas être dans le futur » sans qu'aucun écran ne lui dise
  * d'attendre. Documenter un piège ne le désamorce pas.
  *
- * Une seule tolérance des deux côtés ferme l'impasse **par construction** :
- * si `enteredAt <= now + skew`, alors `exitedAt = enteredAt` est toujours une
+ * Une seule tolérance ferme l'impasse **par construction** : si
+ * `enteredAt <= now + skew`, alors `exitedAt = enteredAt` est toujours une
  * clôture recevable. C'est aussi plus juste sur le fond — le journal
  * enregistre des positions PRISES (il exige un prix d'entrée et une taille de
  * lot), pas des ordres en attente ; une entrée dans le futur produit une durée
- * négative dès la clôture. L'invariant est verrouillé par un test dédié.
+ * négative dès la clôture. L'invariant est verrouillé par un test qui ne lit
+ * aucune constante.
+ *
+ * La valeur elle-même, et sa source, sont justifiées dans `clock-skew.ts`.
  */
-export const CLOCK_SKEW_TOLERANCE_MS = 2 * 60 * 1000;
+export { CLOCK_SKEW_TOLERANCE_MS };
 
 /**
  * Post-exit block (step 7, or close-out flow on /journal/[id]/close).

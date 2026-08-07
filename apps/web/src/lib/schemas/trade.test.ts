@@ -263,9 +263,19 @@ describe('tradeCloseSchema', () => {
     }
   });
 
-  it('rejects an exit 3 minutes in the future (just past the clock-skew margin)', () => {
-    const soon = new Date(Date.now() + 3 * 60 * 1000);
+  it('rejects an exit 10 minutes in the future (past the clock-skew margin)', () => {
+    // 10 min : au-delà de la dérive d'horloge de référence (RFC 4120 §1.6 :
+    // « typically on the order of 5 minutes »), donc une saisie, pas un écart.
+    const soon = new Date(Date.now() + 10 * 60 * 1000);
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: soon }).success).toBe(false);
+  });
+
+  it('accepts an exit 3 minutes ahead (a device clock that runs fast, unaided)', () => {
+    // Le cas mesuré par une revue en contexte frais : un appareil en avance de
+    // 3 minutes passe la validation CLIENT (même horloge) et se faisait
+    // refuser par le SERVEUR, sur une valeur que le membre n'a pas saisie.
+    const skewed = new Date(Date.now() + 3 * 60 * 1000);
+    expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: skewed }).success).toBe(true);
   });
 
   it('accepts an exit within the clock-skew margin (a browser clock runs fast)', () => {

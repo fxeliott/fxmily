@@ -425,14 +425,33 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
           onChange={(e) => setNotes(e.currentTarget.value)}
           disabled={pending}
           placeholder="Comment tu t'es senti ? Ce qui a marché / pas marché ?"
+          aria-invalid={state.fieldErrors?.notes ? 'true' : undefined}
+          {...(state.fieldErrors?.notes ? { 'aria-describedby': 'notes-error' } : {})}
           className={cn(
             'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
-            'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            state.fieldErrors?.notes
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
             'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         />
+        {/* Ce champ n'affichait RIEN quand le serveur le refusait, alors que la
+            bannière du formulaire annonce « Vérifie les champs en rouge » — et
+            qu'aucun champ ne devenait rouge. Le membre ne pouvait alors PLUS
+            clôturer son trade, jamais, tant qu'il n'effaçait pas ce texte par
+            chance. C'est pire que le même trou côté ouverture : un trade qui
+            reste ouvert fausse `realizedR`, les statistiques de session et les
+            chargeurs IA aussi longtemps qu'il le reste.
+            `tradeCloseSchema.notes` est LE MÊME `notesSchema` que le wizard
+            d'ouverture : il refuse les caractères de largeur nulle, et le liant
+            U+200D d'un emoji composé (👩‍💻) en est un — un copier-coller suffit. */}
+        {state.fieldErrors?.notes ? (
+          <p id="notes-error" className="text-[11px] text-[var(--bad)]" role="alert">
+            {state.fieldErrors.notes}
+          </p>
+        ) : null}
       </div>
 
       {/* J1 — TradingView exit link (replaces the exit screenshot upload) */}

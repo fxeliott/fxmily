@@ -1104,6 +1104,11 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
           maxLength={2000}
           placeholder="Setup, contexte, déclencheur…"
           aria-invalid={fieldErrors.notes ? 'true' : undefined}
+          // Sans `aria-describedby`, un lecteur d'écran annonce « champ
+          // invalide » sans jamais dire POURQUOI : le message existe à
+          // l'écran mais n'est rattaché à rien. Même câblage que
+          // `NumericField` et `TradingViewNoteField` plus bas.
+          {...(fieldErrors.notes ? { 'aria-describedby': 'notes-error' } : {})}
           className={cn(
             'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
@@ -1120,7 +1125,7 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
             (le liant U+200D de 👩‍💻) suffit à introduire. Le membre voyait
             alors sa sauvegarde échouer sans qu'aucun écran ne nomme la cause. */}
         {fieldErrors.notes ? (
-          <p className="text-[11px] text-[var(--bad)]" role="alert">
+          <p id="notes-error" className="text-[11px] text-[var(--bad)]" role="alert">
             {fieldErrors.notes}
           </p>
         ) : null}

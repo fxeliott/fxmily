@@ -236,7 +236,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
         <Alert tone="danger">
           {errors?.weekStart
             ? `${errors.weekStart} Cette semaine est déterminée automatiquement : recharge la page pour repartir sur la bonne.`
-            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée — corrige-la, puis enregistre à nouveau.`}
+            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée : corrige-la, puis enregistre à nouveau.`}
         </Alert>
       ) : null}
 

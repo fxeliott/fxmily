@@ -440,13 +440,34 @@ export const WIZARD_STEPS = [
   // « Étape X sur 6 ») — this entry documents the CLOSE flow's field group
   // (`/journal/[id]/close`) so both flows share one field map (S4 DOD4-F1 :
   // kept on purpose, not dead code).
+  //
+  // Il MANQUAIT SEPT champs — et rien ne l'a signalé pendant des mois : le seul
+  // test qui regardait ce tableau vérifiait sa LONGUEUR, c'est-à-dire lui-même.
+  // Il est désormais confronté à `tradeCloseSchema` (`trade.test.ts`), donc un
+  // champ ajouté au schéma sans passer par un écran fait rougir la CI. C'est
+  // aussi ce test qui a énuméré les sept — pas une relecture.
+  //
+  // Cinq d'entre eux — `movedToBe`, `partialAtTarget`, `slPerRule`,
+  // `processComplete`, `exitReason` — n'ont volontairement AUCUN rendu
+  // d'erreur : ce sont des boutons radio dont les seules valeurs possibles sont
+  // déjà acceptées (tri-état coercé vers `null`, ou énumération fermée). Le
+  // formulaire ne peut poster aucune valeur refusable, donc un message
+  // d'erreur y serait du code qu'aucun chemin n'atteint. Les deux autres,
+  // `tags` et `tradingViewExitNote`, affichent bien le leur.
   [
     'exitedAt',
     'exitPrice',
     'outcome',
+    'exitReason',
     'emotionDuring',
     'emotionAfter',
+    'processComplete',
+    'slPerRule',
+    'movedToBe',
+    'partialAtTarget',
     'tradingViewExitUrl',
+    'tradingViewExitNote',
+    'tags',
     'notes',
   ],
 ] as const;

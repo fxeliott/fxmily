@@ -68,7 +68,7 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaClient } from '../src/generated/prisma/client';
+import { Prisma, PrismaClient } from '../src/generated/prisma/client';
 import { CLOCK_SKEW_TOLERANCE_MS } from '../src/lib/schemas/clock-skew';
 
 const command = process.argv[2];
@@ -102,18 +102,27 @@ async function countFutureExits(): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-/** Répartition de l'écart, pour savoir à quoi on a affaire avant de corriger. */
+/**
+ * Répartition de l'écart, pour savoir à quoi on a affaire avant de corriger.
+ *
+ * L'écart mesuré ici est CELUI DU CRITÈRE — `exited_at - GREATEST(closed_at,
+ * entered_at)` — et pas `exited_at - closed_at`. Les deux avaient divergé : le
+ * `WHERE` sélectionnait sur l'un pendant que les tranches affichaient l'autre,
+ * si bien que « écart max 105 min » annonçait un écart que la correction
+ * n'allait pas refermer (elle en refermait 60). Un même nombre ne peut pas
+ * avoir deux définitions dans une seule sortie.
+ */
 async function describeFutureExits(): Promise<void> {
   const rows = await db.$queryRaw<{ bucket: string; n: bigint; max_minutes: number | null }[]>`
     SELECT
       CASE
-        WHEN EXTRACT(EPOCH FROM (exited_at - closed_at)) <= 300   THEN 'a. <= 5 min'
-        WHEN EXTRACT(EPOCH FROM (exited_at - closed_at)) <= 3600  THEN 'b. 5 min - 1 h'
-        WHEN EXTRACT(EPOCH FROM (exited_at - closed_at)) <= 86400 THEN 'c. 1 h - 24 h'
+        WHEN EXTRACT(EPOCH FROM (exited_at - GREATEST(closed_at, entered_at))) <= 300   THEN 'a. <= 5 min'
+        WHEN EXTRACT(EPOCH FROM (exited_at - GREATEST(closed_at, entered_at))) <= 3600  THEN 'b. 5 min - 1 h'
+        WHEN EXTRACT(EPOCH FROM (exited_at - GREATEST(closed_at, entered_at))) <= 86400 THEN 'c. 1 h - 24 h'
         ELSE 'd. > 24 h'
       END AS bucket,
       COUNT(*)::bigint AS n,
-      MAX(EXTRACT(EPOCH FROM (exited_at - closed_at)) / 60)::float AS max_minutes
+      MAX(EXTRACT(EPOCH FROM (exited_at - GREATEST(closed_at, entered_at))) / 60)::float AS max_minutes
     FROM trades
     WHERE closed_at IS NOT NULL AND exited_at IS NOT NULL
       AND exited_at > GREATEST(closed_at, entered_at) + make_interval(secs => ${SKEW_SECONDS})
@@ -128,6 +137,53 @@ async function describeFutureExits(): Promise<void> {
     const worst = r.max_minutes === null ? 'n/a' : `${Math.round(r.max_minutes)} min`;
     console.log(`  ${r.bucket} : ${Number(r.n)} trade(s), écart max ${worst}`);
   }
+}
+
+/**
+ * Trades dont l'ENTRÉE déclarée est postérieure à l'enregistrement — la
+ * sous-population que cette commande ne répare PAS, et qu'il serait malhonnête
+ * de laisser croire propre.
+ *
+ * Pourquoi elle existe : jusqu'au durcissement J10, l'ouverture tolérait une
+ * heure d'avance sur `enteredAt`. Une ligne saisie ainsi puis clôturée avant
+ * cette date porte `entered_at > closed_at`.
+ *
+ * Pourquoi la commande ne la touche pas : ramener `exited_at` à `closed_at`
+ * fabriquerait une durée négative — c'est précisément le défaut que la borne
+ * `GREATEST` ferme. Mais `GREATEST` a un effet de bord qu'il faut dire tout
+ * haut : ces lignes sortent du compte « sortie postérieure à la clôture » et
+ * le total affiche zéro alors que leur `entered_at` reste faux. Réparer cela
+ * demande de décider quoi faire de `entered_at` lui-même — ce qu'aucun script
+ * ne devrait trancher seul, faute de savoir ce que le membre a vraiment vécu.
+ *
+ * Donc : compté, affiché, jamais absorbé en silence.
+ */
+async function countFutureEntries(): Promise<{ n: number; worstMinutes: number | null }> {
+  const rows = await db.$queryRaw<{ n: bigint; worst: number | null }[]>`
+    SELECT
+      COUNT(*)::bigint AS n,
+      MAX(EXTRACT(EPOCH FROM (entered_at - closed_at)) / 60)::float AS worst
+    FROM trades
+    WHERE closed_at IS NOT NULL
+      AND entered_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
+  `;
+  return { n: Number(rows[0]?.n ?? 0), worstMinutes: rows[0]?.worst ?? null };
+}
+
+/** Affiche la sous-population non réparée, en disant qu'elle ne l'est pas. */
+async function reportFutureEntries(): Promise<void> {
+  const { n, worstMinutes } = await countFutureEntries();
+  if (n === 0) {
+    console.log("[correctif 2 bis] aucune ligne dont l'entrée précède son enregistrement.");
+    return;
+  }
+  const worst = worstMinutes === null ? 'n/a' : `${Math.round(worstMinutes)} min`;
+  console.log(
+    `[correctif 2 bis] ${n} trade(s) dont l'ENTRÉE est postérieure à l'enregistrement ` +
+      `(au pire ${worst} d'avance). Cette commande ne les corrige PAS : ramener leur ` +
+      `sortie créerait une durée négative. Elles sortent aussi du compte ci-dessus — ` +
+      `un zéro plus haut ne veut donc pas dire « base saine ».`,
+  );
 }
 
 /** Lignes restantes dans les tables du Track Record déprécié (correctif n°5). */
@@ -146,6 +202,7 @@ try {
     const future = await countFutureExits();
     console.log(`[correctif 2] trades dont la sortie est postérieure à leur clôture : ${future}`);
     await describeFutureExits();
+    await reportFutureEntries();
 
     const pub = await countDeprecatedPublicTrades();
     console.log(
@@ -163,6 +220,7 @@ try {
     const before = await countFutureExits();
     console.log(`AVANT : ${before} trade(s) avec une sortie postérieure à la clôture`);
     await describeFutureExits();
+    await reportFutureEntries();
 
     if (!apply) {
       console.log(
@@ -225,16 +283,49 @@ try {
       // précédente de ce script pouvait créer ; le contrôle reste en place
       // même une fois la cause fermée, parce qu'un outil d'écriture doit
       // prouver son invariant à chaque exécution, pas une fois en revue.
-      const negatives = await db.$queryRaw<{ n: bigint }[]>`
+      //
+      // Le contrôle porte sur LES LIGNES QUE CE RUN A ÉCRITES, pas sur toute la
+      // table. La version globale mélangeait deux choses : « mon écriture a
+      // corrompu des données » et « la table contenait déjà une anomalie
+      // étrangère ». Elle affichait alors « NE PAS relancer, investiguer »
+      // après une réparation parfaitement réussie — un message faux, dans la
+      // direction prudente, mais faux quand même. Un opérateur qui reçoit un
+      // FAIL doit pouvoir en déduire ce qui s'est passé.
+      const doomedIds = doomed.map((r) => r.id);
+      const negatives =
+        doomedIds.length === 0
+          ? []
+          : await db.$queryRaw<{ id: string }[]>`
+              SELECT id FROM trades
+              WHERE id = ANY(${doomedIds})
+                AND exited_at IS NOT NULL AND exited_at < entered_at
+            `;
+      console.log(
+        `CONTRÔLE : ${negatives.length} ligne(s) écrite(s) avec une durée négative (attendu : 0)`,
+      );
+      if (negatives.length !== 0) {
+        console.error(
+          `FAIL: cette écriture a produit ${negatives.length} durée(s) négative(s) ` +
+            `(${negatives.map((r) => r.id).join(', ')}) — NE PAS relancer, investiguer.`,
+        );
+        process.exit(1);
+      }
+
+      // Les anomalies préexistantes sont dites, sans faire échouer le run :
+      // elles ne viennent pas d'ici, et les taire reviendrait à laisser croire
+      // que la table est saine parce que cette commande s'est bien passée.
+      const foreign = await db.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(*)::bigint AS n
         FROM trades
         WHERE exited_at IS NOT NULL AND exited_at < entered_at
+          ${doomedIds.length === 0 ? Prisma.empty : Prisma.sql`AND NOT (id = ANY(${doomedIds}))`}
       `;
-      const negativeCount = Number(negatives[0]?.n ?? 0);
-      console.log(`CONTRÔLE : ${negativeCount} trade(s) avec une durée négative (attendu : 0)`);
-      if (negativeCount !== 0) {
-        console.error('FAIL: des durées négatives existent — NE PAS relancer, investiguer.');
-        process.exit(1);
+      const foreignCount = Number(foreign[0]?.n ?? 0);
+      if (foreignCount > 0) {
+        console.warn(
+          `OBSERVATION : ${foreignCount} trade(s) portaient DÉJÀ une durée négative, ` +
+            `hors des lignes touchées ici. Non corrigés par cette commande, à investiguer à part.`,
+        );
       }
     }
   }

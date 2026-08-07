@@ -44,6 +44,7 @@ import {
   markDispatchDelivered,
   releaseEmailDispatch,
 } from '@/lib/email/dispatch-claim';
+import { EmailDeliveryError } from '@/lib/email/client';
 import { sendMonthlyDebriefReadyEmail } from '@/lib/email/send';
 import { enqueueMonthlyDebriefNotification } from '@/lib/notifications/enqueue';
 
@@ -266,6 +267,50 @@ describe('monthly debrief dispatch — ce que le batch écrit selon le sort de l
       'member_dispatch_failed',
       expect.objectContaining({ userId: 'user-active-1' }),
     );
+  });
+
+  /**
+   * Le pendant exact du test précédent, et la frontière entre les deux.
+   *
+   * Le dépassement de délai d'envoi n'annule PAS la requête vers Resend : elle
+   * poursuit sa route et peut délivrer l'email. Libérer la réservation dans ce
+   * cas retirerait le seul garde-fou contre un DOUBLE envoi — alors que le
+   * mécanisme entier existe pour ça, et que la note du fichier promet un
+   * résidu « borné ». Une première version libérait sur TOUTE exception, ce
+   * qui rendait cette promesse fausse sur ce chemin précis.
+   *
+   * La réservation reste donc en vol et expire d'elle-même. Le batch tournant
+   * une fois par mois, le membre est re-servi bien après l'expiration du bail
+   * si l'email n'était finalement pas parti : rien n'est perdu.
+   */
+  it('délai d’envoi dépassé : la réservation N’EST PAS libérée (l’email a pu partir)', async () => {
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockRejectedValue(
+      new EmailDeliveryError('Resend send timed out after 10000ms', null, true),
+    );
+
+    await runBatch();
+
+    expect(releaseEmailDispatch).not.toHaveBeenCalled();
+    expect(markDispatchDelivered).not.toHaveBeenCalled();
+    expect(db.monthlyDebrief.update).not.toHaveBeenCalled();
+    // L'incident reste visible : ne pas libérer n'est pas ne rien dire.
+    expect(reportWarning).toHaveBeenCalledWith(
+      'monthly_debrief.batch',
+      'member_dispatch_failed',
+      expect.objectContaining({ userId: 'user-active-1' }),
+    );
+  });
+
+  it('refus explicite du fournisseur : la réservation EST libérée (échec certain)', async () => {
+    // Même type d'erreur, drapeau à `false` : c'est bien le drapeau qui
+    // décide, pas la classe de l'exception ni son message.
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockRejectedValue(
+      new EmailDeliveryError('Resend rejected the email', { name: 'validation_error' }, false),
+    );
+
+    await runBatch();
+
+    expect(releaseEmailDispatch).toHaveBeenCalledWith('claim-1');
   });
 
   it('réservation refusée : aucun envoi, aucune écriture de marquage', async () => {

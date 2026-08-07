@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   CLOCK_SKEW_TOLERANCE_MS,
@@ -538,9 +539,54 @@ describe('tradeFullSchema cross-validation', () => {
   });
 });
 
-describe('WIZARD_STEPS', () => {
-  it('lists 7 steps covering pre-entry through post-exit', () => {
-    expect(WIZARD_STEPS).toHaveLength(7);
+describe('WIZARD_STEPS — la carte des champs dit-elle vrai des DEUX flux ?', () => {
+  // Le test d'origine vérifiait `toHaveLength(7)` : il comparait la constante à
+  // elle-même et serait resté vert quel qu'en soit le contenu. Or ce tableau
+  // porte une promesse VÉRIFIABLE, et c'est elle qui compte : « les deux flux
+  // partagent une carte de champs ». Quand elle est fausse, un champ que le
+  // serveur peut refuser n'a aucun écran pour le dire, et le membre reste
+  // devant un formulaire muet — c'est le défaut qu'a coûté `notes`, absent de
+  // toute étape rendue alors que le wizard l'affichait et le postait.
+  //
+  // On interroge donc les SCHÉMAS, pas la constante. Un champ ajouté demain à
+  // l'un des deux schémas sans écran pour l'accueillir fait rougir ce test.
+
+  /** Noms de propriétés d'un schéma Zod, vus côté ENTRÉE (avant transformation). */
+  function fieldsOf(schema: z.ZodType): string[] {
+    const json = z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as {
+      properties?: Record<string, unknown>;
+    };
+    return Object.keys(json.properties ?? {});
+  }
+
+  /** Les 6 entrées que le wizard d'ouverture REND réellement (« Étape X sur 6 »). */
+  const RENDERED_OPEN_FIELDS: ReadonlySet<string> = new Set<string>(
+    WIZARD_STEPS.slice(0, 6).flat(),
+  );
+  /** L'entrée 6 documente le groupe de champs du flux de clôture. */
+  const CLOSE_FIELDS: ReadonlySet<string> = new Set<string>(WIZARD_STEPS[6] ?? []);
+
+  it('tout champ de tradeOpenSchema est porté par une étape RENDUE (0 à 5)', () => {
+    const orphans = fieldsOf(tradeOpenSchema).filter((f) => !RENDERED_OPEN_FIELDS.has(f));
+    expect(
+      orphans,
+      `champ(s) que le serveur peut refuser sans qu'aucune étape ne les affiche : ${orphans.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('tout champ de tradeCloseSchema est déclaré dans le groupe de clôture', () => {
+    const orphans = fieldsOf(tradeCloseSchema).filter((f) => !CLOSE_FIELDS.has(f));
+    expect(orphans, `champ(s) de clôture absent(s) de la carte : ${orphans.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
+  it('aucune entrée rendue ne référence un champ que le schéma ignore', () => {
+    // Le sens inverse : une carte qui parle de champs inexistants ferait router
+    // vers une étape au petit bonheur.
+    const known = new Set(fieldsOf(tradeOpenSchema));
+    const ghosts = [...RENDERED_OPEN_FIELDS].filter((f) => !known.has(f));
+    expect(ghosts, `champ(s) fantôme(s) dans la carte : ${ghosts.join(', ')}`).toEqual([]);
   });
 
   it('first step covers pair + enteredAt', () => {

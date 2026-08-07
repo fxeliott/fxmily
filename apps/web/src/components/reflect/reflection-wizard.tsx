@@ -259,8 +259,8 @@ export function ReflectionWizard({ today }: ReflectionWizardProps) {
       {formError === 'invalid_input' ? (
         <Alert tone="danger">
           {errors?.date
-            ? `${errors.date} Cette date est calculée automatiquement : si le message persiste, vérifie la date et l'heure de ton appareil, puis recharge la page.`
-            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée — corrige-la, puis enregistre à nouveau.`}
+            ? `${errors.date} Cette date est calculée automatiquement. Si le message persiste, vérifie la date et l'heure de ton appareil, puis recharge la page.`
+            : `Une de tes réponses a été refusée. Nous t'avons ramené·e sur l'étape concernée : corrige-la, puis enregistre à nouveau.`}
         </Alert>
       ) : null}
 

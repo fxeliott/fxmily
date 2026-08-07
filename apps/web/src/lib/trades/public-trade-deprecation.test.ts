@@ -61,15 +61,23 @@ const APPLICATION_ACCESS = /\b(?:db|prisma|tx)\.publicTrade(?:Partial)?\b/;
  *
  * Le nom de table doit être précédé d'un mot-clé SQL. Sans cette exigence, la
  * garde se fait berner par les commentaires qui DÉCRIVENT la dépréciation —
- * `auth/audit.ts:606` en contient un, et il a fait rougir le premier jet.
+ * `auth/audit.ts:606` en contient un, et il a fait rougir un premier jet.
  * C'est le piège déjà consigné au J8 : une garde de proximité bernée par sa
  * propre documentation.
  *
- * Contrepartie assumée : un commentaire qui écrirait littéralement
- * « FROM public_trades » déclencherait encore. C'est le bon sens de l'erreur —
- * mieux vaut une exception à nommer qu'un accès manqué.
+ * Une revue en contexte frais a mesuré ce que la première écriture ratait, et
+ * c'était l'inverse de l'arbitrage annoncé : `TRUNCATE public_trades`,
+ * `COPY public_trades FROM STDIN`, `DELETE FROM public.public_trades` et
+ * `UPDATE "public"."public_trades"` passaient tous. Des ÉCRITURES, donc — pas
+ * des lectures. Les mots-clés manquants sont ajoutés, le schéma qualifié et
+ * les guillemets sont tolérés de chaque côté du point.
+ *
+ * Contrepartie assumée, et elle va maintenant dans le bon sens : un
+ * commentaire qui écrirait littéralement « FROM public_trades » déclencherait
+ * encore. Mieux vaut une exception à nommer qu'un accès manqué.
  */
-const RAW_SQL_ACCESS = /\b(?:FROM|INTO|UPDATE|JOIN|TABLE)\s+"?public_trade(?:s|_partials)\b/i;
+const RAW_SQL_ACCESS =
+  /\b(?:FROM|INTO|UPDATE|JOIN|TABLE|TRUNCATE|COPY)\s+(?:"?\w+"?\s*\.\s*)?"?public_trade(?:s|_partials)\b/i;
 
 /**
  * Fichiers autorisés à mentionner ces tables, et pourquoi. Toute autre
@@ -151,6 +159,15 @@ describe('PublicTrade deprecation is enforced, not merely commented', () => {
     expect(RAW_SQL_ACCESS.test('SELECT COUNT(*) FROM public_trades')).toBe(true);
     expect(RAW_SQL_ACCESS.test('DELETE FROM public_trade_partials WHERE 1=1')).toBe(true);
     expect(RAW_SQL_ACCESS.test('INSERT INTO "public_trades" (id) VALUES (1)')).toBe(true);
+    // Les 5 formes d'ÉCRITURE qu'une première écriture de cette expression
+    // laissait passer — toutes trouvées par une revue en contexte frais.
+    expect(RAW_SQL_ACCESS.test('TRUNCATE public_trades')).toBe(true);
+    expect(RAW_SQL_ACCESS.test('COPY public_trades FROM STDIN')).toBe(true);
+    expect(RAW_SQL_ACCESS.test('DELETE FROM public.public_trades')).toBe(true);
+    expect(RAW_SQL_ACCESS.test('INSERT INTO public.public_trades (id) VALUES (1)')).toBe(true);
+    expect(RAW_SQL_ACCESS.test('UPDATE "public"."public_trades" SET id = 1')).toBe(true);
+    // Multi-ligne : le nom peut être sur la ligne suivante du mot-clé.
+    expect(RAW_SQL_ACCESS.test('SELECT * FROM\n        public_trades')).toBe(true);
 
     // Prose : ce sont les mentions qui DOCUMENTENT la dépréciation. Les
     // confondre avec un accès, c'est rendre la garde inutilisable — et donc,

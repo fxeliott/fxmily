@@ -347,7 +347,30 @@ export function TrainingFormWizard({
         clearDraft();
         return;
       }
-      if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      if (result.fieldErrors) {
+        setFieldErrors(result.fieldErrors);
+        // Symétrie avec le wizard du journal : un refus serveur sur un champ
+        // d'une étape ANTÉRIEURE doit ramener le membre à cette étape, sinon
+        // l'erreur s'affiche sur un écran qui ne contient pas le champ — donc
+        // nulle part. C'est atteignable ici depuis que la borne d'`enteredAt`
+        // est passée d'une heure à la tolérance de dérive d'horloge : un
+        // appareil en avance produit un refus sur un champ de l'étape 0 alors
+        // que le membre soumet depuis l'étape 6.
+        //
+        // La borne sur les panneaux rendus est défensive : `STEP_FIELDS` en
+        // compte exactement autant que `STEP_TITLES` aujourd'hui, mais c'est
+        // précisément la divergence des deux tables qui, côté journal, a
+        // transformé un routage en crash.
+        const lastRenderedStep = STEP_TITLES.length - 1;
+        const firstBadStep = STEP_FIELDS.findIndex(
+          (fields, index) =>
+            index <= lastRenderedStep &&
+            (fields as readonly string[]).some((f) => result.fieldErrors?.[f] !== undefined),
+        );
+        if (firstBadStep >= 0 && firstBadStep !== step) {
+          goToStep(firstBadStep as StepIndex, { keepErrors: true });
+        }
+      }
       setServerError(serverErrorMessage(result));
     });
   };

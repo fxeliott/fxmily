@@ -245,6 +245,29 @@ describe('monthly debrief dispatch — ce que le batch écrit selon le sort de l
     expect(Object.keys(stampedFields() ?? {})).not.toContain('sentToMemberAt');
   });
 
+  /**
+   * Une exception d'envoi n'est pas un `delivered: false` : elle saute par
+   * dessus toutes les branches de décision. Sans libération explicite, la
+   * réservation restait « en vol » jusqu'à l'expiration du bail — sur un batch
+   * mensuel, cela repousse le membre d'un mois entier pour une panne réseau.
+   */
+  it('exception pendant l’envoi : la réservation est libérée, pas laissée en vol', async () => {
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockRejectedValue(new Error('Resend 503'));
+
+    await runBatch();
+
+    expect(releaseEmailDispatch).toHaveBeenCalledWith('claim-1');
+    expect(markDispatchDelivered).not.toHaveBeenCalled();
+    // Rien n'est marqué : le membre reste dispatchable au tour suivant.
+    expect(db.monthlyDebrief.update).not.toHaveBeenCalled();
+    // Et l'incident reste visible plutôt qu'avalé en silence.
+    expect(reportWarning).toHaveBeenCalledWith(
+      'monthly_debrief.batch',
+      'member_dispatch_failed',
+      expect.objectContaining({ userId: 'user-active-1' }),
+    );
+  });
+
   it('réservation refusée : aucun envoi, aucune écriture de marquage', async () => {
     vi.mocked(claimEmailDispatch).mockResolvedValue({ ok: false, reason: 'already_delivered' });
 

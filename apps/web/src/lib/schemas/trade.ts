@@ -423,7 +423,16 @@ export const WIZARD_STEPS = [
   ['plannedRR'],
   // 4 — discipline & emotion before (V1.5: + tradeQuality at the top of the step,
   //                                  Steenbarger setup classification before discipline tags)
-  ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore'],
+  //
+  // `notes` y figure depuis le durcissement post-J10 : le wizard d'ouverture
+  // AFFICHE ce champ sur cette étape (`StepDisciplineEmotions`) et le POSTe,
+  // alors qu'il n'était déclaré que dans l'entrée 6 — celle du flux de clôture,
+  // qu'aucun panneau d'ouverture ne rend. Deux conséquences, toutes deux
+  // fermées ici : la validation client était structurellement aveugle à ce
+  // champ (elle ne regarde que l'étape courante), et le routage d'erreur
+  // visait une étape inexistante. Le champ appartient légitimement aux DEUX
+  // flux — il est déclaré dans les deux, ce n'est pas un doublon accidentel.
+  ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore', 'notes'],
   // 5 — entry proof: TradingView link (J1 pivot, replaces the screenshot upload)
   //     + Tour 13 optional member explanation of the screen (validated for length).
   ['tradingViewEntryUrl', 'tradingViewEntryNote'],

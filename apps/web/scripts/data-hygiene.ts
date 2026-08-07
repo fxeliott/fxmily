@@ -37,11 +37,27 @@
  *
  * ## Ce que la correction fait, et ce qu'elle ne peut pas faire
  *
- * La vraie heure de sortie est INCONNUE — elle n'a jamais été saisie. La
- * meilleure borne dont on dispose est `closedAt` : l'instant où le membre était
- * devant son écran en train de clôturer. On ramène donc `exitedAt` à `closedAt`.
- * Ce n'est pas la vérité, c'est la valeur la plus proche qu'on puisse justifier,
- * et elle a le mérite de rendre la durée du trade non négative.
+ * La vraie heure de sortie est INCONNUE — elle n'a jamais été saisie. On ramène
+ * donc `exitedAt` à **`GREATEST(closedAt, enteredAt)`** : l'instant où le membre
+ * était devant son écran en train de clôturer, sans jamais descendre sous
+ * l'entrée. Ce n'est pas la vérité, c'est la valeur la plus proche qu'on puisse
+ * justifier, et elle garantit une durée de trade **non négative**.
+ *
+ * ⚠️ Le `GREATEST` n'est PAS une précaution théorique — sans lui, ce script
+ * fabriquait la corruption qu'il prétend réparer, et précisément sur la
+ * population qu'il vise EN PREMIER. Deux revues indépendantes l'ont trouvé.
+ * Le scénario, avec l'ancienne tolérance d'une heure côté entrée :
+ *
+ *   entrée déclarée   = maintenant + 45 min   (le schéma l'acceptait)
+ *   clôture immédiate → closed_at = maintenant, exited_at pré-rempli à
+ *                       max(maintenant, entrée + 1 h) = maintenant + 1 h 45
+ *
+ * La ligne est bien aberrante. Mais `SET exited_at = closed_at` l'aurait
+ * ramenée à `maintenant`, soit **45 minutes AVANT son entrée** — une durée de
+ * trade négative, c'est-à-dire une corruption qu'aucun chemin d'écriture de
+ * l'app ne peut produire, introduite par l'outil censé nettoyer. Le critère de
+ * détection utilise la même borne, pour que le compte final puisse retomber
+ * à zéro au lieu de boucler sur les lignes que l'outil vient de « réparer ».
  *
  * `realizedR`, `outcome` et tout le reste sont laissés INTACTS : ils ne
  * dépendent pas de l'heure de sortie.
@@ -81,7 +97,7 @@ async function countFutureExits(): Promise<number> {
     FROM trades
     WHERE closed_at IS NOT NULL
       AND exited_at IS NOT NULL
-      AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
+      AND exited_at > GREATEST(closed_at, entered_at) + make_interval(secs => ${SKEW_SECONDS})
   `;
   return Number(rows[0]?.n ?? 0);
 }
@@ -100,7 +116,7 @@ async function describeFutureExits(): Promise<void> {
       MAX(EXTRACT(EPOCH FROM (exited_at - closed_at)) / 60)::float AS max_minutes
     FROM trades
     WHERE closed_at IS NOT NULL AND exited_at IS NOT NULL
-      AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
+      AND exited_at > GREATEST(closed_at, entered_at) + make_interval(secs => ${SKEW_SECONDS})
     GROUP BY 1
     ORDER BY 1
   `;
@@ -151,35 +167,36 @@ try {
     if (!apply) {
       console.log(
         `\nESSAI À BLANC — rien n'a été écrit. ${before} ligne(s) seraient corrigées ` +
-          `(exited_at ramené à closed_at). Relance avec --apply pour appliquer.`,
+          `(exited_at ramené à GREATEST(closed_at, entered_at), jamais sous l'entrée). ` +
+          `Relance avec --apply pour appliquer.`,
       );
     } else {
       // Journal AVANT écriture : l'ancienne valeur n'existe nulle part
       // ailleurs, et un `UPDATE` en masse ne se défait pas. Ces lignes sont la
       // seule façon de revenir en arrière si la décision se révélait mauvaise —
       // elles sont donc imprimées, à conserver avec la sortie de la commande.
-      const doomed = await db.$queryRaw<{ id: string; exited_at: Date; closed_at: Date }[]>`
-        SELECT id, exited_at, closed_at
+      const doomed = await db.$queryRaw<{ id: string; exited_at: Date; target: Date }[]>`
+        SELECT id, exited_at, GREATEST(closed_at, entered_at) AS target
         FROM trades
         WHERE closed_at IS NOT NULL
           AND exited_at IS NOT NULL
-          AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
+          AND exited_at > GREATEST(closed_at, entered_at) + make_interval(secs => ${SKEW_SECONDS})
         ORDER BY id
       `;
       console.log('\nLignes modifiées (anciennes valeurs — à conserver pour un retour arrière) :');
       for (const row of doomed) {
         console.log(
-          `  ${row.id}  exited_at ${row.exited_at.toISOString()} -> ${row.closed_at.toISOString()}`,
+          `  ${row.id}  exited_at ${row.exited_at.toISOString()} -> ${row.target.toISOString()}`,
         );
       }
       if (doomed.length === 0) console.log('  (aucune)');
 
       const updated = await db.$executeRaw`
         UPDATE trades
-        SET exited_at = closed_at
+        SET exited_at = GREATEST(closed_at, entered_at)
         WHERE closed_at IS NOT NULL
           AND exited_at IS NOT NULL
-          AND exited_at > closed_at + make_interval(secs => ${SKEW_SECONDS})
+          AND exited_at > GREATEST(closed_at, entered_at) + make_interval(secs => ${SKEW_SECONDS})
       `;
       const after = await countFutureExits();
       console.log(`\nAPPLIQUÉ : ${updated} ligne(s) mises à jour`);
@@ -199,6 +216,24 @@ try {
       }
       if (after !== 0) {
         console.error('FAIL: des écarts subsistent après correction.');
+        process.exit(1);
+      }
+
+      // Garde de non-corruption, vérifiée SUR LA BASE et pas dans un
+      // commentaire : aucune ligne ne doit sortir d'ici avec une sortie
+      // antérieure à son entrée. C'est le défaut exact que la version
+      // précédente de ce script pouvait créer ; le contrôle reste en place
+      // même une fois la cause fermée, parce qu'un outil d'écriture doit
+      // prouver son invariant à chaque exécution, pas une fois en revue.
+      const negatives = await db.$queryRaw<{ n: bigint }[]>`
+        SELECT COUNT(*)::bigint AS n
+        FROM trades
+        WHERE exited_at IS NOT NULL AND exited_at < entered_at
+      `;
+      const negativeCount = Number(negatives[0]?.n ?? 0);
+      console.log(`CONTRÔLE : ${negativeCount} trade(s) avec une durée négative (attendu : 0)`);
+      if (negativeCount !== 0) {
+        console.error('FAIL: des durées négatives existent — NE PAS relancer, investiguer.');
         process.exit(1);
       }
     }

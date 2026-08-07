@@ -370,11 +370,25 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
       });
     }
 
-    const email = await sendMonthlyDebriefReadyEmail({
-      to: user.email,
-      recipientFirstName: user.firstName,
-      debrief: serialized,
-    });
+    // La réservation est prise ; à partir d'ici, TOUT chemin de sortie doit la
+    // trancher. Une exception (Resend en panne, réseau coupé, délai dépassé)
+    // saute par-dessus les branches ci-dessous et tombe dans le `catch`
+    // extérieur : sans ce `try`, la réservation restait « en vol » et n'était
+    // reprenable qu'au bout du bail. Sur un batch qui ne tourne qu'une fois par
+    // mois, cela revient à repousser le membre d'un mois pour une panne
+    // passagère. On libère donc explicitement, puis on laisse l'erreur remonter
+    // — elle doit rester visible.
+    let email: Awaited<ReturnType<typeof sendMonthlyDebriefReadyEmail>>;
+    try {
+      email = await sendMonthlyDebriefReadyEmail({
+        to: user.email,
+        recipientFirstName: user.firstName,
+        debrief: serialized,
+      });
+    } catch (sendErr) {
+      await releaseEmailDispatch(claim.claimId);
+      throw sendErr;
+    }
 
     // J10-6 — l'envoi est confirmé (ou libéré) AVANT le marquage, parce que
     // c'est la réservation, pas le marquage, qui décide s'il y aura un second

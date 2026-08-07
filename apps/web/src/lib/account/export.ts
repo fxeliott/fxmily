@@ -161,6 +161,13 @@ export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
   // downloadable archive is the artifact, the job row is transient infra state.
   dataExportJobs:
     'Async-export job bookkeeping (status/result key of the export itself): operational infra state, not portable member content.',
+  // J10 correctif n°6 — réservations d'envoi « une fois par période ». Même
+  // classe que `dataExportJobs` : de la mécanique d'expédition (a-t-on déjà
+  // envoyé ce débrief à ce membre ce mois-ci ?), pas du contenu que le membre a
+  // produit. Le débrief lui-même est exporté via `monthlyDebriefs`, et l'envoi
+  // reste tracé côté membre par `MonthlyDebrief.sentToMemberAt`.
+  emailDispatchClaims:
+    'Réservations anti-doublon des envois (membre × type × période) : mécanique d’expédition, pas du contenu produit par le membre. Le document envoyé est exporté via `monthlyDebriefs`.',
 } as const;
 
 export interface UserDataExport {

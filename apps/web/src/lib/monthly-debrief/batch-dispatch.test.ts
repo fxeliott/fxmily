@@ -38,6 +38,7 @@ vi.mock('@/lib/notifications/enqueue', () => ({ enqueueMonthlyDebriefNotificatio
 
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
+import { reportWarning } from '@/lib/observability';
 import {
   claimEmailDispatch,
   markDispatchDelivered,
@@ -149,21 +150,99 @@ describe('monthly debrief dispatch — ce que le batch écrit selon le sort de l
     expect(data).toMatchObject({ sentToMemberEmail: null });
   });
 
+  /**
+   * Le tour suivant, joué contre une base qui SE SOUVIENT.
+   *
+   * Une première version de ce test remettait `sentToMemberAt: null` dans la
+   * fixture entre les deux tours : le second tour était donc dispatchable
+   * **par le harnais**, jamais par le code, et il restait vert même en
+   * réintroduisant le défaut. Une revue en contexte frais l'a prouvé par
+   * mutation. C'est le canon déjà payé au J8 : un harnais qui modélise
+   * l'hypothèse à vérifier ne peut jamais dire non.
+   *
+   * Ici, l'upsert relit un état que `update` a réellement écrit — c'est le
+   * comportement de la base qui décide, pas la fixture.
+   */
   it('email refusé : le membre reste dispatchable, donc la relance suivante repasse', async () => {
+    // État persistant minimal : ce que `update` écrit, l'upsert le relit.
+    let stored = persistedRow();
+    // `as never` sur l'implémentation : le client Prisma renvoie un
+    // `Prisma__MonthlyDebriefClient` (un « thenable » enrichi), pas une simple
+    // promesse. Seul le contenu compte ici.
+    vi.mocked(db.monthlyDebrief.upsert).mockImplementation((async () => stored) as never);
+    vi.mocked(db.monthlyDebrief.update).mockImplementation((async ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }) => {
+      stored = { ...stored, ...data } as ReturnType<typeof persistedRow>;
+      return stored;
+    }) as never);
+
     vi.mocked(sendMonthlyDebriefReadyEmail).mockResolvedValue({ delivered: false } as never);
     await runBatch();
+    expect(stored.sentToMemberAt, 'un envoi refusé ne doit pas marquer la ligne').toBeNull();
 
-    // La colonne n'ayant pas bougé, la ligne relue au tour suivant porte
-    // toujours `sentToMemberAt: null` — la condition d'entrée du dispatch.
-    // On rejoue ce tour-là pour de vrai plutôt que de le raisonner.
+    // Tour suivant : l'email part cette fois. Le dispatch ne doit avoir lieu
+    // que parce que la colonne est restée `null`.
     vi.mocked(sendMonthlyDebriefReadyEmail).mockResolvedValue({ delivered: true } as never);
-    vi.mocked(db.monthlyDebrief.update).mockClear();
     vi.mocked(sendMonthlyDebriefReadyEmail).mockClear();
-
     await runBatch();
 
     expect(sendMonthlyDebriefReadyEmail).toHaveBeenCalledOnce();
+    expect(stored.sentToMemberAt).toBeInstanceOf(Date);
+
+    // Troisième tour : maintenant que la ligne est marquée, plus aucun envoi.
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockClear();
+    await runBatch();
+    expect(sendMonthlyDebriefReadyEmail).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Adresse en liste de suppression (hard bounce / plainte) : réessayer est
+   * sans espoir. Le traiter comme un échec ordinaire transformait le correctif
+   * précédent en **alerte quotidienne perpétuelle** — `overdue.ts` lit
+   * `sentToMemberAt`, donc un membre jamais marqué revient chaque jour dans le
+   * rapport, l'admin relance, le même refus tombe. Une revue en contexte frais
+   * a nommé ce risque ; ce test le verrouille dans les deux sens.
+   */
+  it('adresse morte : marque la ligne, confirme la réservation, et le dit', async () => {
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockResolvedValue({
+      id: null,
+      delivered: false,
+      permanent: true,
+    } as never);
+
+    await runBatch();
+
+    // Pas de relance : elle serait refusée à l'identique, indéfiniment.
+    expect(markDispatchDelivered).toHaveBeenCalledWith('claim-1');
+    expect(releaseEmailDispatch).not.toHaveBeenCalled();
     expect(stampedFields()?.['sentToMemberAt']).toBeInstanceOf(Date);
+
+    // …mais la ligne ne prétend PAS que le membre a reçu quelque chose, et un
+    // avertissement nommé porte le diagnostic.
+    expect(stampedFields()).toMatchObject({ sentToMemberEmail: null });
+    expect(reportWarning).toHaveBeenCalledWith(
+      'monthly_debrief.batch',
+      'member_email_undeliverable',
+      expect.objectContaining({ userId: 'user-active-1' }),
+    );
+  });
+
+  it('échec récupérable ≠ adresse morte : le cap quotidien laisse une relance', async () => {
+    // `permanent` absent = réessayable. C'est la distinction qui empêche de
+    // confondre « Resend est plein aujourd'hui » et « cette adresse est morte ».
+    vi.mocked(sendMonthlyDebriefReadyEmail).mockResolvedValue({
+      id: null,
+      delivered: false,
+    } as never);
+
+    await runBatch();
+
+    expect(releaseEmailDispatch).toHaveBeenCalledWith('claim-1');
+    expect(markDispatchDelivered).not.toHaveBeenCalled();
+    expect(Object.keys(stampedFields() ?? {})).not.toContain('sentToMemberAt');
   });
 
   it('réservation refusée : aucun envoi, aucune écriture de marquage', async () => {

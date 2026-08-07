@@ -380,8 +380,27 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
     // c'est la réservation, pas le marquage, qui décide s'il y aura un second
     // envoi. Un email non délivré libère la place : la prochaine exécution
     // réessaiera au lieu d'abandonner le membre en silence.
+    // Trois sorts possibles, et ils n'appellent pas la même suite.
+    //
+    // `permanent` = l'adresse est en liste de suppression (hard bounce,
+    // plainte). Réessayer est SANS ESPOIR et abîme la réputation d'envoi. Sans
+    // cette distinction, le correctif « ne pas marquer un envoi qui n'est pas
+    // parti » transformait une adresse morte en **alerte quotidienne
+    // perpétuelle** : `overdue.ts` compte ce membre découvert, l'admin relance,
+    // le même refus revient. Un signal que rien ne peut résoudre finit ignoré,
+    // et emporte les vrais avec lui.
+    const permanentlyUndeliverable = email.delivered === false && email.permanent === true;
+
     if (email.delivered) {
       await markDispatchDelivered(claim.claimId);
+    } else if (permanentlyUndeliverable) {
+      // La réservation est CONFIRMÉE : plus aucune tentative, elles seraient
+      // toutes refusées de la même façon.
+      await markDispatchDelivered(claim.claimId);
+      reportWarning('monthly_debrief.batch', 'member_email_undeliverable', {
+        userId: row.userId,
+        monthStart: serialized.monthStart,
+      });
     } else {
       await releaseEmailDispatch(claim.claimId);
     }
@@ -412,7 +431,13 @@ async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): 
       await db.monthlyDebrief.update({
         where: { id: row.id },
         data: {
-          ...(email.delivered ? { sentToMemberAt: new Date() } : {}),
+          // Marqué si l'email est parti — ou s'il ne partira JAMAIS : dans les
+          // deux cas il n'y a plus rien à tenter, et laisser la colonne à
+          // `null` produirait une relance quotidienne sans issue.
+          // `sentToMemberEmail` reste `null` pour l'adresse morte : la ligne
+          // dit alors « traité, mais rien n'est arrivé », et l'avertissement
+          // `member_email_undeliverable` porte le diagnostic.
+          ...(email.delivered || permanentlyUndeliverable ? { sentToMemberAt: new Date() } : {}),
           sentToMemberEmail: email.delivered ? user.email : null,
           pushEnqueuedAt: pushId !== null ? new Date() : null,
         },

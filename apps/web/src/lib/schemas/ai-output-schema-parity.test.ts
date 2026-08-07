@@ -166,14 +166,32 @@ const PAIRS = [
   ['verification', verificationVisionOutputSchema, VERIFICATION_VISION_OUTPUT_JSON_SCHEMA],
 ] as const;
 
-/** Applique les exceptions connues à la structure générée. */
-function withKnownGaps(pipeline: string, generated: unknown, manual: unknown): unknown {
-  if (pipeline !== 'verification') return generated;
+/**
+ * Applique les exceptions connues à la structure générée.
+ *
+ * ⚠️ Une exception se applique par AJOUT du seul champ concerné, jamais en
+ * recopiant le tableau de l'autre côté. Le premier jet faisait la recopie :
+ * `account.required` du généré était remplacé en bloc par celui du manuel,
+ * donc l'exception « `login` disparaît » masquait en réalité **tout**
+ * désaccord sur les champs obligatoires de `account`. Une revue en contexte
+ * frais l'a démontré par mutation — rendre `broker` optionnel côté Zod seul
+ * laissait les deux gardes vertes, sur le pipeline qui tourne toutes les cinq
+ * minutes en production.
+ *
+ * L'exception est lue dans {@link KNOWN_GAPS} : vider la map désarme le
+ * masquage au lieu de le laisser vivre dans le code.
+ */
+function withKnownGaps(pipeline: string, generated: unknown): unknown {
+  const key = `${pipeline}:properties.account.required`;
+  if (!KNOWN_GAPS.has(key)) return generated;
+
   const g = structuredClone(generated) as Node;
-  const m = manual as Node;
-  const props = g['properties'] as Node;
-  const account = props['account'] as Node;
-  account['required'] = ((m['properties'] as Node)['account'] as Node)['required'];
+  const account = (g['properties'] as Node)['account'] as Node;
+  const required = ((account['required'] as string[] | undefined) ?? []).slice();
+  // `Set` plutôt que push : le jour où Zod cessera de perdre `login`, le
+  // masquage ne créera pas un doublon qui ferait rougir pour la mauvaise
+  // raison — c'est le test d'exception périmée, plus bas, qui doit parler.
+  account['required'] = [...new Set([...required, 'login'])].sort();
   return g;
 }
 
@@ -196,14 +214,44 @@ describe('AI output contracts — wire JSON Schema ↔ Zod shape parity', () => 
     it(`${name}: field names, required-ness and object closure match`, () => {
       const generated = shapeOf(wire(zodSchema as z.ZodType));
       const expected = shapeOf(manual);
-      expect(withKnownGaps(name, generated, expected)).toEqual(expected);
+      expect(withKnownGaps(name, generated)).toEqual(expected);
     });
   }
 
+  /**
+   * L'exception ne doit réparer QUE `login`. Sans ce test, la garde peut
+   * s'élargir en silence jusqu'à ne plus rien garder — c'est exactement ce
+   * qui s'était produit, et aucun des tests ci-dessus ne le voyait, puisqu'ils
+   * comparent deux schémas RÉELS qui, eux, concordent aujourd'hui.
+   *
+   * On lui donne donc un généré volontairement abîmé : un second champ
+   * obligatoire manquant. Si `withKnownGaps` le répare aussi, la garde ne
+   * garde plus rien.
+   */
+  it('the known gap repairs `login` and NOTHING else (the guard is narrow)', () => {
+    const damaged = {
+      properties: { account: { required: ['broker', 'currency'] } },
+    };
+    const repaired = withKnownGaps('verification', damaged) as Node;
+    const required = ((repaired['properties'] as Node)['account'] as Node)['required'];
+
+    expect(required).toEqual(['broker', 'currency', 'login']);
+    // La reformulation qui compte : un champ absent des DEUX côtés reste
+    // absent. Seul `login` est ajouté.
+    expect(required).not.toContain('server');
+  });
+
+  it('an emptied KNOWN_GAPS map disarms the masking (the exception lives in data)', () => {
+    // La map était décorative dans le premier jet : `withKnownGaps` masquait
+    // en dur, donc vider la map ne retirait rien. Elle est désormais lue.
+    const untouched = { properties: { account: { required: ['broker'] } } };
+    expect(withKnownGaps('weekly', untouched)).toBe(untouched);
+  });
+
   it('documents every known gap, and none that no longer applies', () => {
-    // Une exception qui ne correspond plus à rien est une porte laissée
-    // ouverte. Ici : retirer le `preprocess` de `login` doit forcer à retirer
-    // aussi l'exception, sinon la garde s'affaiblit en silence.
+    // Verrou d'INVENTAIRE, pas oracle : il ne prouve pas que l'exception est
+    // fondée, il empêche qu'on en ajoute une sans passer par une revue. Le
+    // vrai oracle est l'assertion qui suit — elle interroge Zod pour de bon.
     expect([...KNOWN_GAPS.keys()]).toEqual(['verification:properties.account.required']);
     const raw = wire(verificationVisionOutputSchema) as Node;
     const account = (raw['properties'] as Node)['account'] as Node;

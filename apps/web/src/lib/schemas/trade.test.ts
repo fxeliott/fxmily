@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  EXIT_CLOCK_SKEW_TOLERANCE_MS,
   TRADE_TAG_SLUGS,
   TRADE_TAGS_MAX_PER_TRADE,
   isTradeTagSlug,
@@ -242,6 +243,47 @@ describe('tradeCloseSchema', () => {
   it('rejects exit at a far-future date', () => {
     const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: farFuture }).success).toBe(false);
+  });
+
+  /**
+   * J10 correctif n°2 — LES tests qui auraient détecté le défaut.
+   *
+   * L'ancienne borne était `now + 60 min`, copiée du côté ENTRÉE où elle a un
+   * sens (on peut saisir un ordre qu'on vient de placer). Côté SORTIE elle
+   * n'en a aucun : une position ne se clôture pas dans le futur. Combinée au
+   * pré-remplissage `max(now, entrée + 1 h)`, elle laissait passer sans un mot
+   * les durées de trade fausses que ce jalon vient nettoyer.
+   */
+  it('rejects an exit 30 minutes in the future (regression J10-2)', () => {
+    const soon = new Date(Date.now() + 30 * 60 * 1000);
+    const result = tradeCloseSchema.safeParse({ ...baseClose, exitedAt: soon });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe('La sortie ne peut pas être dans le futur.');
+    }
+  });
+
+  it('rejects an exit 3 minutes in the future (just past the clock-skew margin)', () => {
+    const soon = new Date(Date.now() + 3 * 60 * 1000);
+    expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: soon }).success).toBe(false);
+  });
+
+  it('accepts an exit within the clock-skew margin (a browser clock runs fast)', () => {
+    // Sans cette marge, le membre verrait son PROPRE pré-remplissage rejeté
+    // sur une machine mal synchronisée — un refus contre lequel il ne peut rien.
+    const skewed = new Date(Date.now() + EXIT_CLOCK_SKEW_TOLERANCE_MS - 5_000);
+    expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: skewed }).success).toBe(true);
+  });
+
+  it('accepts an exit at now (the new prefill value)', () => {
+    expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: new Date() }).success).toBe(true);
+  });
+
+  it('keeps the skew margin far below the entry tolerance it was copied from', () => {
+    // Garde structurelle : si quelqu'un ré-élargit la borne de sortie à
+    // l'heure de l'entrée, ce test tombe avant que des durées fausses ne
+    // reviennent en base.
+    expect(EXIT_CLOCK_SKEW_TOLERANCE_MS).toBeLessThanOrEqual(5 * 60 * 1000);
   });
 
   // Tour 13 — free-text explanation attached to the exit screen. Same OPTIONAL,

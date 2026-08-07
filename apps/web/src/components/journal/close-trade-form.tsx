@@ -12,7 +12,7 @@ import { Btn, btnVariants } from '@/components/ui/btn';
 import type { TradeExitReasonSlug, TradeTagSlug } from '@/lib/schemas/trade';
 import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
 import { EXIT_REASON_LABELS, EXIT_REASON_OPTIONS } from '@/lib/trading/exit-reasons';
-import { formatDateTimeLocalInput } from '@/lib/timezones';
+import { defaultExitLocalInput } from '@/lib/trades/exit-prefill';
 import { cn } from '@/lib/utils';
 
 /**
@@ -44,21 +44,13 @@ interface CloseTradeFormProps {
 const initialState: CloseTradeActionState = { ok: false };
 
 /**
- * Default exit value = max(now, entry + 1h), rendered as a `datetime-local`
- * wall-clock in the member's SET timezone.
- *
- * F2 — the member's set timezone (settings), not the device's, is authoritative
- * end to end: this default is built in it, and the server re-interprets the
- * submitted wall-clock in the same set timezone (see `memberWallClock` in
- * journal/actions.ts). The two are offset-symmetric, so closing « now » with the
- * default untouched stores exactly the displayed instant. (Supersedes the S2
- * audit B1 fix, which relied on the BROWSER timezone matching the member's.)
+ * J10 correctif n°2 — le calcul de la valeur par défaut vit désormais dans
+ * `lib/trades/exit-prefill.ts`, où il est testé en environnement node nu. Le
+ * défaut corrigé (`max(now, entrée + 1 h)`, qui proposait une sortie dans le
+ * futur sur tout trade de moins d'une heure) était un défaut de calcul, et
+ * aucun test ne pouvait l'atteindre tant qu'il était enfermé dans ce
+ * composant client.
  */
-function defaultExitLocalFrom(enteredAtIso: string, timezone: string): string {
-  const entered = new Date(enteredAtIso);
-  const proposed = new Date(Math.max(Date.now(), entered.getTime() + 60 * 60 * 1000));
-  return formatDateTimeLocalInput(proposed, timezone);
-}
 
 export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFormProps) {
   const action = closeTradeAction.bind(null, tradeId);
@@ -92,7 +84,7 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
   const [exitedAtLocal, setExitedAtLocal] = useState<string>('');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setExitedAtLocal(defaultExitLocalFrom(enteredAtIso, timezone));
+    setExitedAtLocal(defaultExitLocalInput(enteredAtIso, timezone));
   }, [enteredAtIso, timezone]);
 
   const topError = state.ok

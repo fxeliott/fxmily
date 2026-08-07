@@ -280,14 +280,49 @@ export const tradeOpenSchema = z
 export type TradeOpenInput = z.infer<typeof tradeOpenSchema>;
 
 /**
+ * J10 correctif n°2 — tolérance de DÉRIVE D'HORLOGE sur `exitedAt`, et rien
+ * d'autre.
+ *
+ * Le mur horaire est `now` : une position ne se clôture pas dans le futur. Mais
+ * l'instant soumis est construit à partir de l'horloge du NAVIGATEUR (le champ
+ * `datetime-local` est pré-rempli côté client), puis réinterprété par le
+ * serveur dans le fuseau du membre. Deux horloges, donc un écart possible de
+ * quelques secondes à quelques minutes sur une machine mal synchronisée. Sans
+ * marge, un membre qui ne touche à rien verrait son propre pré-remplissage
+ * rejeté — le pire des refus, puisqu'il ne peut rien y faire.
+ *
+ * 2 minutes couvrent la dérive ordinaire et restent trop courtes pour laisser
+ * passer une saisie volontairement future (l'ancienne valeur, 60 minutes,
+ * laissait passer une heure entière).
+ *
+ * ⚠️ Ne PAS réutiliser cette constante côté entrée : `tradeOpenSchema` garde
+ * délibérément sa tolérance d'une heure, parce qu'y déclarer une entrée
+ * légèrement en avance est un usage réel (on saisit l'ordre avant qu'il ne se
+ * déclenche). Conséquence assumée et bornée : un trade dont l'entrée est
+ * datée en avant de plus de 2 minutes n'est pas clôturable tant que l'horloge
+ * ne l'a pas rattrapé — `closeTrade` exige déjà `exitedAt >= enteredAt`
+ * (`lib/trades/service.ts`). Le cas se résorbe seul en moins d'une heure et
+ * décrire une sortie avant l'entrée n'aurait aucun sens.
+ */
+export const EXIT_CLOCK_SKEW_TOLERANCE_MS = 2 * 60 * 1000;
+
+/**
  * Post-exit block (step 7, or close-out flow on /journal/[id]/close).
  */
 export const tradeCloseSchema = z
   .object({
     exitedAt: z.coerce
       .date({ message: 'Date de sortie invalide.' })
-      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
-        message: 'Date dans le futur.',
+      // J10 correctif n°2 — la tolérance était de 60 minutes, la même que côté
+      // ENTRÉE. Elle n'y a pas le même sens : on peut saisir une entrée qu'on
+      // vient de prendre avec une horloge en avance, on ne peut pas clôturer
+      // une position dans le futur. Combinée au pré-remplissage
+      // `max(now, entrée + 1 h)`, elle laissait passer une sortie jusqu'à une
+      // heure devant l'horloge du serveur — donc des durées de trade négatives
+      // ou fantaisistes, qui polluent l'attribution de session, les moyennes de
+      // durée et tout ce que l'IA en déduit.
+      .refine((d) => d.getTime() <= Date.now() + EXIT_CLOCK_SKEW_TOLERANCE_MS, {
+        message: 'La sortie ne peut pas être dans le futur.',
       }),
     exitPrice: positivePrice,
     outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),

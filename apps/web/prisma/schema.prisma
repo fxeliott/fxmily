@@ -2245,14 +2245,19 @@ model PreTradeCheck {
 //   • La vitrine lit une base **Neon** distincte, pas celle-ci : son
 //     `scripts/sync-trades.ts` importe `@neondatabase/serverless`. Supprimer
 //     ces tables ici ne casserait donc PAS le site public.
-//   • `apps/track-record/` n'existe plus dans ce monorepo, ce qui rend
-//     `scripts/import-fxmily-trades.ts` structurellement inopérant : son
-//     fichier d'entrée vivait dans cette sub-app. C'est la dernière référence
-//     au type `PublicTrade` dans le dépôt ; la retirer est la 1ʳᵉ étape du
-//     jour où la suppression sera décidée.
-//   • Zéro accès applicatif (`db.publicTrade*`), garanti en continu par
-//     `src/lib/trades/public-trade-deprecation.test.ts` — la dépréciation
-//     n'est plus un commentaire, elle casse la CI si elle se dégrade.
+//   • ⚠️ RECTIFICATIF (revue en contexte frais, même jour) : une 1ʳᵉ version
+//     de ce bloc affirmait que `scripts/import-fxmily-trades.ts` était
+//     « structurellement inopérant, son fichier d'entrée vivant dans
+//     `apps/track-record/` » — c'est FAUX. Il lit `FXMILY_TRADES_JSON` avec
+//     un chemin local par défaut (`:119`) et fait `deleteMany({})` puis
+//     `createMany` (`:202`, `:206`). Il n'est appelé par rien, mais il est
+//     EXÉCUTABLE : c'est le seul écrivain restant de ces tables, et le
+//     retirer est la 1ʳᵉ étape du jour où la suppression sera décidée.
+//   • Zéro accès applicatif NON RÉPERTORIÉ, garanti en continu par
+//     `src/lib/trades/public-trade-deprecation.test.ts` — qui balaie `src/`
+//     ET `scripts/` (l'angle mort qui avait laissé passer le point
+//     ci-dessus), détecte aussi le SQL brut, et nomme ses 2 exceptions une
+//     par une. La dépréciation n'est plus un commentaire : elle casse la CI.
 //   • ⛔ Le `DROP` n'a PAS été fait : une migration part automatiquement en
 //     production au déploiement suivant, elle est irréversible, et le nombre
 //     de lignes réellement présentes en base de production n'a pas pu être

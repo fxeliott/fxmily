@@ -478,6 +478,10 @@ model User {
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions             PushSubscription[]
   notificationPreferences       NotificationPreference[]
+  // J10-6 — réservations d'envoi « une fois par période » (clé d'idempotence
+  // memberId × type × période). Cascade : une réservation orpheline n'a aucun
+  // sens et la purge RGPD doit l'emporter avec le compte.
+  emailDispatchClaims           EmailDispatchClaim[]
   // V2.5 — public self-service access requests reviewed by this admin
   // (approve/reject). SetNull on the request so a deleted admin doesn't
   // cascade-wipe the audit trail of who reviewed a non-member's request.
@@ -2237,6 +2241,24 @@ model PreTradeCheck {
 // in this monorepo touches them anymore. The CRUD + vitrine live in
 // <https://github.com/fxeliott/trackrecord-fxmily> (Hono Worker + Neon).
 //
+// J10 (2026-08-07) — état MESURÉ, et pourquoi la suppression attend encore :
+//   • La vitrine lit une base **Neon** distincte, pas celle-ci : son
+//     `scripts/sync-trades.ts` importe `@neondatabase/serverless`. Supprimer
+//     ces tables ici ne casserait donc PAS le site public.
+//   • `apps/track-record/` n'existe plus dans ce monorepo, ce qui rend
+//     `scripts/import-fxmily-trades.ts` structurellement inopérant : son
+//     fichier d'entrée vivait dans cette sub-app. C'est la dernière référence
+//     au type `PublicTrade` dans le dépôt ; la retirer est la 1ʳᵉ étape du
+//     jour où la suppression sera décidée.
+//   • Zéro accès applicatif (`db.publicTrade*`), garanti en continu par
+//     `src/lib/trades/public-trade-deprecation.test.ts` — la dépréciation
+//     n'est plus un commentaire, elle casse la CI si elle se dégrade.
+//   • ⛔ Le `DROP` n'a PAS été fait : une migration part automatiquement en
+//     production au déploiement suivant, elle est irréversible, et le nombre
+//     de lignes réellement présentes en base de production n'a pas pu être
+//     mesuré. Compter d'abord — `pnpm --filter @fxmily/web exec tsx
+//     scripts/data-hygiene.ts count` —, décider ensuite.
+//
 // To drop the tables from this DB, follow `docs/runbook-hetzner-deploy.md`
 // §21 (T5 rollback recipe) — pg_dump + `DROP TABLE public_trade_partials,
 // public_trades` + `DROP TYPE "PublicTradeSegment", "PublicTradeStatus"`
@@ -3988,4 +4010,64 @@ model EmailSendCounter {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("email_send_counters")
+}
+
+/// J10 correctif n°6 — clé d'idempotence des notifications « une fois par
+/// période et par membre ».
+///
+/// ## Le défaut fermé
+///
+/// `dispatchMonthlyDebriefToMember` envoyait dans l'ordre push → email →
+/// marquage (`MonthlyDebrief.sentToMemberAt`). Si le marquage échouait — une
+/// panne de connexion à la base dans l'intervalle étroit qui suit le retour de
+/// Resend — la colonne restait `null` et la relance suivante du batch
+/// renvoyait un DEUXIÈME email au membre. Le code le documentait comme un
+/// résidu accepté ; ce jalon le ferme.
+///
+/// ## Pourquoi une table dédiée et pas un simple « marquer avant d'envoyer »
+///
+/// Marquer d'abord échange un doublon rare contre une non-délivrance
+/// silencieuse — c'est pire pour une notification, et le code sortant le
+/// refusait explicitement. Une réservation résout les deux : elle est écrite
+/// AVANT l'envoi (donc aucun second envoi ne peut la doubler) et elle est
+/// LIBÉRÉE si l'envoi échoue vraiment (donc la relance suivante réessaie).
+///
+/// ## Reprise après incident
+///
+/// `claimedAt` fait office de bail. Un processus tué entre la réservation et
+/// l'envoi laisserait sinon la réservation en place pour toujours, et le
+/// membre ne recevrait jamais rien. Au-delà de `DISPATCH_CLAIM_STALE_AFTER_MS`
+/// une réservation non confirmée est reprenable. Résidu irréductible, assumé
+/// et borné : un processus tué APRÈS l'acceptation par Resend mais AVANT la
+/// confirmation peut encore produire un doublon — au lieu de n'importe quel
+/// incident de base, comme avant.
+model EmailDispatchClaim {
+  id String @id @default(cuid())
+
+  /// Membre destinataire. FK explicite : une réservation orpheline n'a aucun
+  /// sens, et la purge RGPD doit l'emporter avec le compte.
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Type de notification (`monthly_debrief_ready`, …). Volontairement une
+  /// chaîne et non l'enum `NotificationType` : cette table protège des envois
+  /// qui n'ont pas tous une entrée dans la file de push.
+  type String
+
+  /// Période couverte, `YYYY-MM-DD` (1er du mois pour le débrief mensuel,
+  /// lundi ISO pour un envoi hebdomadaire). C'est ce qui rend la clé
+  /// idempotente : un même membre, un même type, une même période = un envoi.
+  period String
+
+  /// Instant de réservation — sert de bail (voir le commentaire du modèle).
+  claimedAt DateTime @default(now()) @map("claimed_at")
+
+  /// Instant de confirmation. `null` = réservé, envoi non confirmé.
+  deliveredAt DateTime? @map("delivered_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, type, period])
+  @@index([type, claimedAt])
+  @@map("email_dispatch_claims")
 }

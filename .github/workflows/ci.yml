@@ -125,6 +125,75 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: pnpm build
 
+  dispatch-idempotency:
+    name: Dispatch idempotency (real Postgres)
+    # Le banc `scripts/verify-dispatch-idempotency.ts` prouve la garantie
+    # « un seul email par membre et par période » en exerçant la VRAIE requête
+    # (`lib/email/dispatch-claim-core`) sous concurrence, contre un vrai
+    # Postgres. Il n'était câblé nulle part : il prouvait une fois, à la main,
+    # puis plus jamais. Une revue en contexte frais l'a relevé — et le test
+    # unitaire, lui, ne peut pas combler ce trou : `$queryRaw` y est simulé,
+    # donc il vérifie la FORME de la requête, jamais sa sémantique
+    # (`ON CONFLICT … WHERE`). Seule une base réelle peut le dire.
+    #
+    # Job séparé À DESSEIN : le chemin critique (lint/type/build) ne doit pas
+    # attendre un conteneur de base de données.
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fxmily
+          POSTGRES_PASSWORD: fxmily_ci
+          POSTGRES_DB: fxmily_ci
+        ports:
+          - 5432:5432
+        # Sans ce contrôle de santé, les étapes démarrent avant que Postgres
+        # accepte les connexions et le job échoue au hasard.
+        options: >-
+          --health-cmd "pg_isready -U fxmily"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://fxmily:fxmily_ci@localhost:5432/fxmily_ci?schema=public
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @fxmily/web exec prisma migrate deploy
+
+      - name: Prove dispatch idempotency
+        # Le script sort en échec si un seul des contrôles tombe : concurrence,
+        # relance après confirmation, reprise après libération, bail expiré,
+        # bail frais NON repris, et unicité de la ligne.
+        run: pnpm --filter @fxmily/web exec tsx scripts/verify-dispatch-idempotency.ts
+
   dependency-audit:
     name: Dependency vulnerability audit
     # Independent of the lint/build job so a freshly-published advisory shows as

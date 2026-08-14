@@ -16,7 +16,7 @@ ci-dessous n'ajoute de contrainte absente de l'original.
    Un membre qui rate un trade doit pouvoir être renvoyé à la notion exacte.
 4. **Décision 4** — Le site vidéo cesse d'exister ; son acquis de façade est repris et développé.
 5. **Décision 5** — Le contenu écrit est un vrai cours par module, très visuel, qui dépasse la vidéo.
-   Un module agrège sa vidéo principale, ses satellites et ses pages externes.
+   Un module rassemble plusieurs sources : sa vidéo, ce qui gravite autour, les pages qu'il cite.
 6. **Décision 6** — Le parcours entier est construit avant toute ouverture aux membres.
    Les garde-fous qui rendent ce choix tenable sont en `REGLES-PARTAGEES.md §4`.
 

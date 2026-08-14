@@ -7,18 +7,18 @@
 
 États autorisés : `À FAIRE` · `EN COURS` · `FAIT` · `BLOQUÉ`.
 
-| Phase | Titre                          | État     | Date       | Livrables mesurés                     | Preuve (commande)                                         |
-| ----- | ------------------------------ | -------- | ---------- | ------------------------------------- | --------------------------------------------------------- |
-| 00    | Fondation & constitution       | EN COURS | 2026-08-14 | 5 fichiers — compteur brut ci-dessous | `wc -l docs/pedagogie/*.md docs/pedagogie/DECISIONS/*.md` |
-| 01    | Ancrage Fxmily et parcours     | À FAIRE  | —          | —                                     | —                                                         |
-| 02    | Ingestion pédagogie            | À FAIRE  | —          | —                                     | —                                                         |
-| 03    | Conception apprentissage       | À FAIRE  | —          | —                                     | —                                                         |
-| 04    | Modèle de données et migration | À FAIRE  | —          | —                                     | —                                                         |
-| 05    | Interface et composants        | À FAIRE  | —          | —                                     | —                                                         |
-| 06    | Build parcours et cours        | À FAIRE  | —          | —                                     | —                                                         |
-| 07    | Build évaluation et indexation | À FAIRE  | —          | —                                     | —                                                         |
-| 08    | Absorption de l'app vidéo      | À FAIRE  | —          | —                                     | —                                                         |
-| 09    | Vérification et production     | À FAIRE  | —          | —                                     | —                                                         |
+| Phase | Titre                          | État    | Date       | Livrables mesurés                     | Preuve (commande)                                         |
+| ----- | ------------------------------ | ------- | ---------- | ------------------------------------- | --------------------------------------------------------- |
+| 00    | Fondation & constitution       | FAIT    | 2026-08-14 | 5 fichiers — compteur brut ci-dessous | `wc -l docs/pedagogie/*.md docs/pedagogie/DECISIONS/*.md` |
+| 01    | Ancrage Fxmily et parcours     | À FAIRE | —          | —                                     | —                                                         |
+| 02    | Ingestion pédagogie            | À FAIRE | —          | —                                     | —                                                         |
+| 03    | Conception apprentissage       | À FAIRE | —          | —                                     | —                                                         |
+| 04    | Modèle de données et migration | À FAIRE | —          | —                                     | —                                                         |
+| 05    | Interface et composants        | À FAIRE | —          | —                                     | —                                                         |
+| 06    | Build parcours et cours        | À FAIRE | —          | —                                     | —                                                         |
+| 07    | Build évaluation et indexation | À FAIRE | —          | —                                     | —                                                         |
+| 08    | Absorption de l'app vidéo      | À FAIRE | —          | —                                     | —                                                         |
+| 09    | Vérification et production     | À FAIRE | —          | —                                     | —                                                         |
 
 Les titres des phases 01 à 09 sont relevés des noms de fichiers présents dans le dossier de prompts
 le 2026-08-14. Les dix fichiers existent : aucune phase ne porte `titre à confirmer`.
@@ -29,10 +29,10 @@ Sortie brute de `wc -l docs/pedagogie/*.md docs/pedagogie/DECISIONS/*.md`, coll�
 
 ```
    62 docs/pedagogie/ETAT.md
-   82 docs/pedagogie/VISION.md
-   40 docs/pedagogie/a-verifier.md
-  113 docs/pedagogie/DECISIONS/0001-perimetre.md
-  297 total
+   79 docs/pedagogie/VISION.md
+   44 docs/pedagogie/a-verifier.md
+  120 docs/pedagogie/DECISIONS/0001-perimetre.md
+  305 total
 ```
 
 Borne de la phase : chaque livrable sous `docs/pedagogie/` tient en 120 lignes au maximum.

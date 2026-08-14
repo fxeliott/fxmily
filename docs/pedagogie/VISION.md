@@ -37,13 +37,13 @@ Ces sept traits ont été enseignés avant le 2026-08-03. Ils sont écrits ici *
 jamais pour être appris. Chaque ligne porte son marqueur littéral, et c'est lui seul qui distingue
 la citation d'un enseignement.
 
-- Unités de temps d'exécution M5 et M15 — `cadre-abandonne-2026-08-03`
-- Fenêtre d'exécution 13h-16h — `cadre-abandonne-2026-08-03`
-- Coupure à 20h — `cadre-abandonne-2026-08-03`
-- TP figé à RR3 — `cadre-abandonne-2026-08-03`
-- BE au RR1 — `cadre-abandonne-2026-08-03`
-- Aucune partielle — `cadre-abandonne-2026-08-03`
-- Un seul risque par jour — `cadre-abandonne-2026-08-03`
+- Unités de temps d'exécution M5 et M15 — cadre-abandonne-2026-08-03
+- Fenêtre d'exécution 13h-16h — cadre-abandonne-2026-08-03
+- Coupure à 20h — cadre-abandonne-2026-08-03
+- TP figé à RR3 — cadre-abandonne-2026-08-03
+- BE au RR1 — cadre-abandonne-2026-08-03
+- Aucune partielle — cadre-abandonne-2026-08-03
+- Un seul risque par jour — cadre-abandonne-2026-08-03
 
 ## d. Correction ICHOR
 
@@ -65,7 +65,7 @@ Neuf contradictions relevées dans le corpus. **Aucune n'est tranchée ici** : e
 posées à Eliot, et chaque phase avance avec son défaut réversible. Détail, origine et défaut
 appliqué : `a-verifier.md`.
 
-- `AV-001` — Fenêtre horaire : 13h-16h annoncé d'un côté, prise à 5h de l'autre — `cadre-abandonne-2026-08-03`
+- `AV-001` — Fenêtre horaire : 13h-16h annoncé d'un côté, prise à 5h de l'autre — cadre-abandonne-2026-08-03
 - `AV-002` — Niveaux de Fibonacci : trois listes incompatibles, transcription corrompue
 - `AV-003` — Grille de risque chiffrée : 1 %, 2 %, 0,5 % cités sans règle qui les ordonne
 - `AV-004` — Deux ou trois compréhensions de marché selon la source
@@ -75,8 +75,5 @@ appliqué : `a-verifier.md`.
 - `AV-008` — Statut des signaux « Trade A / A+ » : enseigner à analyser et envoyer des signaux sont deux finalités opposées
 - `AV-009` — Profitable day The5ers : 0,7 % annoncé, 0,5 % calculé, à re-sourcer
 
-## Ce que cette phase n'a pas fait
-
-Aucun membre n'est servi par la phase 00. Aucune surface d'interface n'est livrée, aucun modèle de
-données n'est touché, aucun contenu de cours n'est rédigé. Ce fichier est un document de
-gouvernance, pas un livrable pédagogique.
+Ce fichier est un document de gouvernance, pas un livrable pédagogique. Ce que la phase 00 n'a pas
+fait est écrit dans `ETAT.md`, son propriétaire unique.

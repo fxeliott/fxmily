@@ -20,11 +20,14 @@ Ce document ne tranche aucune question de contenu. Il trace une frontière.
 
 ### 1. Hors périmètre, nominativement
 
-**Le fichier `C:\Users\eliot\Documents\transcript final\transcript vidéo analyse fondamental et autres (connaissance).txt`**
-— 203 119 octets, mesuré le 2026-08-14 par `ls -la`. Ce n'est **pas** le contenu d'Eliot : ce sont
-des scripts d'un tiers, destinés au projet Ichor. **Exclu de toute source pédagogique, tranché par
-Eliot.** Il n'est ni lu, ni copié, ni cité, ni résumé par une phase de cette suite. Le publier sous
-le nom d'Eliot serait une faute, pas une approximation.
+**La source tierce `transcript vidéo analyse fondamental et autres (connaissance).txt`**,
+**203 119 octets** — identifiée par son nom et sa taille, jamais par un chemin figé : elle a déjà
+été déplacée une fois. Commande de contrôle en `## Evidence base`. Ce n'est **pas** le contenu
+d'Eliot : ce sont des scripts d'un tiers, destinés au projet Ichor. **Exclu de toute source
+pédagogique, tranché par Eliot.** Ni lu, ni copié, ni cité, ni résumé par une phase de cette suite.
+Le publier sous le nom d'Eliot serait une faute, pas une approximation. Eliot a confirmé cette
+exclusion par un geste, le 2026-08-14 : il a isolé le fichier dans un sous-répertoire dont le nom
+dit lui-même qu'il ne relève pas de sa méthode et ne sert que de base de connaissance.
 
 Sont également hors périmètre, et pour la même raison — ils existent déjà ou ils ont été refusés :
 
@@ -40,9 +43,8 @@ Sont également hors périmètre, et pour la même raison — ils existent déj�
 ### 2. Dans le périmètre : les sept modules
 
 Ordre relevé **par lecture** de `D:\Projects\fxmily-videos\src\lib\videos.ts` le 2026-08-14, jamais
-retapé de mémoire. Trois cardinaux mesurés le même jour par les commandes de `REGLES-PARTAGEES.md
-§8 ter` : 7 contenus portent un identifiant de lecteur, 5 satellites sont annoncés, 1 seul module de
-premier niveau est annoncé non tourné.
+retapé de mémoire. Cardinaux et correspondance des sources re-mesurés le même jour : commandes en
+`## Evidence base`.
 
 | n   | slug                       | titre                           | statut lu      | source écrite                           |
 | --- | -------------------------- | ------------------------------- | -------------- | --------------------------------------- |
@@ -51,14 +53,15 @@ premier niveau est annoncé non tourné.
 | 03  | `comprehension-marche`     | Compréhension du marché         | disponible     | présente                                |
 | 04  | `analyse-technique`        | Analyse technique               | disponible     | présente, plus 2 réunions d'application |
 | 05  | `gestion-trades-risque`    | Gestion des trades & du risque  | disponible     | présente                                |
-| 06  | `education-independance`   | Éducation et indépendance       | **disponible** | **manquante**                           |
+| 06  | `education-independance`   | Éducation et indépendance       | disponible     | **présente depuis le 2026-08-14**       |
 | 07  | `sites-importants-trading` | Les sites importants en trading | **non tourné** | sans objet                              |
 
 Trois précisions qui ont déjà coûté cher et qui ne se devinent pas :
 
-- **Le module 06 est lisible, pas « à venir ».** Sa vidéo est publiée et dure 804 secondes, lu dans
-  `videos.ts`. Ce qui lui manque, c'est sa transcription — Eliot la fournira. Le classer « à venir »
-  livrerait un module publié sans cours. Entrée `AV-013` du registre.
+- **Le module 06 est lisible ET sourcé.** Sa vidéo est publiée et dure 804 secondes. Sa
+  transcription a été déposée par Eliot le 2026-08-14 à 12h30 : `éducation trading indépendance
+vision.txt`, 16 983 octets. **Aucune phase ne doit plus le traiter comme « sans source ».**
+  Son cours est dû dès la phase de rédaction, au même titre que les cinq premiers.
 - **Le module 07 n'est pas tourné.** C'est le seul dans ce cas. Il reçoit une fiche d'état, sans
   aucun contenu pédagogique et sans lien mort.
 - **Les deux réunions de backtest sont l'application du module 04, pas des modules.** Elles peuvent
@@ -70,44 +73,48 @@ Cinq briques sont déjà en production dans le dépôt et toute phase qui en rec
 phase à arrêter. La liste, son état mesuré et sa conséquence vivent en un seul endroit :
 `REGLES-PARTAGEES.md §0`. Elle n'est pas recopiée ici.
 
+## Evidence base
+
+Chaque affirmation chiffrée ci-dessus porte sa commande. Elles se rejouent, elles ne se recopient pas.
+
+| Ce qui est mesuré                 | Commande                                                                                                 | Valeur du 2026-08-14               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| La source tierce, où qu'elle soit | `find "/c/Users/eliot/Documents/transcript final" -type f -printf '%s\t%p\n' \| awk -F'\t' '$1==203119'` | 1 fichier, dans un sous-répertoire |
+| Sources écrites disponibles       | `ls -1 "/c/Users/eliot/Documents/transcript final/"*.txt \| wc -l`                                       | 8 fichiers à la racine             |
+| Contenus lisibles du parcours     | `grep -c "^[[:space:]]*vimeoId: '" src/lib/videos.ts`                                                    | 7                                  |
+| Satellites annoncés               | `grep -c "^        kind: 'coming'," src/lib/videos.ts`                                                   | 5                                  |
+| Modules non tournés               | `grep -c "^    status: 'coming-soon'," src/lib/videos.ts`                                                | 1, le module 07                    |
+
 ## Alternatives considered + Why rejected
 
-- **Reprendre le dépôt v1 et le brancher par une authentification déléguée** — rejeté par Eliot :
-  la pédagogie doit lire le profil du membre, ses scores et son historique, qui existent déjà dans
-  cette base. Un second système obligerait à dupliquer le membre.
-- **Traiter la source tierce comme un corpus d'appoint** — rejeté : elle n'est pas d'Eliot. La
-  question n'est pas sa qualité, c'est sa paternité.
-- **Repousser le module 06 faute de transcription** — rejeté : sa vidéo est publiée. Un membre le
-  verrait disponible et sans cours.
+- **Reprendre le dépôt v1 derrière une authentification déléguée** — rejeté par Eliot : la
+  pédagogie doit lire le profil, les scores et l'historique du membre, déjà présents dans cette base.
+- **Traiter la source tierce comme un corpus d'appoint** — rejeté : la question n'est pas sa
+  qualité, c'est sa paternité.
+- **Identifier l'exclusion par son chemin absolu** — rejeté après l'avoir essayé le jour même : le
+  chemin a cessé d'être vrai en une heure. Un nom et une taille survivent à un déplacement.
 
 ## Consequences
 
-### Pros
-
-- La frontière est écrite avant la première ligne de code, et elle est mesurée, pas déclarée.
-- Aucune phase ne peut « redécouvrir » qu'un sujet appartenait à une autre.
-- L'exclusion de la source tierce est nominative : elle ne peut plus rentrer par inadvertance.
-
-### Cons / Risks
-
-- Le module 06 restera sans cours complet tant que sa transcription manque : suivi en `AV-013`.
-- Le nom exact du fichier exclu est écrit ici, une seule fois, parce que l'exclusion doit être
-  nominative — un contrôle de la constitution attend pourtant zéro occurrence de cette chaîne dans
-  ce répertoire. Le conflit est nommé, pas contourné : entrée `AV-014`.
+- **Pros** — la frontière est écrite avant la première ligne de code et elle est mesurée, pas
+  déclarée ; aucune phase ne peut « redécouvrir » qu'un sujet appartenait à une autre ; l'exclusion
+  tient à une propriété stable, pas à un emplacement.
+- **Cons** — deux motifs de la constitution attendent zéro occurrence de littéraux que ce document
+  et `VISION.md` sont pourtant tenus d'écrire : conflit nommé en `AV-014`, jamais contourné. Et le
+  parcours reste incomplet tant que le 07 n'est pas tourné — un état, pas un défaut.
 
 ## Honesty disclaimers
 
-- Les trois cardinaux du corpus vidéo sont **remesurés** dans cette session, pas recopiés d'un
-  document : ils ont déjà été comptés faux par trois lecteurs successifs.
-- Le poids « environ 80 % pour l'analyse technique » est une heuristique d'Eliot, étiquetée `CADRE`.
-  Elle n'est pas sourcée et ne doit jamais être servie comme un fait.
-- Aucune phase de cette suite ne tranche une contradiction du corpus. Les neuf sont au registre.
+- **La première version de ce document affirmait que le module 06 n'avait pas de source.** C'était
+  faux quand elle a été écrite : le fichier avait été déposé deux minutes plus tôt. La cause n'est
+  pas l'inattention, c'est d'avoir repris l'affirmation d'un prompt au lieu de mesurer le disque.
+  `REGLES §9.4` le dit : le réel fait foi, le document est ce qui a tort.
+- Les cardinaux sont **remesurés** ici, pas recopiés : ils ont déjà été comptés faux trois fois.
+- « Environ 80 % pour l'analyse technique » est une heuristique d'Eliot, étiquetée `CADRE`.
+- Aucune phase ne tranche une contradiction du corpus : les neuf sont au registre. Ce document reprend la forme des ADR de `docs/decisions/`, sans reprendre leur numérotation.
 
 ## 0001 audit trail
 
-- **2026-08-14** — Accepted (phase 00, fondation). Périmètre arrêté, registre amorcé.
-
-## Related ADRs
-
-- `docs/decisions/ADR-001` à `ADR-005` — décisions produit de l'app hôte, dont ce document
-  reprend la forme sans reprendre la numérotation.
+- **2026-08-14** — Accepted (phase 00). Périmètre arrêté, registre amorcé.
+- **2026-08-14, amendé après relecture en contexte frais** — module 06 corrigé de « sans source » à
+  « sourcé » ; exclusion ré-identifiée par nom et taille ; `Evidence base` ajoutée.

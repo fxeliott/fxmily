@@ -81,6 +81,13 @@ pnpm --filter @fxmily/web prisma:studio
 - Vérification post-changement → subagent `verifier`.
 - Audit avant release / sur PR critique → subagents `code-reviewer` + `security-auditor` + `accessibility-reviewer` + `ui-designer` en parallèle.
 
+## Pédagogie (module)
+
+- **Docs** : `docs/pedagogie/` — avancement `ETAT.md`, périmètre et vision `VISION.md`, questions ouvertes `a-verifier.md`.
+- **Code** : `apps/web/src/app/(pedagogie)/` — premier groupe de routes du dépôt.
+- **Décisions du module** : `docs/pedagogie/DECISIONS/000N-*.md`, numérotation sans trou, distinctes de `docs/decisions/`.
+- **Le module pédagogie n'ajoute aucune règle dans ce fichier — tout va dans `docs/pedagogie/`.**
+
 ## Eliot (rappel court)
 
 Débutant motivé. Travaille en français pour discuter, anglais pour code/commits. Style direct sans flagornerie. Tester avant d'affirmer (`YOU MUST` du CLAUDE.md global). Demander confirmation avant toute commande destructive ou modif `.git/`/`.claude/`/`.env`.

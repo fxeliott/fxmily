@@ -13,7 +13,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/claude-print-limit-wait.sh
 . "$SCRIPT_DIR/lib/claude-print-limit-wait.sh"
 
-readonly EXPECTED_ASSERTIONS=16
+readonly EXPECTED_ASSERTIONS=17
 declare -i PASSED=0
 declare -i FAILED=0
 ok()   { echo "  ✓ $1"; PASSED+=1; }
@@ -62,6 +62,14 @@ fi
 assert_eq "pipe+epoch form" "1725292800" "$(_cplw_parse_reset_epoch "Claude AI usage limit reached|1725292800")"
 assert_eq "no reset time -> empty" "" "$(_cplw_parse_reset_epoch "API Error: Rate limited")"
 assert_eq "weekly notice without clock time -> empty" "" "$(_cplw_parse_reset_epoch "You've hit your weekly limit · resets Sep 5, 3pm (Europe/Paris)")"
+# A weekly notice WITH a clock time parses like any other: the parser does not know about weekly.
+# That is why the core checks _cplw_is_weekly BEFORE trusting a parsed epoch (core test 11e-bis).
+if [ "$HAS_GNU_DATE" -eq 1 ]; then
+  exp="$(date -d '2026-09-03 15:00:00' +%s)"
+  assert_eq "weekly notice WITH a clock time parses (15:00 already passed -> tomorrow)" "$exp" "$(_cplw_parse_reset_epoch "You've hit your weekly limit · resets 3pm (Europe/Paris)")"
+else
+  ok "(GNU date absent: weekly-with-clock parsing skipped)"
+fi
 
 echo ""
 echo "→ 3. wait computation"

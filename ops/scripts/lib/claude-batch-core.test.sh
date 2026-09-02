@@ -383,6 +383,7 @@ case "${MOCK_CLAUDE_MODE:-ok}" in
              printf '%s\n' '{"summary":"after reset","highlights":[],"axes_prioritaires":[]}' ;;
   capcap)    printf "You've hit your session limit · resets 8pm (Europe/Paris)\n"; exit 1 ;;
   capweekly) printf "You've hit your weekly limit · resets Sep 5, 3pm (Europe/Paris)\n"; exit 1 ;;
+  capweeklyclock) printf "You've hit your weekly limit · resets 3pm (Europe/Paris)\n"; exit 1 ;;
   capnotime) printf "You've hit your session limit\n"; exit 1 ;;
 esac
 MOCK
@@ -449,6 +450,14 @@ check_eq "weekly cap → one call only" "1" "$(cap_calls)"
 check_eq "weekly cap → no sleep" "" "$(cap_sleeps)"
 core_note_failure
 check_eq "weekly cap → still latched → 75" "75" "$(core_run_exit_code)"
+
+# 11e-bis — a WEEKLY cap that carries a clock time parses like a session cap; the weekly check
+# must run BEFORE the parse decides anything (a named review found the opposite order in the
+# first version of this work: the function slept on a weekly cap whenever the time was readable).
+cap_case capweeklyclock
+core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+check_eq "weekly cap with a clock time → one call only" "1" "$(cap_calls)"
+check_eq "weekly cap with a clock time → no sleep" "" "$(cap_sleeps)"
 
 # 11f — cap without a reset time: no wait (the worker cooldown covers it).
 cap_case capnotime

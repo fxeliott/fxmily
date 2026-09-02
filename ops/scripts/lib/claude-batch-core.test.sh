@@ -356,6 +356,120 @@ core_reset_failure_state
 FXMILY_MAX_CONSECUTIVE_FAILURES=99
 
 # ---------------------------------------------------------------------------
+echo "[11] cap wait-once — an announced reset is waited for ONCE, then the member is retried"
+# Why: the weekly/monthly/calendar/profile pipelines tick once per week/month/day, so a 5-hour
+# cap at 05:40 on Sunday used to lose the whole run until the next Sunday. The wait sends
+# nothing during the wait (not the back-off-and-continue the core rejects) and only happens for
+# an announced, non-weekly reset within FXMILY_CAP_WAIT_MAX_S. Everything else keeps the
+# halt / latch / exit-75 / cooldown path byte-identical.
+#
+# Mock claude with STATE: a counter file selects the behaviour of each successive call.
+#   capthenok : call 1 prints the cap notice on STDOUT (empty stderr, R18 shape) and exits 1 ;
+#               call 2 answers JSON, exit 0.
+#   capcap    : both calls print the cap notice, exit 1.
+#   capweekly : call 1 prints a WEEKLY cap notice, exit 1 (never waited for).
+#   capnotime : call 1 prints a cap notice WITHOUT a reset time, exit 1 (no wait: today's path).
+cat >"$MOCKBIN/claude" <<'MOCK'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+n=$(cat "${MOCK_CLAUDE_COUNTER:-/dev/null}" 2>/dev/null || echo 0); n=$((n + 1))
+[ -n "${MOCK_CLAUDE_COUNTER:-}" ] && echo "$n" >"$MOCK_CLAUDE_COUNTER"
+case "${MOCK_CLAUDE_MODE:-ok}" in
+  ok)   printf '%s\n' '{"summary":"ok","highlights":[],"axes_prioritaires":[]}' ;;
+  hang) sleep 30 ;;
+  rl)   echo "API Error: 429 rate limit exceeded" >&2; exit 1 ;;
+  boom) echo "ECONNRESET socket hang up" >&2; exit 1 ;;
+  capthenok) if [ "$n" -eq 1 ]; then printf "You've hit your session limit · resets 8pm (Europe/Paris)\n"; exit 1; fi
+             printf '%s\n' '{"summary":"after reset","highlights":[],"axes_prioritaires":[]}' ;;
+  capcap)    printf "You've hit your session limit · resets 8pm (Europe/Paris)\n"; exit 1 ;;
+  capweekly) printf "You've hit your weekly limit · resets Sep 5, 3pm (Europe/Paris)\n"; exit 1 ;;
+  capnotime) printf "You've hit your session limit\n"; exit 1 ;;
+esac
+MOCK
+chmod +x "$MOCKBIN/claude"
+CAP_SLEEPS="$TMP/cap-sleeps"
+record_sleep() { echo "$1" >>"$CAP_SLEEPS"; }
+export -f record_sleep
+CORE_SLEEP_CMD=record_sleep
+export CLAUDE_LIMIT_JITTER_S=0 CLAUDE_LIMIT_MARGIN_S=90
+export CLAUDE_LIMIT_NOW_EPOCH="$(date -d '2026-09-02 17:00:00' +%s)"
+FXMILY_CLAUDE_TIMEOUT_S=0
+cap_case() { # mode
+  export MOCK_CLAUDE_MODE="$1" MOCK_CLAUDE_COUNTER="$TMP/cap-count-$1"
+  rm -f "$MOCK_CLAUDE_COUNTER"; : >"$CAP_SLEEPS"; : >"$ERRORS_LOG"; : >"$RESP"
+  core_reset_failure_state
+}
+cap_calls() { cat "$MOCK_CLAUDE_COUNTER" 2>/dev/null || echo 0; }
+cap_sleeps() { tr '\n' ' ' <"$CAP_SLEEPS" | sed 's/ $//'; }
+
+if date -d '@0' +%s >/dev/null 2>&1; then
+  # 11a — cap then ok: one wait until 20:00 + 90 s, one retry, exit 0, JSON, no latch.
+  cap_case capthenok
+  FXMILY_CAP_WAIT_MAX_S=21600
+  core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+  check_eq "capthenok → exit 0 after the retry" "0" "$rc"
+  check_eq "capthenok → claude called twice" "2" "$(cap_calls)"
+  check_eq "capthenok → slept once until 20:00 + 90 s" "10890" "$(cap_sleeps)"
+  if grep -q '"after reset"' "$RESP"; then ok "capthenok → response is the retry's JSON"; else fail "response is not the retry's JSON"; fi
+  core_note_success
+  check_eq "capthenok → run not latched (exit code 0)" "0" "$(core_run_exit_code)"
+
+  # 11b — cap twice: one wait, retry capped too → non-zero, classifier latches as before.
+  cap_case capcap
+  core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+  if [ "$rc" -ne 0 ]; then ok "capcap → non-zero exit ($rc)"; else fail "capcap must exit non-zero"; fi
+  check_eq "capcap → exactly one wait, two calls" "2" "$(cap_calls)"
+  check_eq "capcap → one sleep only" "10890" "$(cap_sleeps)"
+  core_note_failure
+  check_eq "capcap → latched → 75 (cooldown path intact)" "75" "$(core_run_exit_code)"
+
+  # 11c — budget too small: no wait, no retry, today's behaviour.
+  cap_case capcap
+  FXMILY_CAP_WAIT_MAX_S=60
+  core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+  check_eq "budget 60 s → one call only" "1" "$(cap_calls)"
+  check_eq "budget 60 s → no sleep" "" "$(cap_sleeps)"
+  FXMILY_CAP_WAIT_MAX_S=21600
+
+  # 11d — disabled (0): no wait, no retry.
+  cap_case capthenok
+  FXMILY_CAP_WAIT_MAX_S=0
+  core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+  check_eq "FXMILY_CAP_WAIT_MAX_S=0 → one call only" "1" "$(cap_calls)"
+  check_eq "FXMILY_CAP_WAIT_MAX_S=0 → non-zero exit kept" "1" "$rc"
+  FXMILY_CAP_WAIT_MAX_S=21600
+else
+  echo "  ⚠ SKIP 11a-11d — GNU date absent (no reset-time parsing possible on this host)"
+fi
+
+# 11e — weekly cap: never waited for.
+cap_case capweekly
+core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+check_eq "weekly cap → one call only" "1" "$(cap_calls)"
+check_eq "weekly cap → no sleep" "" "$(cap_sleeps)"
+core_note_failure
+check_eq "weekly cap → still latched → 75" "75" "$(core_run_exit_code)"
+
+# 11f — cap without a reset time: no wait (the worker cooldown covers it).
+cap_case capnotime
+core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+check_eq "cap without time → one call only" "1" "$(cap_calls)"
+check_eq "cap without time → no sleep" "" "$(cap_sleeps)"
+
+# 11g — a plain network failure never waits.
+cap_case boom
+core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
+check_eq "network failure → one call only" "1" "$(cap_calls)"
+check_eq "network failure → no sleep" "" "$(cap_sleeps)"
+
+# Restore the stateless mock and the ambient knobs for anything that follows.
+export MOCK_CLAUDE_MODE=ok
+unset MOCK_CLAUDE_COUNTER
+CORE_SLEEP_CMD=sleep
+core_reset_failure_state
+: >"$ERRORS_LOG"
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "===================================================="
 echo "core anti-ban tests: $PASS passed, $FAIL failed"

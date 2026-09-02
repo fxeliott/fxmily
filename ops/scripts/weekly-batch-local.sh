@@ -58,6 +58,12 @@ SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat, anti-quota-surprise)
 MODEL_FLAG=""
+# 2026-09-02 : wait-and-retry around `claude --print` when a claude.ai usage limit is hit
+# (interactive sessions wait on their own since CLI 2.1.234 ; --print never does).
+# Optional env : CLAUDE_LIMIT_MAX_WAIT_S (default 21600), CLAUDE_LIMIT_MAX_RETRIES (3),
+# CLAUDE_LIMIT_FALLBACK_WAIT_S (900), CLAUDE_LIMIT_MARGIN_S (90). See the lib header.
+# shellcheck source=lib/claude-print-limit-wait.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/claude-print-limit-wait.sh"
 
 # V1.7.2 — required token. Refuse to run without it (refuse-by-default mirrors
 # the server-side 503).
@@ -296,14 +302,17 @@ for idx in $ENTRY_INDICES; do
   # has happened before — Sonnet upgrade Dec 2024) this caps damage at
   # $5 per call (vs typical Sonnet 4.6 cost ~$0.02-0.05 = 100x margin).
   # Researcher V1.7.2 R5 confirmed flag in CLI 2.1.139 --help output.
-  claude --print \
+  # 2026-09-02 : usage-limit aware wrapper (ops/scripts/lib/claude-print-limit-wait.sh). It runs
+  # exactly this `claude --print` call (stdin = prompt file, stdout = response file, stderr
+  # appended to the errors log) ; on a usage-limit message it waits until the announced reset
+  # and retries, bounded by CLAUDE_LIMIT_MAX_WAIT_S / CLAUDE_LIMIT_MAX_RETRIES. Any other failure
+  # returns at once with claude's exit code, as before.
+  claude_print_with_limit_wait "$PROMPT_FILE" "$RESPONSE_FILE" "$ERRORS_LOG" -- \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
-    --output-format text \
-    <"$PROMPT_FILE" \
-    >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"
+    --output-format text
   CLAUDE_EXIT=$?
   set -e
 

@@ -57,6 +57,12 @@ SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat)
 MODEL_FLAG=""
+# 2026-09-02 : wait-and-retry around `claude --print` when a claude.ai usage limit is hit
+# (interactive sessions wait on their own since CLI 2.1.234 ; --print never does).
+# Optional env : CLAUDE_LIMIT_MAX_WAIT_S (default 21600), CLAUDE_LIMIT_MAX_RETRIES (3),
+# CLAUDE_LIMIT_FALLBACK_WAIT_S (900), CLAUDE_LIMIT_MARGIN_S (90). See the lib header.
+# shellcheck source=lib/claude-print-limit-wait.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/claude-print-limit-wait.sh"
 
 # Required token. Refuse to run without it (mirrors the server-side 503).
 if [ -z "${FXMILY_MONTHLY_ADMIN_TOKEN:-}" ]; then
@@ -255,14 +261,17 @@ for idx in $ENTRY_INDICES; do
   # invocation per member keeps ban-risk rule #3 (fresh context) satisfied.
   # `--max-budget-usd 5.00` financial circuit-breaker (theoretical $0 on Max
   # sub, caps damage if Anthropic ever silently switches to billable API).
-  claude --print \
+  # 2026-09-02 : usage-limit aware wrapper (ops/scripts/lib/claude-print-limit-wait.sh). It runs
+  # exactly this `claude --print` call (stdin = prompt file, stdout = response file, stderr
+  # appended to the errors log) ; on a usage-limit message it waits until the announced reset
+  # and retries, bounded by CLAUDE_LIMIT_MAX_WAIT_S / CLAUDE_LIMIT_MAX_RETRIES. Any other failure
+  # returns at once with claude's exit code, as before.
+  claude_print_with_limit_wait "$PROMPT_FILE" "$RESPONSE_FILE" "$ERRORS_LOG" -- \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
-    --output-format text \
-    <"$PROMPT_FILE" \
-    >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"
+    --output-format text
   CLAUDE_EXIT=$?
   set -e
 

@@ -393,7 +393,13 @@ record_sleep() { echo "$1" >>"$CAP_SLEEPS"; }
 export -f record_sleep
 CORE_SLEEP_CMD=record_sleep
 export CLAUDE_LIMIT_JITTER_S=0 CLAUDE_LIMIT_MARGIN_S=90
-export CLAUDE_LIMIT_NOW_EPOCH="$(date -d '2026-09-02 17:00:00' +%s)"
+# ZONE-AGNOSTIC clock (CI runs in UTC with a tz database, the Windows dev box has none): "now" and the
+# expected reset are both taken in the zone the lib will use to read « resets 8pm (Europe/Paris) »,
+# Europe/Paris when zone names are honoured, the local zone otherwise. Either way 20:00 − 17:00 + 90 s.
+if [ "$(TZ=Asia/Tokyo date -d @0 +%H 2>/dev/null)" = "09" ]; then CAP_TZ="Europe/Paris"; else CAP_TZ=""; fi
+cap_date() { if [ -n "$CAP_TZ" ]; then TZ="$CAP_TZ" date "$@"; else date "$@"; fi; }
+export CLAUDE_LIMIT_NOW_EPOCH="$(cap_date -d '2026-09-02 17:00:00' +%s)"
+CAP_EXPECTED_SLEEP=$(( $(cap_date -d '2026-09-02 20:00:00' +%s) - CLAUDE_LIMIT_NOW_EPOCH + 90 ))
 FXMILY_CLAUDE_TIMEOUT_S=0
 cap_case() { # mode
   export MOCK_CLAUDE_MODE="$1" MOCK_CLAUDE_COUNTER="$TMP/cap-count-$1"
@@ -410,7 +416,7 @@ if date -d '@0' +%s >/dev/null 2>&1; then
   core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
   check_eq "capthenok → exit 0 after the retry" "0" "$rc"
   check_eq "capthenok → claude called twice" "2" "$(cap_calls)"
-  check_eq "capthenok → slept once until 20:00 + 90 s" "10890" "$(cap_sleeps)"
+  check_eq "capthenok → slept once until 20:00 + 90 s (3 h in the reading zone)" "$CAP_EXPECTED_SLEEP" "$(cap_sleeps)"
   if grep -q '"after reset"' "$RESP"; then ok "capthenok → response is the retry's JSON"; else fail "response is not the retry's JSON"; fi
   core_note_success
   check_eq "capthenok → run not latched (exit code 0)" "0" "$(core_run_exit_code)"
@@ -420,7 +426,7 @@ if date -d '@0' +%s >/dev/null 2>&1; then
   core_invoke_claude_print "$PROMPT_FILE" "$RESP" 2>/dev/null; rc=$?
   if [ "$rc" -ne 0 ]; then ok "capcap → non-zero exit ($rc)"; else fail "capcap must exit non-zero"; fi
   check_eq "capcap → exactly one wait, two calls" "2" "$(cap_calls)"
-  check_eq "capcap → one sleep only" "10890" "$(cap_sleeps)"
+  check_eq "capcap → one sleep only" "$CAP_EXPECTED_SLEEP" "$(cap_sleeps)"
   core_note_failure
   check_eq "capcap → latched → 75 (cooldown path intact)" "75" "$(core_run_exit_code)"
 

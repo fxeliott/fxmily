@@ -25,11 +25,13 @@ assert_eq() { # label expected actual
 export CLAUDE_LIMIT_JITTER_S=0
 export CLAUDE_LIMIT_MARGIN_S=90
 
-# Fixed "now": 2026-09-02 17:00:00 in the machine's LOCAL zone (the lib parses announced times in
-# the local zone when GNU date has no tz database, which is the case under Git Bash).
-export CLAUDE_LIMIT_NOW_EPOCH="$(date -d '2026-09-02 17:00:00' +%s)"
+# Fixed "now": 2026-09-02 17:00:00 in the zone the lib will READ announced times in: Europe/Paris when
+# GNU date honours zone names (CI runners, the VPS), the local zone otherwise (Git Bash without tzdata).
+# Expectations below are computed with the same rule, so the suite is green in both environments.
 HAS_GNU_DATE=1; date -d '@0' +%s >/dev/null 2>&1 || HAS_GNU_DATE=0
 TZ_OK=0; [ "$(TZ=Asia/Tokyo date -d @0 +%H 2>/dev/null)" = "09" ] && TZ_OK=1
+paris_date() { if [ "$TZ_OK" -eq 1 ]; then TZ=Europe/Paris date "$@"; else date "$@"; fi; }
+export CLAUDE_LIMIT_NOW_EPOCH="$(paris_date -d '2026-09-02 17:00:00' +%s)"
 echo "  (GNU date: $HAS_GNU_DATE ; IANA zones honoured: $TZ_OK)"
 
 echo ""
@@ -44,11 +46,11 @@ _cplw_is_weekly "You've hit your weekly limit · resets Sep 5, 3pm" && ok "weekl
 if _cplw_is_weekly "You've hit your session limit · resets 8pm (Europe/Paris)"; then fail "session limit wrongly taken for weekly"; else ok "session limit is not weekly"; fi
 
 echo ""
-echo "→ 2. reset time parsing (fixed now = 2026-09-02 17:00 local)"
+echo "→ 2. reset time parsing (fixed now = 2026-09-02 17:00 in the reading zone)"
 if [ "$HAS_GNU_DATE" -eq 1 ]; then
-  exp="$(date -d '2026-09-02 20:00:00' +%s)"
-  assert_eq "resets 8pm today -> 20:00 today (local)" "$exp" "$(_cplw_parse_reset_epoch "You've hit your session limit · resets 8pm (Europe/Paris)")"
-  exp="$(date -d '2026-09-03 05:50:00' +%s)"
+  exp="$(paris_date -d '2026-09-02 20:00:00' +%s)"
+  assert_eq "resets 8pm today -> 20:00 today (reading zone)" "$exp" "$(_cplw_parse_reset_epoch "You've hit your session limit · resets 8pm (Europe/Paris)")"
+  exp="$(paris_date -d '2026-09-03 05:50:00' +%s)"
   assert_eq "resets 5:50am (already passed) -> tomorrow 05:50" "$exp" "$(_cplw_parse_reset_epoch "You've hit your session limit · resets 5:50am (Europe/Paris)")"
   if [ "$TZ_OK" -eq 1 ]; then
     exp="$(TZ=America/New_York date -d '2026-09-02 15:45:00' +%s)"
@@ -65,7 +67,7 @@ assert_eq "weekly notice without clock time -> empty" "" "$(_cplw_parse_reset_ep
 # A weekly notice WITH a clock time parses like any other: the parser does not know about weekly.
 # That is why the core checks _cplw_is_weekly BEFORE trusting a parsed epoch (core test 11e-bis).
 if [ "$HAS_GNU_DATE" -eq 1 ]; then
-  exp="$(date -d '2026-09-03 15:00:00' +%s)"
+  exp="$(paris_date -d '2026-09-03 15:00:00' +%s)"
   assert_eq "weekly notice WITH a clock time parses (15:00 already passed -> tomorrow)" "$exp" "$(_cplw_parse_reset_epoch "You've hit your weekly limit · resets 3pm (Europe/Paris)")"
 else
   ok "(GNU date absent: weekly-with-clock parsing skipped)"

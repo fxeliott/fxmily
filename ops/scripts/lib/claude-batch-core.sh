@@ -97,6 +97,24 @@ FXMILY_MAX_CONSECUTIVE_FAILURES="${FXMILY_MAX_CONSECUTIVE_FAILURES:-4}"
 # call (with a one-time warning) when absent. 0 disables the wrapper entirely.
 FXMILY_CLAUDE_TIMEOUT_S="${FXMILY_CLAUDE_TIMEOUT_S:-900}"
 
+# Wait ONCE for an ANNOUNCED usage-limit reset, then retry the same member once
+# (2026-09-02, Eliot's decision: « attente et relance » for the batches). This
+# is NOT the back-off-and-continue the paragraph above rejects: nothing is sent
+# during the wait, and the wait only happens when the cap notice carries a
+# reset time (« resets 8pm (Europe/Paris) ») that falls within this budget. A
+# cap without a parseable time, a WEEKLY cap, or a reset beyond the budget
+# keeps today's behaviour exactly: halt, exit 75, worker cooldown. If the retry
+# is capped again the classifier latches as before. Why it matters: the weekly,
+# monthly, calendar and profile pipelines have ONE tick per week/month/day, so
+# a 5-hour cap at 05:40 on Sunday used to leave every remaining member without
+# a digest until the NEXT Sunday. 0 disables the wait entirely. Parsing and the
+# wait computation live in claude-print-limit-wait.sh (sourced below).
+FXMILY_CAP_WAIT_MAX_S="${FXMILY_CAP_WAIT_MAX_S:-21600}"
+# Sleep command used for the cap wait (tests substitute a recording function).
+CORE_SLEEP_CMD="${CORE_SLEEP_CMD:-sleep}"
+# shellcheck source=claude-print-limit-wait.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/claude-print-limit-wait.sh"
+
 # --- Runtime state (module globals, reset per run by core_reset_failure_state) -
 CORE_CONSECUTIVE_FAILURES=0
 CORE_RATE_LIMITED=0
@@ -432,6 +450,7 @@ core_invoke_claude_print() {
       CORE_TIMEOUT_WARNED=1
     fi
   fi
+  local rc
   "${timeout_cmd[@]}" claude --print \
     --model "$CLAUDE_MODEL" \
     --effort "$CLAUDE_EFFORT" \
@@ -443,6 +462,46 @@ core_invoke_claude_print() {
     "${extra_args[@]}" \
     <"$prompt_file" \
     >"$response_file" 2>>"$ERRORS_LOG"
+  rc=$?
+  [ "$rc" -eq 0 ] && return 0
+
+  # --- Cap wait-once (FXMILY_CAP_WAIT_MAX_S) ---------------------------------
+  # Same evidence the classifier reads (this call's stderr past the mark, plus
+  # the response file: caps land on STDOUT with an empty stderr, R18). Wait only
+  # for an announced, non-weekly reset within the budget; anything else returns
+  # the failure unchanged so the latch / breaker / cooldown path is untouched.
+  if [ "${FXMILY_CAP_WAIT_MAX_S:-0}" -gt 0 ] && [ "$(core_classify_failure)" = "rate_limited" ]; then
+    local cap_txt reset_epoch secs
+    cap_txt="$(tail -c +"$(( ${CORE_ERRLOG_MARK:-0} + 1 ))" "$ERRORS_LOG" 2>/dev/null | tail -c 4000 || true)"
+    cap_txt="$cap_txt
+$(tail -c 4000 "$response_file" 2>/dev/null || true)"
+    reset_epoch="$(_cplw_parse_reset_epoch "$cap_txt")"
+    if [ -n "$reset_epoch" ] && ! _cplw_is_weekly "$cap_txt"; then
+      secs="$(_cplw_wait_seconds "$reset_epoch")"
+      if [ "$secs" -le "$FXMILY_CAP_WAIT_MAX_S" ]; then
+        echo "  ⏳ usage limit hit — waiting ${secs}s until the announced reset ($(date -d "@$reset_epoch" +%H:%M 2>/dev/null || echo "epoch $reset_epoch")), then ONE retry of this member" >&2
+        "$CORE_SLEEP_CMD" "$secs"
+        # Re-mark so the classifier judges the RETRY's stderr only, not the cap notice.
+        CORE_ERRLOG_MARK=$(wc -c <"$ERRORS_LOG" 2>/dev/null | tr -dc '0-9')
+        [ -n "$CORE_ERRLOG_MARK" ] || CORE_ERRLOG_MARK=0
+        "${timeout_cmd[@]}" claude --print \
+          --model "$CLAUDE_MODEL" \
+          --effort "$CLAUDE_EFFORT" \
+          --max-turns "$MAX_TURNS" \
+          --max-budget-usd "$MAX_BUDGET_USD" \
+          --setting-sources "" \
+          --system-prompt "$system_prompt_content" \
+          --output-format text \
+          "${extra_args[@]}" \
+          <"$prompt_file" \
+          >"$response_file" 2>>"$ERRORS_LOG"
+        rc=$?
+      else
+        echo "  ! usage limit hit — announced reset is ${secs}s away, beyond FXMILY_CAP_WAIT_MAX_S=${FXMILY_CAP_WAIT_MAX_S}: not waiting (halt + worker cooldown as before)" >&2
+      fi
+    fi
+  fi
+  return "$rc"
 }
 
 # Strip markdown fences + surrounding prose, then validate JSON.

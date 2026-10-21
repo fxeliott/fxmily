@@ -23,6 +23,7 @@ name: Seed demo account
 # Secrets reused from the deploy pipeline :
 #   - HETZNER_HOST    : public IPv4 of the Hetzner CX22.
 #   - HETZNER_SSH_KEY : private SSH key for the `fxmily` host user.
+#   - DEMO_PASSWORD   : new, this workflow only. Demo account password; masked, never printed.
 
 on:
   workflow_dispatch:
@@ -48,17 +49,22 @@ jobs:
           # Short-lived token used INSIDE the container to clone the private repo.
           # Scoped to `contents: read` by the job permissions above.
           GH_CLONE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Demo account password: masked by Actions, never echoed.
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: fxmily
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: 22
           command_timeout: 22m
-          envs: GH_CLONE_TOKEN
+          envs: GH_CLONE_TOKEN,DEMO_PASSWORD
           script: |
             set -euo pipefail
 
             echo "Seeding demo (prod-safe) inside a one-shot container on fxmily-internal..."
+
+            # Never seed with a known password: stop here when the secret is missing.
+            : "${DEMO_PASSWORD:?DEMO_PASSWORD secret is not set}"
 
             # The demo seed needs tsx + the generated Prisma client + argon2,
             # none of which live in the standalone runtime image — so we run a
@@ -70,6 +76,7 @@ jobs:
               --network fxmily-internal \
               --env-file /etc/fxmily/web.env \
               -e DEMO_SEED_GLOBAL_MEETINGS=false \
+              -e DEMO_PASSWORD \
               -e GH_CLONE_TOKEN \
               -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
               -w /work \
@@ -95,4 +102,4 @@ jobs:
                 pnpm --filter @fxmily/web exec tsx scripts/seed-demo.ts
               '
 
-            echo "Demo seed complete. Login: demo@fxmily.local @ https://app.fxmilyapp.com/login"
+            echo "Demo seed complete (credentials are never printed)."

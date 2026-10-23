@@ -4,11 +4,12 @@
  * verification, training, calendar, reports…) renders with real, evolving data.
  *
  * Idempotent: wipes and re-creates ONLY `demo@fxmily.local` (real members are
- * never touched). Self-contained: needs only DATABASE_URL (Pattern A — local
+ * never touched). Self-contained: needs only DATABASE_URL + DEMO_PASSWORD (Pattern A — local
  * PrismaClient + argon2, no AUTH_SECRET / server-only coupling).
  *
  * Usage (from D:\Fxmily):
  *   $env:DATABASE_URL = "postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public"
+ *   $env:DEMO_PASSWORD = "<demo password, never committed>"
  *   pnpm --filter @fxmily/web exec tsx scripts/seed-demo.ts
  *
  * Mark Douglas cards must already be seeded (scripts/seed-mark-douglas-cards.ts);
@@ -84,7 +85,7 @@ async function main() {
   await wipeDemo();
 
   const userId = await createDemoUser();
-  console.log(`[seed-demo] created member ${DEMO.email} (id=${userId})`);
+  console.log(`[seed-demo] created member (id=${userId})`);
 
   const ctx: SeedCtx = {
     db,
@@ -120,10 +121,8 @@ async function main() {
 
   console.log('\n[seed-demo] ✅ done. Summary:');
   console.table(summary);
-  console.log('\n[seed-demo] Login with:');
-  console.log(`  email:    ${DEMO.email}`);
-  console.log(`  password: ${DEMO.password}`);
-  console.log('  url:      http://localhost:3000/login');
+  // Credentials are never printed: the Actions log of a public repository is public.
+  console.log('[seed-demo] Login: demo e-mail + DEMO_PASSWORD (never printed).');
 }
 
 main()

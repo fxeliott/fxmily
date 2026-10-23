@@ -16,10 +16,26 @@ import type { PrismaClient } from '../../src/generated/prisma/client.js';
 
 export type DB = PrismaClient;
 
-/** Identity + credentials of the demo member. Surfaced in the run summary. */
+/**
+ * The demo password is never committed (the repository is public). It comes from
+ * DEMO_PASSWORD: a masked GitHub secret in CI, a root-only file on the server.
+ * Read lazily, so importing this module never needs it; reading it without the
+ * variable fails loudly instead of falling back to a known value.
+ */
+function demoPassword(): string {
+  const value = process.env.DEMO_PASSWORD;
+  if (!value) {
+    throw new Error('DEMO_PASSWORD is not set: refusing to seed the demo account without it.');
+  }
+  return value;
+}
+
+/** Identity of the demo member. The password is read from DEMO_PASSWORD, never printed. */
 export const DEMO = {
   email: 'demo@fxmily.local',
-  password: 'DemoFxmily2026!',
+  get password(): string {
+    return demoPassword();
+  },
   firstName: 'Démo',
   lastName: 'Fxmily',
   timezone: 'Europe/Paris',

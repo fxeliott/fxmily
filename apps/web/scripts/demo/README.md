@@ -10,6 +10,7 @@ From `D:\Fxmily` (PowerShell):
 
 ```powershell
 $env:DATABASE_URL = "postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public"
+$env:DEMO_PASSWORD = "<demo password, never committed>"
 pnpm --filter @fxmily/web exec tsx scripts/seed-demo.ts
 ```
 
@@ -22,7 +23,7 @@ cards by slug/category.
 |          |                             |
 | -------- | --------------------------- |
 | email    | `demo@fxmily.local`         |
-| password | `DemoFxmily2026!`           |
+| password | `$DEMO_PASSWORD`            |
 | url      | http://localhost:3000/login |
 
 ## What it does
@@ -30,7 +31,7 @@ cards by slug/category.
 - **Idempotent**: wipes and re-creates **only** `demo@fxmily.local` (the User
   cascade removes all its rows). Real members are never touched. Re-running
   produces byte-identical data (single seeded `mulberry32` PRNG).
-- **Self-contained** (Pattern A): needs only `DATABASE_URL`. It instantiates its
+- **Self-contained** (Pattern A): needs `DATABASE_URL` + `DEMO_PASSWORD`. It instantiates its
   own `PrismaClient` + `PrismaPg` adapter and hashes the password with argon2 —
   no `AUTH_SECRET` / `server-only` coupling. Because the scoring/triggers
   services are `server-only` (unloadable under `tsx`), the derived rows
@@ -68,4 +69,4 @@ Prod is seeded via the manual GitHub Actions workflow **`.github/workflows/seed-
 It SSHes to the host and runs this seed (with the prod-safe flag) inside a
 one-shot container on the `fxmily-internal` network, against the prod
 `DATABASE_URL`. Login is then the same everywhere: `demo@fxmily.local` /
-`DemoFxmily2026!`.
+`$DEMO_PASSWORD`.
